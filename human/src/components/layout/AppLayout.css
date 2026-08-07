@@ -1,0 +1,152 @@
+.app-layout {
+  display: flex;
+  flex-direction: row;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--surface-0);
+}
+
+.app-layout-menubar {
+  background: #f5f5f5;
+  flex: 0 0 38px;
+  width: 100%;
+}
+
+.app-layout-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-layout-toolbar {
+  background: #f5f5f5;
+  flex: 0 0 58px;
+  width: 58px; /* explicit width prevents flex recalculation during Suspense fallback */
+  height: 100%;
+  overflow: hidden;
+}
+
+.app-layout-main {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.custom-menubar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  width: 100%;
+  background: transparent;
+  border-bottom: 1px solid var(--line-soft);
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.menubar-title {
+  padding-left: 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-strong);
+  flex: 1;
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.menubar-controls {
+  display: flex;
+  height: 100%;
+}
+
+.menubar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background-color 150ms ease;
+}
+
+.menubar-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+.menubar-btn.close-btn:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+.custom-main-content {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  position: relative;
+  background: var(--surface-0);
+}
+
+.custom-toolbar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  padding: 14px 8px 12px;
+  background: transparent;
+  border-right: 1px solid var(--line-soft);
+}
+
+.toolbar-nav {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 6px;
+  width: 100%;
+}
+
+.toolbar-btn {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 38px;
+  flex-shrink: 0;
+  margin: 0 auto;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.toolbar-btn:not(.active):hover {
+  background: rgba(240, 243, 246, 0.72);
+  border-color: var(--line-soft);
+  color: var(--text-strong);
+}
+
+.toolbar-btn.active,
+.toolbar-btn.active:hover {
+  background: var(--surface-2);
+  border-color: var(--line-accent);
+  color: var(--accent);
+  box-shadow: 0 7px 18px rgba(30, 48, 71, 0.045);
+}
+
+.settings-btn {
+  margin-top: auto;
+  to { transform: translateY(0); }
+}

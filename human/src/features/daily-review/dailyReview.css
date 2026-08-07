@@ -1,0 +1,360 @@
+/* ══════════════════════════════════════════════════════════════
+   Daily Review - 焦点流布局
+   顶部日期导航 + 左侧编辑器 + 右侧指标/日历
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── Panel Root ── */
+.daily-review-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  overflow: hidden;
+}
+
+/* ── Top Bar: Date Navigation ── */
+.review-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 24px;
+  background-color: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.top-bar-date-nav {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.top-bar-nav-btn {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 6px;
+  color: var(--color-text-muted);
+  transition: all 0.15s;
+}
+
+.top-bar-nav-btn:hover {
+  background-color: var(--color-bg-hover);
+  color: var(--color-text);
+}
+
+.top-bar-nav-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
+}
+
+.top-bar-nav-btn:disabled:hover {
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.top-bar-date-display {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+}
+
+.top-bar-today-badge {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  background-color: var(--color-bg-hover);
+  padding: 2px 8px;
+  border-radius: 10px;
+  margin-left: 4px;
+}
+
+/* ── Main Layout: Left-Right ── */
+.review-main-layout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* ── Left: Editor Panel ── */
+.review-editor-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 20px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.review-editor-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--surface-1, #fafbfc);
+  border: 1px solid var(--line-soft, rgba(123, 145, 169, 0.18));
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.03);
+}
+
+.editor-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.editor-simple-editor {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.editor-reactjs-tiptap {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Editor Footer ── */
+.editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line-soft, rgba(123, 145, 169, 0.14));
+  background-color: var(--surface-0, #f4f6f8);
+  flex-shrink: 0;
+}
+
+.rating-selector {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.rating-label {
+  font-size: 12px;
+  color: var(--color-text-muted);
+}
+
+.rating-stars {
+  display: flex;
+  gap: 2px;
+}
+
+.rating-star {
+  cursor: pointer;
+  color: var(--color-border);
+  transition: color 0.15s, transform 0.1s;
+}
+
+.rating-star:hover {
+  transform: scale(1.15);
+}
+
+.rating-star.active {
+  color: #fbbf24;
+}
+
+.save-status {
+  font-size: 11px;
+  color: var(--color-text-muted);
+}
+
+/* ── Right: Stats Panel ── */
+.review-stats-panel {
+  width: 300px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--color-border);
+  background-color: var(--color-bg-elevated);
+  overflow-y: auto;
+}
+
+.compound-stats-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 16px;
+  gap: 16px;
+}
+
+/* ── Stats Section ── */
+.stats-section {
+  flex-shrink: 0;
+}
+
+.stats-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.stat-card {
+  padding: 12px;
+  background-color: var(--color-bg);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.stat-card-accent {
+  background-color: #fdf3e3;
+}
+
+.stat-card-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.stat-card-accent .stat-card-value {
+  color: #d4943a;
+}
+
+.compound-value {
+  background: linear-gradient(135deg, #e8a849, #d4943a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.stat-card-icon {
+  color: #e8a849;
+}
+
+.stat-card-icon-muted {
+  color: var(--color-text-muted);
+  opacity: 0.6;
+}
+
+.stat-card-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  margin-top: 4px;
+}
+
+/* ── Calendar Section ── */
+.calendar-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.calendar-section-title {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--color-text-muted);
+  margin-bottom: 8px;
+}
+
+.monthly-calendar-wrapper {
+  flex: 1;
+}
+
+.monthly-calendar-wrapper .arco-calendar-panel {
+  border: none;
+  background: transparent;
+}
+
+.monthly-calendar-wrapper .arco-calendar-date {
+  width: 30px;
+  height: 30px;
+  aspect-ratio: 1;
+  margin: 3px auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--color-text);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.15s;
+  box-sizing: border-box;
+  background-color: transparent;
+}
+
+.monthly-calendar-wrapper .arco-calendar-date-value {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+}
+
+/* Hover */
+.monthly-calendar-wrapper .arco-calendar-cell:hover .arco-calendar-date:not(.arco-calendar-date-selected) {
+  background-color: var(--color-bg-hover);
+  transform: scale(1.08);
+}
+
+/* Heatmap Levels - Green Palette */
+.monthly-calendar-wrapper .active-level-1:not(.is-selected) { background-color: #e8f5e9; color: #2e7d32; font-weight: 600; }
+.monthly-calendar-wrapper .active-level-2:not(.is-selected) { background-color: #a5d6a7; color: #1b5e20; font-weight: 600; }
+.monthly-calendar-wrapper .active-level-3:not(.is-selected) { background-color: #66bb6a; color: white; font-weight: 600; }
+.monthly-calendar-wrapper .active-level-4:not(.is-selected) { background-color: #2e7d32; color: white; font-weight: 600; }
+
+.monthly-calendar-wrapper .is-selected {
+  position: relative;
+  z-index: 2;
+  font-weight: 700;
+}
+
+/* ── Calendar Legend ── */
+.calendar-legend {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 8px;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+.legend-box {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.legend-box.level-0 { background-color: var(--color-bg); border: 1px solid var(--color-border); }
+.legend-box.level-1 { background-color: #e8f5e9; }
+.legend-box.level-2 { background-color: #a5d6a7; }
+.legend-box.level-3 { background-color: #66bb6a; }
+.legend-box.level-4 { background-color: #2e7d32; }
+
+/* ── Empty State ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: var(--color-text-muted);
+  gap: 16px;
+}

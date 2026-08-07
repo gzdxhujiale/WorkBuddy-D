@@ -1,0 +1,242 @@
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
+import { getCurrentWindow, currentMonitor, PhysicalPosition } from '@tauri-apps/api/window';
+import { emitTo, listen, type UnlistenFn } from '@tauri-apps/api/event';
+import type { Task, QuadrantType, TaskDraft } from '@/types/timeManagement';
+
+export function isTauriEnv(): boolean {
+  return typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+}
+
+const POPUP_W = 1100;
+const POPUP_H = 700;
+const ANCHOR_X = 640;
+const ANCHOR_Y = 36;
+const POOL_LABEL = 'task-quick-edit';
+
+export interface QuickEditWindowOptions {
+  task?: Task;
+  quadrant?: QuadrantType;
+  anchorEl: HTMLElement;
+  onSave?: (taskId: string, updates: Partial<Task>, isHighFreq?: boolean) => void;
+  onCreate?: (quadrant: QuadrantType, draft: TaskDraft) => void;
+  onClosed: () => void;
+}
+
+function fromWire(wire: Record<string, unknown>): Partial<Task> {
+  return Object.fromEntries(
+    Object.entries(wire).map(([k, v]) => [k, v === null ? undefined : v])
+  ) as Partial<Task>;
+}
+
+let pool: WebviewWindow | null = null;
+let poolReady: Promise<void> | null = null;
+let readyResolve: (() => void) | null = null;
+let readyReject: ((e: unknown) => void) | null = null;
+let unlistenPoolFocus: UnlistenFn | null = null;
+let listenersInstalled = false;
+let sessionSeq = 0;
+let current: { session: number; opts: QuickEditWindowOptions } | null = null;
+let lastPos: { x: number; y: number } | null = null;
+
+let mainFocused = true;
+let popupFocused = false;
+let popupEverFocused = false;
+let focusTimer: number | null = null;
+
+function scheduleFocusCheck(): void {
+  if (focusTimer !== null) window.clearTimeout(focusTimer);
+  focusTimer = window.setTimeout(() => {
+    focusTimer = null;
+    if (!current || !popupEverFocused) return;
+    if (!mainFocused && !popupFocused) void emitTo(POOL_LABEL, 'tqe:close-all');
+  }, 120);
+}
+
+function endSession(session: number): void {
+  if (current?.session !== session) return;
+  const cur = current;
+  current = null;
+  cur.opts.onClosed();
+}
+
+async function installListeners(): Promise<void> {
+  if (listenersInstalled) return;
+  listenersInstalled = true;
+
+  await Promise.all([
+    listen('tqe:ready', () => {
+      readyResolve?.();
+      readyResolve = null;
+      readyReject = null;
+    }),
+    listen<{ session: number; taskId: string; updates: Record<string, unknown>; isHighFreq?: boolean }>('tqe:save', (e) => {
+      if (e.payload?.session !== current?.session) return;
+      current?.opts.onSave?.(e.payload.taskId, fromWire(e.payload.updates), e.payload.isHighFreq);
+    }),
+    listen<{ session: number; draft: TaskDraft }>('tqe:create', (e) => {
+      if (e.payload?.session !== current?.session) return;
+      const q = current?.opts.quadrant;
+      if (q) current?.opts.onCreate?.(q, e.payload.draft);
+    }),
+    listen<{ session: number }>('tqe:closed', (e) => {
+      endSession(e.payload?.session ?? -1);
+    }),
+    listen<{ session: number }>('tqe:shown', (e) => {
+      if (e.payload?.session !== current?.session || !pool || !lastPos) return;
+      void pool.setPosition(new PhysicalPosition(lastPos.x, lastPos.y)).catch(() => {});
+    }),
+    getCurrentWindow().onFocusChanged(({ payload }) => {
+      mainFocused = payload;
+      if (!payload) scheduleFocusCheck();
+    }),
+  ]);
+}
+
+function attachPoolHandlers(webview: WebviewWindow, isNew: boolean): void {
+  void webview.onFocusChanged(({ payload }) => {
+    popupFocused = payload;
+    if (payload) popupEverFocused = true;
+    else scheduleFocusCheck();
+  }).then(fn => { unlistenPoolFocus = fn; }).catch(() => {});
+
+  if (isNew) {
+    void webview.once('tauri://error', (e) => {
+      console.error('[quick-edit] Sub-window creation error:', e);
+      readyReject?.(e);
+      readyResolve = null;
+      readyReject = null;
+      if (pool === webview) discardPool();
+    });
+  }
+  void webview.once('tauri://destroyed', () => {
+    if (pool === webview) discardPool();
+  });
+}
+
+function ensurePool(): Promise<void> {
+  if (pool && poolReady) return poolReady;
+
+  const ready = new Promise<void>((resolve, reject) => {
+    readyResolve = resolve;
+    readyReject = reject;
+  });
+  poolReady = ready;
+
+  void (async () => {
+    try {
+      await installListeners();
+
+      const existing = await WebviewWindow.getByLabel(POOL_LABEL).catch(() => null);
+      if (existing) {
+        pool = existing;
+        void existing.hide().catch(() => {});
+        attachPoolHandlers(existing, false);
+        void emitTo(POOL_LABEL, 'tqe:ping');
+        readyResolve?.();
+        readyResolve = null;
+        return;
+      }
+
+      const webview = new WebviewWindow(POOL_LABEL, {
+        url: `${window.location.origin}/?window=task-quick-edit`,
+        title: '任务快捷编辑',
+        x: 0,
+        y: 0,
+        width: POPUP_W,
+        height: POPUP_H,
+        resizable: false,
+        decorations: false,
+        transparent: true,
+        shadow: false,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        visible: false,
+        focus: false,
+      });
+      pool = webview;
+      attachPoolHandlers(webview, true);
+    } catch (err) {
+      readyReject?.(err);
+      readyResolve = null;
+      readyReject = null;
+      discardPool();
+    }
+  })();
+
+  return ready;
+}
+
+function discardPool(): void {
+  pool = null;
+  poolReady = null;
+  unlistenPoolFocus?.();
+  unlistenPoolFocus = null;
+  if (current) endSession(current.session);
+}
+
+export function prewarmQuickEditWindow(): void {
+  void ensurePool().catch(() => {});
+}
+
+export function requestQuickEditCloseLayer(): void {
+  if (current) {
+    void emitTo(POOL_LABEL, 'tqe:close-layer');
+  }
+}
+
+export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise<void> {
+  if (current) current = null;
+  const session = ++sessionSeq;
+
+  const readyP = ensurePool();
+  const main = getCurrentWindow();
+  const r = opts.anchorEl.getBoundingClientRect();
+  const [factor, inner, mon] = await Promise.all([
+    main.scaleFactor(),
+    main.innerPosition(),
+    currentMonitor().catch(() => null),
+  ]);
+
+  const anchorScreen = {
+    x: inner.x / factor + r.left,
+    y: inner.y / factor + r.top,
+    w: r.width,
+    h: r.height,
+  };
+
+  let winX = anchorScreen.x - ANCHOR_X;
+  let winY = anchorScreen.y - ANCHOR_Y;
+  if (mon) {
+    const mx = mon.position.x / factor;
+    const my = mon.position.y / factor;
+    const mw = mon.size.width / factor;
+    const mh = mon.size.height / factor;
+    winX = Math.min(Math.max(winX, mx), Math.max(mx, mx + mw - POPUP_W));
+    winY = Math.min(Math.max(winY, my), Math.max(my, my + mh - POPUP_H));
+  }
+
+  const localAnchor = {
+    left: anchorScreen.x - winX,
+    top: anchorScreen.y - winY,
+    right: anchorScreen.x - winX + anchorScreen.w,
+    bottom: anchorScreen.y - winY + anchorScreen.h,
+    width: anchorScreen.w,
+  };
+
+  await readyP;
+  if (session !== sessionSeq || !pool) {
+    if (!pool) opts.onClosed();
+    return;
+  }
+
+  current = { session, opts };
+  popupEverFocused = false;
+  lastPos = { x: Math.round(winX * factor), y: Math.round(winY * factor) };
+  await pool.setPosition(new PhysicalPosition(lastPos.x, lastPos.y)).catch(() => {});
+  void emitTo(POOL_LABEL, 'tqe:init', {
+    session,
+    task: opts.task ?? null,
+    quadrant: opts.quadrant ?? null,
+    anchor: localAnchor,
+  });
+}

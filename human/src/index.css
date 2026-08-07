@@ -1,0 +1,105 @@
+@import "tailwindcss";
+
+@import './styles/_variables.scss';
+@import './styles/_keyframe-animations.scss';
+
+/* Global app styles only; feature CSS is imported by its own feature entry */
+@import "./styles/layout.css";
+@import "./styles/shared.css";
+@import "./styles/settings.css";
+@import "./styles/dialog.css";
+
+:root {
+  color: #20242a;
+  background: #eef1f4;
+  font-family:
+    "Microsoft YaHei",
+    "微软雅黑",
+    Arial,
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
+
+  --surface-0: #f4f6f8;
+  --surface-1: #fbfcfd;
+  --surface-2: #ffffff;
+  --surface-3: #f0f3f6;
+  --line-soft: rgba(123, 145, 169, 0.14);
+  --line-strong: rgba(123, 145, 169, 0.22);
+  --line-accent: rgba(31, 111, 209, 0.26);
+  --text-strong: #171b21;
+  --text-primary: #2b3139;
+  --text-muted: #697381;
+  --text-faint: #8a94a3;
+  --accent: #1f6fd1;
+  --accent-soft: #eaf3ff;
+  --green: #25845a;
+  --violet: #7657d6;
+  --shadow-soft: 0 8px 24px rgba(23, 27, 33, 0.045);
+  --canvas-dot-grid:
+    radial-gradient(circle, rgba(103, 121, 143, 0.5) 1.25px, transparent 1.5px),
+    #fbfcfd;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  margin: 0;
+  overflow: hidden;
+}
+
+button {
+  color: inherit;
+  font: inherit;
+}
+
+input,
+textarea,
+select {
+  color: inherit;
+  font: inherit;
+}
+
+.app-error-fallback {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  width: 100vw;
+  height: 100vh;
+  padding: 24px;
+  color: var(--text-primary);
+  background: #eef2f6;
+  text-align: center;
+}
+
+.app-error-fallback strong {
+  font-size: 18px;
+}
+
+.app-error-fallback span {
+  max-width: 640px;
+  color: var(--text-muted);
+  line-height: 1.7;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.app-error-fallback button {
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid var(--line-accent);
+  border-radius: 7px;
+  color: var(--accent);
+  background: #ffffff;
+  cursor: pointer;
+}

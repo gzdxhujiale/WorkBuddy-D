@@ -1,0 +1,273 @@
+.reactjs-tiptap-editor,
+.template-reactjs-tiptap,
+.task-detail-reactjs-tiptap,
+.note-drawer-reactjs-tiptap,
+.editor-reactjs-tiptap {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background-color: var(--surface-1, #fafbfc);
+}
+
+.reactjs-tiptap-editor .ProseMirror.ProseMirror.ProseMirror,
+.template-reactjs-tiptap .ProseMirror.ProseMirror.ProseMirror,
+.task-detail-reactjs-tiptap .ProseMirror.ProseMirror.ProseMirror,
+.note-drawer-reactjs-tiptap .ProseMirror.ProseMirror.ProseMirror,
+.editor-reactjs-tiptap .ProseMirror.ProseMirror.ProseMirror {
+  padding: 24px 36px !important;
+  min-height: 100%;
+  box-sizing: border-box;
+  outline: none;
+  background-color: var(--surface-1, #fafbfc);
+  color: var(--text-primary, #2b3139);
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  caret-color: var(--text-primary, #18181b) !important;
+}
+
+/* Hide default tiptap placeholder when custom template prompt is displayed */
+.editor-reactjs-tiptap .ProseMirror p.is-editor-empty:first-child:before,
+.note-drawer-reactjs-tiptap .ProseMirror p.is-editor-empty:first-child:before,
+.task-detail-reactjs-tiptap .ProseMirror p.is-editor-empty:first-child:before,
+.reactjs-tiptap-editor .ProseMirror p.is-editor-empty:first-child:before {
+  display: none !important;
+}
+
+/* Custom Interactive Placeholder Widget & Template Button */
+.ProseMirror p.is-editor-empty:first-child {
+  position: relative !important;
+}
+
+.interactive-placeholder-widget {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  height: 1.6em !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  pointer-events: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  white-space: nowrap !important;
+}
+
+.interactive-placeholder-btn {
+  color: #1f6fd1 !important;
+  font-weight: 500 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  position: relative !important;
+  z-index: 1 !important;
+  transition: color 0.15s ease, text-decoration 0.15s ease !important;
+}
+
+.interactive-placeholder-btn:hover {
+  color: #1557a6 !important;
+  text-decoration: underline !important;
+}
+
+/* Ensure all popovers, dropdown portals and drag handle menus render above modal dialog overlays (z-index 1000) */
+.bg-popover,
+[data-radix-popper-content-wrapper],
+[data-radix-popper-content-wrapper] [role="dialog"],
+[data-radix-popper-content-wrapper]>div,
+div[data-richtext-portal],
+.easydrawer-wrapper {
+  background-color: #ffffff !important;
+  color: #1a1a1a !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.12), 0 8px 10px -6px rgba(0, 0, 0, 0.08) !important;
+  z-index: 11000 !important;
+}
+
+/* Ensure TipTap slash command portal renderer container floats above drawers & modals */
+.react-renderer:has(div[data-richtext-portal]) {
+  z-index: 99999 !important;
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+div[data-richtext-portal] {
+  z-index: 99999 !important;
+}
+
+/* Code styling */
+.hljs-comment,
+.hljs-quote {
+  color: #616161;
+}
+
+.hljs-variable,
+.hljs-template-variable,
+.hljs-attribute,
+.hljs-tag,
+.hljs-regexp,
+.hljs-link,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class {
+  color: #f98181;
+}
+
+.hljs-number,
+.hljs-meta,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params {
+  color: #fbbc88;
+}
+
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet {
+  color: #b9f18d;
+}
+
+.hljs-title,
+.hljs-section {
+  color: #faf594;
+}
+
+.hljs-keyword,
+.hljs-selector-tag {
+  color: #70cff8;
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 700;
+}
+
+/* ── Compact Spacing for Lists and Block Elements ── */
+.reactjs-tiptap-editor .ProseMirror ul,
+.reactjs-tiptap-editor .ProseMirror ol,
+.template-reactjs-tiptap .ProseMirror ul,
+.template-reactjs-tiptap .ProseMirror ol,
+.task-detail-reactjs-tiptap .ProseMirror ul,
+.task-detail-reactjs-tiptap .ProseMirror ol,
+.note-drawer-reactjs-tiptap .ProseMirror ul,
+.note-drawer-reactjs-tiptap .ProseMirror ol {
+  margin-top: 0.375rem !important;
+  margin-bottom: 0.375rem !important;
+  padding-left: 1.5rem !important;
+  padding-right: 0 !important;
+}
+
+/* Task lists have a wider left padding than bullet/numbered lists */
+.reactjs-tiptap-editor .ProseMirror [data-type="taskList"],
+.template-reactjs-tiptap .ProseMirror [data-type="taskList"],
+.task-detail-reactjs-tiptap .ProseMirror [data-type="taskList"],
+.note-drawer-reactjs-tiptap .ProseMirror [data-type="taskList"] {
+  margin-top: 0.375rem !important;
+  margin-bottom: 0.375rem !important;
+  padding-left: 0.25rem !important;
+  padding-right: 0 !important;
+}
+
+.ProseMirror>ul,
+.ProseMirror>ol,
+.ProseMirror>[data-type="taskList"] {
+  margin-top: 0.375rem !important;
+  margin-bottom: 0.375rem !important;
+}
+
+.ProseMirror ul li,
+.ProseMirror ol li,
+.ProseMirror [data-type="taskItem"] {
+  margin-top: 0.125rem !important;
+  margin-bottom: 0.125rem !important;
+  position: relative;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+.ProseMirror [data-type="taskItem"] > label {
+  -webkit-user-select: none !important;
+  user-select: none !important;
+}
+
+.ProseMirror [data-type="taskItem"] > div {
+  flex: 1 1 auto;
+  min-width: 0;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+.ProseMirror ul p,
+.ProseMirror ol p,
+.ProseMirror [data-type="taskList"] p {
+  margin-top: 0 !important;
+  margin-bottom: 0.125rem !important;
+  line-height: 1.5 !important;
+  -webkit-user-select: text !important;
+  user-select: text !important;
+}
+
+.ProseMirror p {
+  margin-top: 0 !important;
+  margin-bottom: 0.375rem !important;
+  line-height: 1.6 !important;
+}
+
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4,
+.ProseMirror h5,
+.ProseMirror h6 {
+  margin-top: 0.875rem !important;
+  margin-bottom: 0.375rem !important;
+}
+
+/* ── Collapsible List Item Styling ── */
+.list-fold-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  position: absolute;
+  left: -18px;
+  top: 4px;
+  cursor: pointer;
+  border-radius: 3px;
+  color: var(--text-muted, #71717a);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  -webkit-user-select: none;
+  user-select: none;
+  z-index: 2;
+}
+
+.list-fold-btn:hover {
+  background-color: rgba(0, 0, 0, 0.08);
+  color: var(--text-primary, #18181b);
+}
+
+.list-fold-btn.collapsed .fold-chevron {
+  transform: rotate(-90deg);
+}
+
+.list-fold-btn.expanded .fold-chevron {
+  transform: rotate(0deg);
+}
+
+.fold-chevron {
+  transition: transform 0.15s ease;
+}
+
+/* Hide nested child lists when list item is collapsed */
+.ProseMirror li[data-collapsed="true"]>ul,
+.ProseMirror li[data-collapsed="true"]>ol,
+.ProseMirror li[data-collapsed="true"]>[data-type="taskList"],
+.ProseMirror [data-type="taskItem"][data-collapsed="true"]>ul,
+.ProseMirror [data-type="taskItem"][data-collapsed="true"]>ol,
+.ProseMirror [data-type="taskItem"][data-collapsed="true"]>[data-type="taskList"] {
+  display: none !important;
+}

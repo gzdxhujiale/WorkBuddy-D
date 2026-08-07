@@ -1,0 +1,114 @@
+.course-dialog {
+  width: min(430px, 100%);
+  padding: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 24px 60px rgba(23, 27, 33, 0.2);
+}
+
+.dialog-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 14px;
+}
+
+.form-field span {
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.form-field input,
+.form-field textarea {
+  width: 100%;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  outline: 0;
+  background: #f8fafc;
+  color: var(--text-primary);
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.form-field input {
+  height: 38px;
+  padding: 0 11px;
+}
+
+.form-field textarea {
+  min-height: 88px;
+  resize: none;
+  padding: 10px 11px;
+  line-height: 1.5;
+}
+
+.form-field input:focus,
+.form-field textarea:focus {
+  border-color: #b7d4f6;
+  background: #ffffff;
+  box-shadow: 0 0 0 3px rgba(31, 111, 209, 0.1);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 78px;
+  height: 36px;
+  padding: 0 13px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.primary-button {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #ffffff;
+  font-weight: 650;
+}
+
+.primary-button:disabled {
+  border-color: #c8d3df;
+  background: #d8e0ea;
+  color: #ffffff;
+  cursor: default;
+}
+
+.secondary-button {
+  border: 1px solid var(--line-soft);
+  background: #ffffff;
+  color: var(--text-muted);
+}
+
+.secondary-button:hover {
+  background: var(--surface-3);
+  color: var(--text-primary);
+}
+
+.secondary-button.compact-button {
+  min-width: 72px;
+  height: 32px;
+  padding: 0 11px;
+}

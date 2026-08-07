@@ -1,0 +1,102 @@
+.mini-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.mini-button:hover {
+  border-color: var(--line-soft);
+  background: rgba(240, 243, 246, 0.72);
+  color: var(--text-primary);
+}
+
+.mini-button.danger:hover {
+  border-color: #f4c8c8;
+  background: #fff0f0;
+  color: #b42318;
+}
+
+.status-message {
+  margin-top: 12px;
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.status-message.error {
+  border: 1px solid #f4c8c8;
+  background: #fff4f4;
+  color: #a11912;
+}
+
+.status-message.success {
+  border: 1px solid rgba(37, 132, 90, 0.2);
+  background: rgba(37, 132, 90, 0.08);
+  color: var(--green);
+}
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-mount {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--canvas-dot-grid);
+  background-position: 0 0;
+  background-size: 16px 16px;
+  overflow: hidden;
+}
+
+.editor-mount::before {
+  display: none;
+}
+
+.mount-empty-state {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(360px, calc(100% - 48px));
+  padding: 15px 16px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--text-muted);
+  box-shadow: var(--shadow-soft);
+  transform: translate(-50%, -50%);
+}
+
+.mount-empty-state strong,
+.mount-empty-state span {
+  display: block;
+}
+
+.mount-empty-state strong {
+  margin-bottom: 4px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.mount-empty-state span {
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.35;
+}
