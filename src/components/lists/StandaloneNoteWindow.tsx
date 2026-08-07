@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { useListsData, useListsActions } from './useListsQuery';
-import { Note } from './listsTypes';
+import { useListsData, useListsActions } from '@/hooks/useListsQuery';
+import { Note } from '@/types/lists';
 import { MoreHorizontal, Pin, Cloud, Minus, Square, Copy, X } from 'lucide-react';
-import * as listsService from './listsService';
+import * as listsService from '@/services/listsService';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { ReactjsTiptapEditor, convertMarkdownToTipTapJson, convertTipTapJsonToMarkdown } from '../reactjs-tiptap-v1';
+import { ReactjsTiptapEditor, convertMarkdownToTipTapJson, convertTipTapJsonToMarkdown } from '../tiptap';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 const logWarn = console.warn;
 const EMPTY_NOTES: Note[] = [];
@@ -24,7 +26,7 @@ export function StandaloneNoteWindow() {
 
   const note = notes.find(n => n.id === noteId) || null;
 
-  // 笔记被其他窗口删除（删除事件同步过来）：自动关闭本窗口，不停在“不存在”占位页
+  // 笔记被其他窗口删除（删除事件同步过来）：自动关闭本窗口，不停在"不存在"占位页
   const hadNoteRef = useRef(false);
   useEffect(() => {
     if (note) {
@@ -38,7 +40,7 @@ export function StandaloneNoteWindow() {
 
   if (!noteId) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#888' }}>
+      <div className="flex items-center justify-center h-screen text-muted-foreground">
         未指定笔记 ID
       </div>
     );
@@ -46,7 +48,7 @@ export function StandaloneNoteWindow() {
 
   if (!note) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#888' }}>
+      <div className="flex items-center justify-center h-screen text-muted-foreground">
         正在加载笔记或笔记不存在...
       </div>
     );
@@ -237,21 +239,20 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: 'var(--bg-app, #ffffff)', color: 'var(--text-strong, #1f2937)' }}>
+    <div className="flex flex-col h-screen bg-background text-foreground">
       {/* Top Header Bar */}
       <div
-        className="standalone-note-header"
+        className="flex items-center justify-between px-4 py-2 pl-4 border-b border-border bg-background select-none h-12"
         onMouseDown={handleHeaderMouseDown}
         onMouseMove={handleHeaderMouseMove}
         onMouseUp={handleHeaderMouseUp}
         onDoubleClick={handleHeaderDoubleClick}
       >
-        <div style={{ display: 'flex', alignItems: 'center', flex: 1, marginRight: '16px', minWidth: 0 }}>
+        <div className="flex items-center flex-1 mr-4 min-w-0">
           {isEditingTitle ? (
             <input
               ref={titleInputRef}
               type="text"
-              className="note-drawer-title-input"
               value={title}
               onChange={e => setTitle(e.target.value)}
               onBlur={() => setIsEditingTitle(false)}
@@ -261,127 +262,112 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
                 }
               }}
               placeholder="笔记标题"
-              style={{
-                flex: 1,
-                fontSize: '18px',
-                fontWeight: 600,
-                border: 'none',
-                outline: 'none',
-                background: 'transparent',
-                color: 'var(--text-strong, #111827)',
-              }}
+              className="flex-1 text-lg font-semibold border-none outline-none bg-transparent text-foreground placeholder:text-muted-foreground"
             />
           ) : (
             <div
               title="双击修改标题，按住拖拽窗口"
-              style={{
-                flex: 1,
-                fontSize: '18px',
-                fontWeight: 600,
-                color: 'var(--text-strong, #111827)',
-                cursor: 'default',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                userSelect: 'none',
-                padding: '4px 0',
-              }}
+              className="flex-1 text-lg font-semibold text-foreground cursor-default truncate select-none py-1"
             >
-              {title || <span style={{ color: 'var(--text-faint, #9ca3af)', fontWeight: 400 }}>未命名笔记 (双击修改)</span>}
+              {title || <span className="text-muted-foreground font-normal">未命名笔记 (双击修改)</span>}
             </div>
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="flex items-center gap-2">
           <span
             title={saveStatus === 'saving' ? '保存中...' : '已自动保存'}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginRight: '4px',
-              padding: '4px',
-            }}
+            className="inline-flex items-center justify-center mr-1 p-1"
           >
             <Cloud
               size={18}
-              style={{
-                color: saveStatus === 'saved' ? '#3b82f6' : '#9ca3af',
-                fill: saveStatus === 'saved' ? 'rgba(59, 130, 246, 0.18)' : 'none',
-                transition: 'all 0.25s ease',
-              }}
+              className={cn(
+                'transition-all duration-300',
+                saveStatus === 'saved' ? 'text-primary fill-primary/20' : 'text-muted-foreground fill-none'
+              )}
             />
           </span>
 
-          <button
-            type="button"
+          <Button
+            variant="ghost"
+            size="icon"
             onClick={handlePin}
             title={note.isPinned ? '取消置顶' : '置顶'}
-            style={{
-              border: 'none',
-              background: note.isPinned ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-              color: note.isPinned ? '#3b82f6' : 'var(--text-muted, #6b7280)',
-              borderRadius: '4px',
-              padding: '6px',
-              cursor: 'pointer',
-            }}
+            className={cn(
+              'rounded',
+              note.isPinned && 'text-primary bg-primary/10'
+            )}
           >
             <Pin size={16} />
-          </button>
+          </Button>
 
-          <div style={{ position: 'relative' }} ref={menuRef}>
-            <button
-              type="button"
+          <div className="relative" ref={menuRef}>
+            <Button
+              variant="ghost"
+              size="icon"
               onClick={() => setMenuOpen(!menuOpen)}
               title="更多操作"
-              style={{
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--text-muted, #6b7280)',
-                borderRadius: '4px',
-                padding: '6px',
-                cursor: 'pointer',
-              }}
+              className="rounded"
             >
               <MoreHorizontal size={18} />
-            </button>
+            </Button>
 
             {menuOpen && (
-              <div className="lists-dropdown-menu" style={{ top: '100%', right: 0, marginTop: '4px', zIndex: 100 }}>
-                <div className="lists-dropdown-item" onClick={() => { setMenuOpen(false); handlePin(); }}>{note.isPinned ? '取消置顶' : '置顶笔记'}</div>
-                <div className="lists-dropdown-item" onClick={() => { setMenuOpen(false); handleImport(); }}>导入 MD</div>
-                <div className="lists-dropdown-item" onClick={() => { setMenuOpen(false); handleExport(); }}>导出 MD</div>
-                <div className="lists-dropdown-item text-danger" onClick={() => { setMenuOpen(false); handleDelete(); }}>删除笔记</div>
+              <div className="absolute top-full right-0 mt-1 z-50 min-w-30 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95">
+                <button
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  onClick={() => { setMenuOpen(false); handlePin(); }}
+                >
+                  {note.isPinned ? '取消置顶' : '置顶笔记'}
+                </button>
+                <button
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  onClick={() => { setMenuOpen(false); handleImport(); }}
+                >
+                  导入 MD
+                </button>
+                <button
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
+                  onClick={() => { setMenuOpen(false); handleExport(); }}
+                >
+                  导出 MD
+                </button>
+                <button
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                  onClick={() => { setMenuOpen(false); handleDelete(); }}
+                >
+                  删除笔记
+                </button>
               </div>
             )}
           </div>
 
           {/* Window Control Buttons */}
-          <div className="standalone-window-controls">
+          <div className="flex items-center h-full ml-2 gap-0.5">
             <button
               type="button"
-              className="standalone-window-btn"
               onClick={handleMinimizeWindow}
               title="最小化"
               aria-label="最小化"
+              className="inline-flex items-center justify-center size-8 rounded bg-transparent border-none text-muted-foreground cursor-pointer transition-[background-color,color] duration-150 hover:bg-black/5 hover:text-foreground"
             >
               <Minus size={15} />
             </button>
             <button
               type="button"
-              className="standalone-window-btn"
               onClick={handleToggleMaximizeWindow}
               title={isMaximized ? "向下还原" : "最大化"}
               aria-label={isMaximized ? "向下还原" : "最大化"}
+              className="inline-flex items-center justify-center size-8 rounded bg-transparent border-none text-muted-foreground cursor-pointer transition-[background-color,color] duration-150 hover:bg-black/5 hover:text-foreground"
             >
               {isMaximized ? <Copy size={13} /> : <Square size={13} />}
             </button>
             <button
               type="button"
-              className="standalone-window-btn close-btn"
               onClick={handleCloseWindow}
               title="关闭"
               aria-label="关闭"
+              className="inline-flex items-center justify-center size-8 rounded bg-transparent border-none text-muted-foreground cursor-pointer transition-[background-color,color] duration-150 hover:bg-[#e81123] hover:text-white"
             >
               <X size={16} />
             </button>
@@ -390,14 +376,13 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
       </div>
 
       {/* Main Editor Area */}
-      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden', position: 'relative' }}>
+      <div className="flex flex-col flex-1 overflow-hidden relative">
         <ReactjsTiptapEditor
           key={note.id}
           content={content}
           initialContent={content}
           onChange={setContent}
           enableCustomTemplates={true}
-          className="note-drawer-reactjs-tiptap"
         />
       </div>
     </div>

@@ -57,7 +57,14 @@ const routeTree = rootRoute.addChildren([
   listsRoute,
 ]);
 
-export const router = createRouter({ routeTree });
+export const router = createRouter({
+  routeTree,
+  defaultNotFoundComponent: () => (
+    <div className="flex items-center justify-center h-screen text-muted-foreground text-sm">
+      页面未找到
+    </div>
+  ),
+});
 
 declare module "@tanstack/react-router" {
   interface Register {

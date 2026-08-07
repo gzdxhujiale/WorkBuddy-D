@@ -1,4 +1,4 @@
-import type { List, Folder, Note, NoteGroup } from './listsTypes';
+import type { List, Folder, Note, NoteGroup } from "@/types/lists";
 
 /**
  * listsSelectors — pure view derivations over the Lists query data.

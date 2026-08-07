@@ -8,12 +8,12 @@ import {
   LOW_FREQ_DELAY,
   logSilent,
 } from '@/lib/syncEngine';
-import * as listsService from './listsService';
-import type { List, Folder, Note, NoteGroup } from './listsTypes';
-import { getNoteGroups as selectNoteGroups, getNotesByListId as selectNotesByListId } from './listsSelectors';
+import * as listsService from '@/services/listsService';
+import type { List, Folder, Note, NoteGroup } from '@/types/lists';
+import { getNoteGroups as selectNoteGroups, getNotesByListId as selectNotesByListId } from '@/utils/listsSelectors';
 
-function genId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+function genId(_prefix: string): string {
+  return crypto.randomUUID();
 }
 
 /**

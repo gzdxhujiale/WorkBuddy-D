@@ -1,5 +1,5 @@
 import { arrayMove } from '@dnd-kit/sortable';
-import { List, Folder, Note } from './listsTypes';
+import { List, Folder, Note } from '@/types/lists';
 
 // ── Discriminated union: 拖拽计算结果 ──
 

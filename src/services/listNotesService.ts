@@ -204,12 +204,21 @@ export const listNotesApi = {
   deleteFolder: async (id: string): Promise<void> => {
     const local = getLocalData();
     local.folders = local.folders.filter((f) => f.id !== id);
-    saveLocalData({ folders: local.folders });
+    // Detach lists from the folder (set folderId to null)
+    local.lists = local.lists.map((l) => (l.folderId === id ? { ...l, folderId: undefined } : l));
+    saveLocalData({ folders: local.folders, lists: local.lists });
 
     try {
+      const now = new Date().toISOString();
+      // Detach lists from the folder
+      await supabase
+        .from("list_lists")
+        .update({ folder_id: null, updated_at: now })
+        .eq("folder_id", id)
+        .is("deleted_at", null);
       const { error } = await supabase
         .from("list_folders")
-        .update({ deleted_at: new Date().toISOString() })
+        .update({ deleted_at: now })
         .eq("id", id);
       if (error) console.warn("Supabase deleteFolder error:", error.message);
     } catch (e) {
@@ -249,13 +258,19 @@ export const listNotesApi = {
 
   deleteList: async (id: string): Promise<void> => {
     const local = getLocalData();
+    // Soft-delete the list and all its associated notes & groups locally
     local.lists = local.lists.filter((l) => l.id !== id);
-    saveLocalData({ lists: local.lists });
+    local.notes = local.notes.filter((n) => n.listId !== id);
+    local.groups = local.groups.filter((g) => g.listId !== id);
+    saveLocalData({ lists: local.lists, notes: local.notes, groups: local.groups });
 
     try {
+      const now = new Date().toISOString();
+      // Database trigger cascade_soft_delete_list() handles cascading soft-delete
+      // of associated notes and groups automatically
       const { error } = await supabase
         .from("list_lists")
-        .update({ deleted_at: new Date().toISOString() })
+        .update({ deleted_at: now })
         .eq("id", id);
       if (error) console.warn("Supabase deleteList error:", error.message);
     } catch (e) {

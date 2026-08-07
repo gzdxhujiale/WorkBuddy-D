@@ -9,16 +9,20 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-import { useListsData, useListsActions } from './useListsQuery';
-import { sortLists, sortFolders } from './listsSelectors';
-import { List, Folder, ViewType, Note, NoteGroup, Template } from './listsTypes';
-import { getNoteOpenMode, setNoteOpenMode, openNoteInNewWindow, NoteOpenMode } from './noteOpenService';
+import { useListsData, useListsActions } from '@/hooks/useListsQuery';
+import { sortLists, sortFolders } from '@/utils/listsSelectors';
+import { List, Folder, ViewType, Note, NoteGroup, Template } from '@/types/lists';
+import { getNoteOpenMode, setNoteOpenMode, openNoteInNewWindow, NoteOpenMode } from '@/services/noteOpenService';
 import { TemplateModal, useTemplateData, useTemplateActions } from '../templates';
-import * as listsService from './listsService';
+import * as listsService from '@/services/listsService';
 import { logError, logSilent } from '@/lib/syncEngine';
-import { computeNoteReorder, computeListReorder } from './listsReorder';
-import { ReactjsTiptapEditor, convertMarkdownToTipTapJson, convertTipTapJsonToMarkdown } from '../reactjs-tiptap-v1';
+import { computeNoteReorder, computeListReorder } from '@/utils/listsReorder';
+import { ReactjsTiptapEditor, convertMarkdownToTipTapJson, convertTipTapJsonToMarkdown } from '../tiptap';
 import { useConfirmDialog } from '@/components/ui/ConfirmDeleteDialog';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { cn } from '@/lib/utils';
 
 // ============================================================================
 // 0. Shared Helpers & Custom Hooks
@@ -44,11 +48,10 @@ interface ModalShellProps {
   footer?: ReactNode;
   width?: string;
   headerRight?: ReactNode;
-  zIndex?: number;
 }
 
-/** Unified Modal Shell rendered via Portal with Tailwind CSS v4 styling */
-const ModalShell: React.FC<ModalShellProps> = memo(({ title, onClose, children, footer, width = '420px', headerRight, zIndex = 100 }) => {
+/** Unified Modal Shell rendered via Portal with Dialog + semantic tokens */
+const ModalShell: React.FC<ModalShellProps> = memo(({ title, onClose, children, footer, width = '520px', headerRight }) => {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -59,30 +62,26 @@ const ModalShell: React.FC<ModalShellProps> = memo(({ title, onClose, children, 
 
   return createPortal(
     <div
-      className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4 transition-all duration-200 animate-in fade-in-0"
-      style={{ zIndex }}
+      className="fixed inset-0 z-[1000] bg-black/20 flex items-center justify-center p-4 transition-all duration-200 animate-in fade-in"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl w-full flex flex-col overflow-hidden text-slate-900 dark:text-slate-100 transition-all transform scale-100"
-        style={{ width, maxWidth: '92vw' }}
+        className="bg-card text-card-foreground border border-border rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.1)] w-full flex flex-col overflow-visible"
+        style={{ maxWidth: width, width: '92vw' }}
       >
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 dark:border-slate-800/80">
-          <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">{title}</h2>
+        <div className="relative flex items-center justify-center px-6 py-5">
+          <DialogTitle className="text-lg font-semibold m-0">{title}</DialogTitle>
           {headerRight || (
-            <button
-              onClick={onClose}
-              className="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <X size={18} />
-            </button>
+            <Button variant="ghost" size="icon" className="absolute right-4 rounded-lg" onClick={onClose}>
+              <X className="size-[18px]" />
+            </Button>
           )}
         </div>
-        <div className="p-6 flex flex-col gap-4 overflow-y-auto max-h-[75vh]">{children}</div>
+        <div className="px-6 pb-6 pt-0 flex flex-col gap-5 overflow-visible max-h-[75vh]">{children}</div>
         {footer && (
-          <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/50">
+          <DialogFooter className="px-6 pb-6 pt-0">
             {footer}
-          </div>
+          </DialogFooter>
         )}
       </div>
     </div>,
@@ -124,7 +123,7 @@ interface DroppableAreaProps {
 
 function DroppableArea({ id, data, children, className, style, onClick }: DroppableAreaProps) {
   const { setNodeRef, isOver } = useDroppable({ id, data });
-  const dynamicClassName = `${className || ''} ${isOver ? 'ring-2 ring-indigo-500/80 bg-indigo-500/10 rounded-lg' : ''}`.trim();
+  const dynamicClassName = `${className || ''} ${isOver ? 'ring-2 ring-ring bg-accent/70 rounded-lg' : ''}`.trim();
   return <div ref={setNodeRef} className={dynamicClassName} style={style} onClick={onClick}>{children}</div>;
 }
 
@@ -150,13 +149,13 @@ const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo((
   return (
     <div
       ref={setNodeRef}
-      className={`group relative flex items-center gap-2.5 px-3 py-2 rounded-lg cursor-pointer text-sm font-medium transition-all duration-150 select-none ${
-        isNested ? 'pl-8' : ''
+      className={`group relative flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-all duration-150 select-none ${
+        isNested ? 'pl-10' : 'pl-6'
       } ${
         isActive
-          ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 font-semibold shadow-2xs'
-          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100/80 dark:hover:bg-slate-800/60'
-      } ${isTarget ? 'ring-2 ring-indigo-500 bg-indigo-100/50 dark:bg-indigo-950/70' : ''}`}
+          ? 'bg-primary/8 text-primary font-medium'
+          : 'text-foreground hover:bg-muted'
+      } ${isTarget ? 'ring-2 ring-ring bg-primary/10' : ''}`}
       onClick={() => onSelectList(list.id)}
       onDragOver={(e) => {
         e.preventDefault();
@@ -274,7 +273,7 @@ function ListsSidebar({
         onSelectList={onSelectList}
         isNested={isNested}
       >
-        <div className="shrink-0 text-slate-400 group-hover:text-indigo-500 transition-colors">
+        <div className="shrink-0 text-muted-foreground group-hover:text-primary transition-colors">
           {getIcon(list.icon, list.color)}
         </div>
         <span className="truncate flex-1">{list.name}</span>
@@ -282,66 +281,66 @@ function ListsSidebar({
 
         <div className="ml-auto flex items-center gap-1">
           {list.itemCount !== undefined && list.itemCount > 0 && (
-            <span className="text-xs font-normal text-slate-400 dark:text-slate-500 group-hover:hidden">
+            <span className="text-xs font-normal text-muted-foreground group-hover:hidden">
               {list.itemCount}
             </span>
           )}
-          <div className="relative" onClick={e => e.stopPropagation()}>
-            <button
-              className={`p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-opacity ${
-                activeDropdown?.type === 'list' && activeDropdown.id === list.id ? 'opacity-100 bg-slate-200 dark:bg-slate-800' : ''
-              }`}
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveDropdown(activeDropdown?.id === list.id ? null : { type: 'list', id: list.id });
-              }}
-            >
-              <MoreHorizontal size={15} />
-            </button>
+          <div className="relative ml-auto" onClick={e => e.stopPropagation()}>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActiveDropdown(activeDropdown?.id === list.id ? null : { type: 'list', id: list.id });
+                        }}
+                      >
+                        <MoreHorizontal size={15} />
+                      </Button>
 
-            {activeDropdown?.type === 'list' && activeDropdown.id === list.id && (
-              <div
-                className="absolute top-full right-0 mt-1 z-50 min-w-32 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl flex flex-col gap-0.5 animate-in fade-in-0 zoom-in-95"
-                ref={dropdownRef}
-              >
-                <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  onClick={() => { setActiveDropdown(null); onEditList(list); }}
-                >
-                  编辑
-                </button>
-                <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  onClick={() => { setActiveDropdown(null); onPinList(list); }}
-                >
-                  {list.isPinned ? '取消置顶' : '置顶'}
-                </button>
-                <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-                  onClick={() => { setActiveDropdown(null); onDuplicateList(list); }}
-                >
-                  复制
-                </button>
-                <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    setActiveDropdown(null);
-                    const confirmed = await confirmDelete({
-                      title: '删除清单',
-                      description: `确定要删除清单 "${list.name}" 吗？`,
-                      confirmText: '删除',
-                    });
-                    if (confirmed) {
-                      onDeleteList(list);
-                    }
-                  }}
-                >
-                  删除
-                </button>
-              </div>
-            )}
-          </div>
+                      {activeDropdown?.type === 'list' && activeDropdown.id === list.id && (
+                        <div
+                          className="absolute top-full right-0 mt-1 z-50 min-w-30 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95"
+                          ref={dropdownRef}
+                        >
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
+                            onClick={() => { setActiveDropdown(null); onEditList(list); }}
+                          >
+                            编辑
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
+                            onClick={() => { setActiveDropdown(null); onPinList(list); }}
+                          >
+                            {list.isPinned ? '取消置顶' : '置顶'}
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
+                            onClick={() => { setActiveDropdown(null); onDuplicateList(list); }}
+                          >
+                            复制
+                          </button>
+                          <button
+                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              setActiveDropdown(null);
+                              const confirmed = await confirmDelete({
+                                title: '删除清单',
+                                description: `确定要删除清单 "${list.name}" 吗？`,
+                                confirmText: '删除',
+                              });
+                              if (confirmed) {
+                                onDeleteList(list);
+                              }
+                            }}
+                          >
+                            删除
+                          </button>
+                        </div>
+                      )}
+                    </div>
         </div>
       </SidebarListItemDroppable>
     </SortableItem>
@@ -351,22 +350,25 @@ function ListsSidebar({
 
   return (
     <aside
-      className={`w-56 flex-none bg-slate-50/80 dark:bg-slate-900/80 border-r border-slate-200/80 dark:border-slate-800 flex flex-col transition-all duration-250 ease-in-out overflow-hidden ${
-        isCollapsed ? 'w-0 opacity-0 border-r-transparent pointer-events-none' : 'w-56 opacity-100'
-      }`}
+      className={cn(
+        'w-[200px] flex-none bg-background border-r border-border flex flex-col transition-all duration-[250ms] ease-in-out overflow-hidden',
+        isCollapsed && '!w-0 opacity-0 border-r-transparent pointer-events-none'
+      )}
     >
-      <div className="group/header flex items-center justify-between px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 select-none">
+      <div className="group/header flex items-center justify-between px-5 pt-4 pb-2 text-sm font-medium text-muted-foreground select-none">
         <span>清单</span>
-        <button
-          className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 cursor-pointer opacity-0 group-hover/header:opacity-100 transition-opacity"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="rounded-md opacity-0 group-hover/header:opacity-100 transition-opacity"
           onClick={() => onAddClick()}
           title="新建清单"
         >
           <Plus size={16} />
-        </button>
+        </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2.5 py-1 space-y-1">
+      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
         <SortableContext items={folders.map(f => f.id)} strategy={verticalListSortingStrategy}>
           {folders.map(folder => {
             const isCollapsedFolder = collapsedFolders[folder.id];
@@ -379,55 +381,57 @@ function ListsSidebar({
                   <DroppableArea
                     id={folder.id}
                     data={{ type: 'folder' }}
-                    className={`group relative flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 transition-colors select-none ${
-                      isTarget ? 'ring-2 ring-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/50' : ''
+                    className={`group relative flex items-center gap-2 px-2 py-1.5 pl-6 rounded-md cursor-pointer text-sm text-foreground hover:bg-muted transition-colors select-none ${
+                      isTarget ? 'ring-2 ring-ring bg-primary/10' : ''
                     }`}
                     onClick={() => toggleFolder(folder.id)}
                   >
                     <ChevronDown
                       size={14}
-                      className={`text-slate-400 transition-transform duration-200 ${isCollapsedFolder ? '-rotate-90' : ''}`}
+                      className={`text-muted-foreground transition-transform duration-200 ${isCollapsedFolder ? '-rotate-90' : ''}`}
                     />
                     <FolderIcon size={16} className="text-amber-500/90 dark:text-amber-400/90 shrink-0" />
-                    <span className="truncate flex-1 font-semibold text-xs text-slate-600 dark:text-slate-400">{folder.name}</span>
+                    <span className="truncate flex-1 text-foreground">{folder.name}</span>
                     {folder.isPinned && <span className="text-[10px] text-amber-500">📌</span>}
 
                     <div className="relative ml-auto" onClick={e => e.stopPropagation()}>
-                      <button
-                        className="p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-opacity"
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveDropdown(activeDropdown?.id === folder.id ? null : { type: 'folder', id: folder.id });
                         }}
                       >
                         <MoreHorizontal size={15} />
-                      </button>
+                      </Button>
 
                       {activeDropdown?.type === 'folder' && activeDropdown.id === folder.id && (
                         <div
-                          className="absolute top-full right-0 mt-1 z-50 min-w-36 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl flex flex-col gap-0.5 animate-in fade-in-0 zoom-in-95"
+                          className="absolute top-full right-0 mt-1 z-50 min-w-30 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95"
                           ref={dropdownRef}
                         >
                           <button
-                            className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                             onClick={() => { setActiveDropdown(null); onAddClick(folder.id); }}
                           >
                             添加清单
                           </button>
                           <button
-                            className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                             onClick={() => { setActiveDropdown(null); onEditFolder(folder); }}
                           >
                             编辑
                           </button>
                           <button
-                            className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                             onClick={() => { setActiveDropdown(null); onPinFolder(folder); }}
                           >
                             {folder.isPinned ? '取消置顶' : '置顶'}
                           </button>
                           <button
-                            className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                             onClick={async (e) => {
                               e.stopPropagation();
                               setActiveDropdown(null);
@@ -466,7 +470,7 @@ function ListsSidebar({
         <DroppableArea
           id="standalone-area"
           data={{ type: 'folder' }}
-          className={`flex-1 min-h-[50px] pb-5 space-y-0.5 rounded-lg ${isTargetStandalone ? 'ring-2 ring-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/50' : ''}`}
+          className={`flex-1 min-h-[50px] pb-5 space-y-0.5 rounded-lg ${isTargetStandalone ? 'ring-2 ring-ring bg-accent/70' : ''}`}
         >
           <SortableContext items={standaloneLists.map(l => l.id)} strategy={verticalListSortingStrategy}>
             {standaloneLists.map(list => renderSidebarItem(list, false))}
@@ -506,7 +510,7 @@ function NoteItem({ note, allLists, onClick, onPin, onDuplicate, onDelete, onMov
 
   return (
     <div
-      className="group relative flex items-center gap-3 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-indigo-300 dark:hover:border-indigo-700/80 rounded-xl px-4 py-3 cursor-pointer shadow-2xs hover:shadow-md transition-all duration-200 mb-2.5 text-slate-900 dark:text-slate-100"
+      className="group relative flex items-center gap-3 bg-card border border-border hover:border-muted-foreground/30 rounded-lg px-4 py-3 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all duration-200 mb-3 text-card-foreground"
       onClick={onClick}
       draggable
       onDragStart={(e) => {
@@ -514,8 +518,8 @@ function NoteItem({ note, allLists, onClick, onPin, onDuplicate, onDelete, onMov
         e.dataTransfer.effectAllowed = 'move';
       }}
     >
-      <FileText size={16} className="text-slate-400 dark:text-slate-500 group-hover:text-indigo-500 transition-colors shrink-0" />
-      <div className="flex-1 text-sm font-medium text-slate-800 dark:text-slate-200 truncate">
+      <FileText size={16} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+      <div className="flex-1 text-sm font-medium text-foreground truncate">
         {note.title || '无标题笔记'}
       </div>
       {note.isPinned && (
@@ -525,10 +529,13 @@ function NoteItem({ note, allLists, onClick, onPin, onDuplicate, onDelete, onMov
       )}
 
       <div className="relative shrink-0" onClick={e => e.stopPropagation()} ref={menuRef}>
-        <button
-          className={`p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 opacity-0 group-hover:opacity-100 transition-all ${
-            menuOpen ? 'opacity-100 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : ''
-          }`}
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'rounded-lg',
+            menuOpen && 'bg-accent text-accent-foreground'
+          )}
           onClick={(e) => {
             e.stopPropagation();
             setMenuOpen(!menuOpen);
@@ -537,15 +544,15 @@ function NoteItem({ note, allLists, onClick, onPin, onDuplicate, onDelete, onMov
           }}
         >
           <MoreHorizontal size={16} />
-        </button>
+        </Button>
 
         {menuOpen && (
-          <div className="absolute right-0 top-full mt-1.5 z-50 min-w-44 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl flex flex-col gap-0.5 animate-in fade-in-0 zoom-in-95">
+          <div className="absolute right-0 top-full mt-1.5 z-50 min-w-44 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95">
             {showMoveTo ? (
-              <div className="flex flex-col gap-1 p-1">
-                <div className="flex items-center gap-1.5 px-2 py-1 border-b border-slate-100 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300">
+              <div className="flex flex-col p-1">
+                <div className="flex items-center gap-1.5 px-2 py-2 border-b border-border text-sm text-foreground">
                   <button
-                    className="p-0.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+                    className="p-0.5 hover:bg-muted rounded-sm transition-colors cursor-pointer"
                     onClick={(e) => { e.stopPropagation(); setShowMoveTo(false); }}
                   >
                     <ChevronRight size={14} className="rotate-180" />
@@ -553,25 +560,25 @@ function NoteItem({ note, allLists, onClick, onPin, onDuplicate, onDelete, onMov
                   <span>移动到...</span>
                 </div>
                 <div className="p-1">
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100 dark:bg-slate-800 rounded-lg text-xs">
-                    <Search size={13} className="text-slate-400 shrink-0" />
+                  <div className="flex items-center gap-1.5 px-2 py-1.5 bg-muted rounded-md text-sm">
+                    <Search size={13} className="text-muted-foreground shrink-0" />
                     <input
                       type="text"
                       placeholder="搜索清单..."
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full bg-transparent border-none outline-none text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                      className="w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
                     />
                   </div>
                 </div>
-                <div className="max-h-40 overflow-y-auto space-y-0.5">
+                <div className="max-h-40 overflow-y-auto">
                   {otherLists.length === 0 ? (
-                    <div className="p-2 text-xs text-slate-400 text-center">无匹配清单</div>
+                    <div className="p-2 text-sm text-muted-foreground text-center">无匹配清单</div>
                   ) : (
                     otherLists.map(list => (
                       <button
                         key={list.id}
-                        className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors truncate"
+                        className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors truncate cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
                           setMenuOpen(false);
@@ -588,26 +595,26 @@ function NoteItem({ note, allLists, onClick, onPin, onDuplicate, onDelete, onMov
             ) : (
               <>
                 <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                   onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onPin(note); }}
                 >
                   {note.isPinned ? '取消置顶' : '置顶'}
                 </button>
                 <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-between"
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors flex items-center justify-between cursor-pointer"
                   onClick={(e) => { e.stopPropagation(); setShowMoveTo(true); }}
                 >
                   <span>移动到</span>
                   <ChevronRight size={14} />
                 </button>
                 <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                   onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDuplicate(note); }}
                 >
                   创建副本
                 </button>
                 <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                   onClick={(e) => {
                     e.stopPropagation();
                     setMenuOpen(false);
@@ -673,17 +680,17 @@ function NoteGroupView({ group, notes, allLists, isUngrouped, isDragOverTarget, 
   return (
     <div
       ref={setNodeRef}
-      className={`mb-6 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 bg-slate-50/40 dark:bg-slate-900/40 p-3 transition-all ${
-        isDragOverTarget ? 'ring-2 ring-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/40' : ''
+      className={`mb-6 rounded-lg border border-border/60 bg-muted/30 p-3 transition-all ${
+        isDragOverTarget ? 'ring-2 ring-ring bg-accent/30' : ''
       }`}
     >
       <div
-        className="group/gh flex items-center gap-2 px-2.5 py-1.5 rounded-lg cursor-pointer hover:bg-slate-200/40 dark:hover:bg-slate-800/40 transition-colors select-none"
+        className="group/gh flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-muted transition-colors select-none"
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
         <ChevronDown
           size={14}
-          className={`text-slate-400 transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`}
+          className={`text-muted-foreground transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`}
         />
 
         {isEditing ? (
@@ -701,39 +708,42 @@ function NoteGroupView({ group, notes, allLists, isUngrouped, isDragOverTarget, 
               }
             }}
             onClick={e => e.stopPropagation()}
-            className="text-sm font-semibold border border-indigo-400 bg-white dark:bg-slate-800 outline-none rounded-md px-2 py-0.5 text-slate-900 dark:text-slate-100"
+            className="text-sm font-semibold border border-primary bg-card outline-none rounded-md px-2 py-0.5 text-foreground"
           />
         ) : (
-          <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">{group.name}</span>
+          <span className="text-sm font-semibold text-foreground">{group.name}</span>
         )}
 
         <div className="ml-auto flex items-center gap-2 relative" onClick={e => e.stopPropagation()} ref={menuRef}>
-          <span className="text-xs font-medium text-slate-400 dark:text-slate-500 bg-slate-200/60 dark:bg-slate-800 px-2 py-0.5 rounded-full">
+          <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
             {notes.length}
           </span>
           {!isUngrouped && (
             <>
-              <button
-                className={`p-1 rounded-md text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 opacity-0 group-hover/gh:opacity-100 transition-opacity ${
-                  menuOpen ? 'opacity-100 bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200' : ''
-                }`}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn(
+                  'rounded-md',
+                  menuOpen && 'bg-accent text-accent-foreground'
+                )}
                 onClick={(e) => {
                   e.stopPropagation();
                   setMenuOpen(!menuOpen);
                 }}
               >
                 <MoreHorizontal size={15} />
-              </button>
+              </Button>
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 z-50 min-w-32 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl flex flex-col gap-0.5 animate-in fade-in-0 zoom-in-95">
+                <div className="absolute right-0 top-full mt-1 z-50 min-w-32 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95">
                   <button
-                    className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                     onClick={(e) => { e.stopPropagation(); setIsEditing(true); setMenuOpen(false); }}
                   >
                     重命名
                   </button>
                   <button
-                    className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors flex items-center gap-1.5"
+                    className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1.5 cursor-pointer"
                     onClick={(e) => {
                       e.stopPropagation();
                       setMenuOpen(false);
@@ -753,7 +763,7 @@ function NoteGroupView({ group, notes, allLists, isUngrouped, isDragOverTarget, 
       {!isCollapsed && (
         <div className="pt-2 min-h-[12px]">
           {notes.length === 0 ? (
-            <div className="px-6 py-2 text-xs text-slate-400 dark:text-slate-500">暂无笔记</div>
+            <div className="px-6 py-2 text-xs text-muted-foreground">暂无笔记</div>
           ) : (
             <SortableContext items={notes.map(n => n.id)} strategy={verticalListSortingStrategy}>
               {notes.map(note => (
@@ -886,66 +896,68 @@ function NoteDrawerContent({
 
   return (
     <>
-      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200/80 dark:border-slate-800 shrink-0">
-        <input
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+        <Input
           type="text"
           value={title}
           onChange={e => setTitle(e.target.value)}
           placeholder="笔记标题"
-          className="flex-1 mr-4 text-xl font-bold border-none outline-none bg-transparent text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
+          className="flex-1 mr-4 text-xl font-bold border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto"
         />
         <div className="flex items-center gap-2 shrink-0">
           <span
             title={saveStatus === 'saving' ? '保存中...' : '已自动保存'}
-            className="p-1.5 rounded-lg text-indigo-500 dark:text-indigo-400 bg-indigo-50/50 dark:bg-indigo-950/40"
+            className="p-1.5 rounded-lg text-primary bg-primary/10"
           >
             <Cloud
               size={18}
-              className={`transition-all duration-300 ${saveStatus === 'saving' ? 'opacity-50 animate-pulse' : 'opacity-100'}`}
+              className={cn('transition-all duration-300', saveStatus === 'saving' ? 'opacity-50 animate-pulse' : 'opacity-100')}
             />
           </span>
           <div className="relative" ref={menuRef}>
-            <button
-              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-lg"
               onClick={() => setMenuOpen(!menuOpen)}
             >
               <MoreHorizontal size={20} />
-            </button>
+            </Button>
 
             {menuOpen && (
-              <div className="absolute right-0 top-full mt-2 z-50 min-w-36 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl flex flex-col gap-0.5 animate-in fade-in-0 zoom-in-95">
+              <div className="absolute right-0 top-full mt-2 z-50 min-w-36 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95">
                 <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                   onClick={() => { setMenuOpen(false); onPin(note); }}
                 >
                   {note.isPinned ? '取消置顶' : '置顶'}
                 </button>
                 <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                   onClick={() => { setMenuOpen(false); onDuplicate(note); }}
                 >
                   创建副本
                 </button>
                 <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                   onClick={() => { setMenuOpen(false); onSaveAsTemplate(note); }}
                 >
                   保存为模板
                 </button>
                 <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                   onClick={() => { setMenuOpen(false); handleImport(); }}
                 >
                   导入MD
                 </button>
                 <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                   onClick={() => { setMenuOpen(false); handleExport(); }}
                 >
                   导出MD
                 </button>
                 <button
-                  className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
                   onClick={async (e) => {
                     e.stopPropagation();
                     setMenuOpen(false);
@@ -977,7 +989,6 @@ function NoteDrawerContent({
           initialContent={content}
           onChange={setContent}
           enableCustomTemplates={true}
-          className="flex-1 overflow-y-auto p-4"
         />
       </div>
     </>
@@ -1024,13 +1035,14 @@ function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSav
         />
       )}
       <div
-        className={`absolute top-0 bottom-0 z-30 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 shadow-2xl flex flex-col transition-all duration-300 ease-out ${
+        className={cn(
+          'absolute top-0 bottom-0 z-30 bg-card text-card-foreground border-l border-border shadow-2xl flex flex-col transition-all duration-300 ease-out',
           isOpen ? 'right-0' : '-right-full'
-        }`}
+        )}
         style={{ width: drawerWidth }}
       >
         <div
-          className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-indigo-500/40 transition-colors z-40"
+          className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-primary/40 transition-colors z-40"
           onMouseDown={handleMouseDown}
         />
         <NoteDrawerContent
@@ -1074,32 +1086,25 @@ function FolderModal({ initialData, onClose, onSave }: FolderModalProps) {
       onClose={onClose}
       footer={
         <>
-          <button
-            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-            onClick={onClose}
-          >
+          <Button variant="secondary" onClick={onClose}>
             取消
-          </button>
-          <button
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-xs hover:shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={handleSave}
-            disabled={!name.trim()}
-          >
+          </Button>
+          <Button variant="default" onClick={handleSave} disabled={!name.trim()}>
             {initialData ? '保存' : '添加'}
-          </button>
+          </Button>
         </>
       }
     >
       <div className="pt-2">
-        <div className="flex items-center gap-2.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
+        <div className="flex items-center gap-2.5 px-3 py-2 bg-card border border-input rounded-lg focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 transition-all">
           <FolderIcon size={18} className="text-amber-500 shrink-0" />
-          <input
+          <Input
             type="text"
             placeholder="文件夹名称"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
-            className="w-full bg-transparent border-none outline-none text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
+            className="border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto"
             onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
           />
         </div>
@@ -1147,52 +1152,46 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
       onClose={onClose}
       footer={
         <>
-          <button
-            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-            onClick={onClose}
-          >
+          <Button variant="secondary" onClick={onClose}>
             取消
-          </button>
-          <button
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-xs hover:shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={handleAdd}
-            disabled={!name.trim()}
-          >
+          </Button>
+          <Button variant="default" onClick={handleAdd} disabled={!name.trim()}>
             {initialData ? '保存' : '添加'}
-          </button>
+          </Button>
         </>
       }
     >
       <div className="space-y-4">
-        <div className="flex items-center gap-2.5 px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-          <BookOpen size={18} className="text-indigo-500 shrink-0" />
-          <input
+        <div className="flex items-center gap-2.5 px-3 py-2 bg-card border border-input rounded-lg focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 transition-all">
+          <BookOpen size={18} className="text-primary shrink-0" />
+          <Input
             type="text"
             placeholder="清单名称"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
-            className="w-full bg-transparent border-none outline-none text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
+            className="border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto"
             onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
           />
         </div>
 
         <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">颜色主题</label>
+          <span className="text-xs font-semibold text-muted-foreground">颜色主题</span>
           <div className="flex items-center gap-2">
             <div
-              className={`w-6 h-6 rounded-full cursor-pointer border-2 transition-transform hover:scale-110 ${
-                color === 'none' ? 'border-indigo-500 ring-2 ring-indigo-500/20' : 'border-slate-300 dark:border-slate-600'
-              }`}
-              style={{ background: 'transparent' }}
+              className={cn(
+                'size-5 rounded-full cursor-pointer border-2 transition-transform hover:scale-110',
+                color === 'none' ? 'border-ring ring-2 ring-ring/20' : 'border-border'
+              )}
               onClick={() => setColor('none')}
             />
             {COLORS.map(c => (
               <div
                 key={c}
-                className={`w-6 h-6 rounded-full cursor-pointer border-2 transition-transform hover:scale-110 ${
-                  color === c ? 'border-slate-900 dark:border-white ring-2 ring-indigo-500/30' : 'border-transparent'
-                }`}
+                className={cn(
+                  'size-5 rounded-full cursor-pointer border-2 transition-transform hover:scale-110',
+                  color === c ? 'border-foreground ring-2 ring-ring/30' : 'border-transparent'
+                )}
                 style={{ background: c }}
                 onClick={() => setColor(c)}
               />
@@ -1201,21 +1200,23 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
         </div>
 
         <div className="flex items-center justify-between">
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">视图模式</label>
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-1 rounded-xl gap-1">
+          <span className="text-xs font-semibold text-muted-foreground">视图模式</span>
+          <div className="flex items-center bg-muted p-1 rounded-lg gap-1">
             <button
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                viewType === 'list' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs' : 'text-slate-600 dark:text-slate-400'
-              }`}
+              className={cn(
+                'flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer',
+                viewType === 'list' ? 'bg-card text-primary border border-primary' : 'text-muted-foreground border border-transparent'
+              )}
               onClick={() => setViewType('list')}
             >
               <LayoutList size={14} />
               <span>列表</span>
             </button>
             <button
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-                viewType === 'board' ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-2xs' : 'text-slate-600 dark:text-slate-400'
-              }`}
+              className={cn(
+                'flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer',
+                viewType === 'board' ? 'bg-card text-primary border border-primary' : 'text-muted-foreground border border-transparent'
+              )}
               onClick={() => setViewType('board')}
             >
               <Columns size={14} />
@@ -1225,46 +1226,47 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
         </div>
 
         <div className="flex items-center justify-between relative">
-          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">所属文件夹</label>
+          <span className="text-xs font-semibold text-muted-foreground">所属文件夹</span>
           <div className="relative flex-1 max-w-[220px]" ref={dropdownRef}>
-            <button
-              type="button"
-              className="w-full flex items-center justify-between px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-700 dark:text-slate-200"
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full flex items-center justify-between px-3 text-xs font-medium"
               onClick={() => setIsFolderDropdownOpen(!isFolderDropdownOpen)}
             >
               <span>{getFolderDisplay()}</span>
-              <ChevronDown size={14} className="text-slate-400" />
-            </button>
+              <ChevronDown size={14} className="text-muted-foreground" />
+            </Button>
 
             {isFolderDropdownOpen && (
-              <div className="absolute top-full right-0 mt-1.5 z-50 w-full p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl flex flex-col gap-0.5 max-h-48 overflow-y-auto">
+              <div className="absolute top-full right-0 mt-1.5 z-50 w-full p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col max-h-48 overflow-y-auto">
                 <button
                   type="button"
-                  className="flex items-center justify-between px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="flex items-center justify-between px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer w-full text-left"
                   onClick={() => { setFolderId(null); setIsFolderDropdownOpen(false); }}
                 >
                   <span>无</span>
-                  {folderId === null && <Check size={14} className="text-indigo-500" />}
+                  {folderId === null && <Check size={14} className="text-primary" />}
                 </button>
                 {folders.map(f => (
                   <button
                     key={f.id}
                     type="button"
-                    className="flex items-center justify-between px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    className="flex items-center justify-between px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer w-full text-left"
                     onClick={() => { setFolderId(f.id); setIsFolderDropdownOpen(false); }}
                   >
                     <span>{f.name}</span>
-                    {folderId === f.id && <Check size={14} className="text-indigo-500" />}
+                    {folderId === f.id && <Check size={14} className="text-primary" />}
                   </button>
                 ))}
-                <div className="pt-1 border-t border-slate-100 dark:border-slate-800 flex items-center gap-1.5 px-2 py-1">
-                  <Plus size={14} className="text-slate-400 shrink-0" />
-                  <input
+                <div className="pt-1 border-t border-border flex items-center gap-1.5 px-2 py-1">
+                  <Plus size={14} className="text-muted-foreground shrink-0" />
+                  <Input
                     type="text"
                     value={newFolderName}
                     onChange={(e) => setNewFolderName(e.target.value)}
                     placeholder="新建文件夹..."
-                    className="w-full bg-transparent border-none outline-none text-xs text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
+                    className="border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto text-xs"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault();
@@ -1324,58 +1326,54 @@ function ListSettingsModal({ onClose, showToast }: ListSettingsModalProps) {
       title="清单设置"
       onClose={onClose}
       width="460px"
-      zIndex={1000}
       footer={
-        <button
-          type="button"
-          onClick={onClose}
-          disabled={isSaving}
-          className="px-5 py-2 rounded-xl text-sm font-medium bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
-        >
+        <Button variant="secondary" onClick={onClose} disabled={isSaving}>
           完成
-        </button>
+        </Button>
       }
     >
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">笔记弹出方式</label>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+          <span className="block text-sm font-semibold text-foreground mb-1">笔记弹出方式</span>
+          <p className="text-xs text-muted-foreground mb-3">
             选择点击笔记列表条目时的打开方式。设置将自动保存并同步至数据库。
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div
               onClick={() => handleSelectMode('sidebar')}
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
+              className={cn(
+                'p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-2',
                 openMode === 'sidebar'
-                  ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40'
-                  : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 hover:border-slate-300 dark:hover:border-slate-700'
-              }`}
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border bg-muted/50 hover:border-muted-foreground/30'
+              )}
             >
               <div className="flex items-center justify-between">
-                <Sidebar size={20} className={openMode === 'sidebar' ? 'text-indigo-500' : 'text-slate-400'} />
-                {openMode === 'sidebar' && <Check size={16} className="text-indigo-500" />}
+                <Sidebar size={20} className={openMode === 'sidebar' ? 'text-primary' : 'text-muted-foreground'} />
+                {openMode === 'sidebar' && <Check size={16} className="text-primary" />}
               </div>
               <div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">侧边栏弹出</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">在主界面右侧滑出抽屉编辑</div>
+                <div className="text-sm font-semibold text-foreground">侧边栏弹出</div>
+                <div className="text-xs text-muted-foreground mt-0.5">在主界面右侧滑出抽屉编辑</div>
               </div>
             </div>
 
             <div
               onClick={() => handleSelectMode('window')}
-              className={`p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-2 ${
+              className={cn(
+                'p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-2',
                 openMode === 'window'
-                  ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/40'
-                  : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 hover:border-slate-300 dark:hover:border-slate-700'
-              }`}
+                  ? 'border-primary bg-primary/5'
+                  : 'border-border bg-muted/50 hover:border-muted-foreground/30'
+              )}
             >
               <div className="flex items-center justify-between">
-                <ExternalLink size={20} className={openMode === 'window' ? 'text-indigo-500' : 'text-slate-400'} />
-                {openMode === 'window' && <Check size={16} className="text-indigo-500" />}
+                <ExternalLink size={20} className={openMode === 'window' ? 'text-primary' : 'text-muted-foreground'} />
+                {openMode === 'window' && <Check size={16} className="text-primary" />}
               </div>
               <div>
-                <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">新窗口弹出</div>
-                <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">在独立的窗口中多任务并发编辑</div>
+                <div className="text-sm font-semibold text-foreground">新窗口弹出</div>
+                <div className="text-xs text-muted-foreground mt-0.5">在独立的窗口中多任务并发编辑</div>
               </div>
             </div>
           </div>
@@ -1427,36 +1425,28 @@ function BatchExportModal({ notes, onExport, onClose }: BatchExportModalProps) {
       title="批量导出笔记"
       onClose={onClose}
       width="500px"
-      zIndex={100}
       footer={
         <>
-          <button
-            className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-lg text-sm font-medium transition-colors cursor-pointer"
-            onClick={onClose}
-          >
+          <Button variant="secondary" onClick={onClose}>
             取消
-          </button>
-          <button
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-sm font-medium shadow-xs hover:shadow-md transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={handleConfirm}
-            disabled={selectedIds.size === 0 || notes.length === 0}
-          >
+          </Button>
+          <Button variant="default" onClick={handleConfirm} disabled={selectedIds.size === 0 || notes.length === 0}>
             导出选中的笔记 ({selectedIds.size})
-          </button>
+          </Button>
         </>
       }
     >
       <div className="overflow-y-auto max-h-[50vh] space-y-1">
         {notes.length === 0 ? (
-          <div className="py-8 text-center text-sm text-slate-400">当前清单暂无笔记。</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">当前清单暂无笔记。</div>
         ) : (
           <>
-            <label className="flex items-center gap-3 px-3 py-2 border-b border-slate-100 dark:border-slate-800 cursor-pointer text-sm font-semibold text-slate-800 dark:text-slate-200 select-none">
+            <label className="flex items-center gap-3 px-3 py-2 border-b border-border cursor-pointer text-sm font-semibold text-foreground select-none">
               <input
                 type="checkbox"
                 checked={allSelected}
                 onChange={handleToggleSelectAll}
-                className="w-4 h-4 rounded-md accent-indigo-600 cursor-pointer"
+                className="size-4 rounded-md accent-primary cursor-pointer"
               />
               <span>全选 ({notes.length})</span>
             </label>
@@ -1466,15 +1456,15 @@ function BatchExportModal({ notes, onExport, onClose }: BatchExportModalProps) {
                 return (
                   <label
                     key={note.id}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800/60 cursor-pointer select-none transition-colors"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent hover:text-accent-foreground cursor-pointer select-none transition-colors"
                   >
                     <input
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => handleToggleNote(note.id)}
-                      className="w-4 h-4 rounded-md accent-indigo-600 cursor-pointer"
+                      className="size-4 rounded-md accent-primary cursor-pointer"
                     />
-                    <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                    <span className="text-sm text-foreground truncate">
                       {note.title || '未命名笔记'}
                     </span>
                   </label>
@@ -2085,7 +2075,7 @@ export function ListsPanel() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-      <section className="flex h-full w-full bg-white dark:bg-slate-950 overflow-hidden text-slate-900 dark:text-slate-100">
+      <section className="flex h-full w-full bg-background overflow-hidden text-foreground">
         <ListsSidebar
           lists={lists}
           folders={folders}
@@ -2105,44 +2095,48 @@ export function ListsPanel() {
         />
 
         <main
-          className="flex-1 flex flex-col bg-white dark:bg-slate-950 relative overflow-hidden"
+          className="flex-1 flex flex-col bg-background relative overflow-hidden"
           onClick={() => setListMenuOpen(false)}
         >
           {activeList ? (
             <>
-              <div className="flex items-center justify-between px-8 py-5 border-b border-slate-100 dark:border-slate-800/80 shrink-0">
-                <div className="flex items-center gap-3 font-bold text-xl text-slate-900 dark:text-slate-100">
-                  <button
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              <div className="flex items-center justify-between px-8 pt-6 pb-4 border-b border-border shrink-0">
+                <div className="flex items-center gap-3 font-bold text-xl text-foreground">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="rounded-lg"
                     onClick={toggleSidebar}
                     title={isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
                   >
                     <MenuIcon isCollapsed={isSidebarCollapsed} />
-                  </button>
+                  </Button>
                   <span>{activeList.name}</span>
                 </div>
-                <div className="flex items-center gap-4 text-slate-400 dark:text-slate-500">
-                  <button className="p-1.5 rounded-lg hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer">
+                <div className="flex items-center gap-4 text-muted-foreground">
+                  <Button variant="ghost" size="icon" className="rounded-lg">
                     <ArrowDownUp size={18} />
-                  </button>
+                  </Button>
                   <div className="relative">
-                    <button
-                      className="p-1.5 rounded-lg hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-lg"
                       onClick={(e) => { e.stopPropagation(); setListMenuOpen(!listMenuOpen); }}
                     >
                       <MoreHorizontal size={18} />
-                    </button>
+                    </Button>
                     {listMenuOpen && (
-                      <div className="absolute right-0 top-full mt-2 z-20 min-w-44 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl flex flex-col gap-0.5 animate-in fade-in-0 zoom-in-95">
-                        <div className="group/sub relative">
-                          <button className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-between">
+                      <div className="absolute right-0 top-full mt-2 z-20 min-w-44 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95">
+                        <div className="group/sub relative before:absolute before:-left-2.5 before:inset-y-0 before:w-3">
+                          <button className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors flex items-center justify-between cursor-pointer">
                             <span>笔记打开方式</span>
-                            <ChevronRight size={14} className="text-slate-400" />
+                            <ChevronRight size={14} className="text-muted-foreground" />
                           </button>
 
-                          <div className="hidden group-hover/sub:flex absolute right-full top-0 mr-1 min-w-40 p-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl shadow-xl flex-col gap-0.5">
+                          <div className="hidden group-hover/sub:flex absolute right-full top-0 mr-0 min-w-40 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex-col">
                             <button
-                              className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-between"
+                              className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors flex items-center justify-between cursor-pointer"
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 await setNoteOpenMode('sidebar');
@@ -2154,11 +2148,11 @@ export function ListsPanel() {
                                 <Sidebar size={14} />
                                 侧边栏弹出
                               </span>
-                              {getNoteOpenMode() === 'sidebar' && <Check size={14} className="text-indigo-600 dark:text-indigo-400" />}
+                              {getNoteOpenMode() === 'sidebar' && <Check size={14} className="text-primary" />}
                             </button>
 
                             <button
-                              className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-between"
+                              className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors flex items-center justify-between cursor-pointer"
                               onClick={async (e) => {
                                 e.stopPropagation();
                                 await setNoteOpenMode('window');
@@ -2170,25 +2164,25 @@ export function ListsPanel() {
                                 <ExternalLink size={14} />
                                 新窗口弹出
                               </span>
-                              {getNoteOpenMode() === 'window' && <Check size={14} className="text-indigo-600 dark:text-indigo-400" />}
+                              {getNoteOpenMode() === 'window' && <Check size={14} className="text-primary" />}
                             </button>
                           </div>
                         </div>
 
                         <button
-                          className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                           onClick={() => { handleAddGroupClick(); setListMenuOpen(false); }}
                         >
                           新建分组
                         </button>
                         <button
-                          className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                           onClick={() => { handleBatchImport(); setListMenuOpen(false); }}
                         >
                           批量导入MD
                         </button>
                         <button
-                          className="w-full text-left px-3 py-1.5 text-xs rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                          className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                           onClick={() => { setBatchExportModalOpen(true); setListMenuOpen(false); }}
                         >
                           批量导出MD
@@ -2200,9 +2194,9 @@ export function ListsPanel() {
               </div>
 
               <div className="px-8 flex-1 overflow-y-auto flex flex-col py-6">
-                <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-4 py-3 mb-6 focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all">
-                  <Plus size={18} className="text-slate-400 shrink-0" />
-                  <input
+                <div className="flex items-center gap-3 bg-muted border border-input rounded-lg px-3 py-2 mb-6 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 transition-all">
+                  <Plus size={18} className="text-muted-foreground shrink-0" />
+                  <Input
                     type="text"
                     placeholder="添加笔记..."
                     value={newNoteTitle}
@@ -2210,19 +2204,19 @@ export function ListsPanel() {
                     onKeyDown={e => {
                       if (e.key === 'Enter') handleAddNote();
                     }}
-                    className="w-full bg-transparent border-none outline-none text-sm text-slate-900 dark:text-slate-100 placeholder:text-slate-400"
+                    className="border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto"
                   />
                 </div>
 
                 {notes.length === 0 && !isAddingGroup ? (
-                  <div className="flex-1 flex items-center justify-center text-sm text-slate-400 dark:text-slate-500">
+                  <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
                     暂无笔记
                   </div>
                 ) : (
                   <div className="flex flex-col pb-8">
                     {isAddingGroup && (
                       <div className="mb-4">
-                        <input
+                        <Input
                           autoFocus
                           type="text"
                           value={newGroupName}
@@ -2233,7 +2227,7 @@ export function ListsPanel() {
                             if (e.key === 'Enter') handleConfirmAddGroup();
                             if (e.key === 'Escape') setIsAddingGroup(false);
                           }}
-                          className="text-sm font-semibold border border-indigo-500 bg-white dark:bg-slate-900 outline-none rounded-lg px-3 py-1.5 text-slate-900 dark:text-slate-100 shadow-xs"
+                          className="text-sm font-semibold border-primary bg-card shadow-xs max-w-xs"
                         />
                       </div>
                     )}
@@ -2312,7 +2306,7 @@ export function ListsPanel() {
               />
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-sm text-slate-400 dark:text-slate-500">
+            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
               请在左侧选择或创建一个清单
             </div>
           )}
@@ -2367,9 +2361,10 @@ export function ListsPanel() {
           {toasts.map(t => (
             <div
               key={t.id}
-              className={`pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-900/90 dark:bg-slate-100/90 text-white dark:text-slate-900 shadow-2xl backdrop-blur-md border border-slate-800 dark:border-slate-200 text-sm font-medium transition-all duration-300 ${
+              className={cn(
+                'pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl bg-foreground/90 dark:bg-background/90 text-background dark:text-foreground shadow-2xl backdrop-blur-md border border-border text-sm font-medium transition-all duration-300',
                 t.isFadingOut ? 'opacity-0 translate-y-2' : 'animate-in slide-in-from-bottom-4'
-              }`}
+              )}
             >
               {t.type === 'success' ? (
                 <CheckCircle size={18} className="text-emerald-400 dark:text-emerald-600 shrink-0" />

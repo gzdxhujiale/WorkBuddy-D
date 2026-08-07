@@ -1,5 +1,5 @@
 import { listNotesApi } from "@/services/listNotesService";
-import type { List, Folder, Note, NoteGroup } from "./listsTypes";
+import type { List, Folder, Note, NoteGroup } from "@/types/lists";
 
 /**
  * listsService — the data-access seam for the Lists feature.
