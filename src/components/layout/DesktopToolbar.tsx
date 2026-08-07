@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import {
   CalendarCheck,
   LayoutGrid,
+  Sparkles,
   BookCheck,
   Settings,
   type LucideIcon,
@@ -18,6 +19,7 @@ export interface NavigationTool {
 export const NAV_TOOLS: NavigationTool[] = [
   { id: "today", name: "当日待办", to: "/today", icon: CalendarCheck },
   { id: "four-quadrants", name: "四象限工作台", to: "/four-quadrants", icon: LayoutGrid },
+  { id: "habit", name: "习惯追踪", to: "/habit", icon: Sparkles },
   { id: "daily-review", name: "每日复盘", to: "/daily-review", icon: BookCheck },
 ];
 

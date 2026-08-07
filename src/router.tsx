@@ -3,6 +3,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { TodayPage } from "@/pages/TodayPage";
 import { FourQuadrantsPage } from "@/pages/FourQuadrantsPage";
 import { DailyReviewPage } from "@/pages/DailyReviewPage";
+import { HabitPage } from "@/pages/HabitPage";
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -26,6 +27,12 @@ const fourQuadrantsRoute = createRoute({
   component: FourQuadrantsPage,
 });
 
+const habitRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/habit",
+  component: HabitPage,
+});
+
 const dailyReviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/daily-review",
@@ -36,6 +43,7 @@ const routeTree = rootRoute.addChildren([
   indexRoute,
   todayRoute,
   fourQuadrantsRoute,
+  habitRoute,
   dailyReviewRoute,
 ]);
 
