@@ -1,0 +1,510 @@
+import { supabase } from "@/lib/supabase";
+import {
+  ListFolder,
+  ListList,
+  ListNoteGroup,
+  ListNote,
+  ListTemplate,
+  ListNotesData,
+} from "@/types/listNotes";
+import {
+  ListFolderRow,
+  ListListRow,
+  ListNoteGroupRow,
+  ListNoteRow,
+  ListTemplateRow,
+} from "@/types/database";
+
+const LOCAL_STORAGE_FOLDERS_KEY = "fishbuddy_list_folders_v1";
+const LOCAL_STORAGE_LISTS_KEY = "fishbuddy_list_lists_v1";
+const LOCAL_STORAGE_GROUPS_KEY = "fishbuddy_list_groups_v1";
+const LOCAL_STORAGE_NOTES_KEY = "fishbuddy_list_notes_v1";
+const LOCAL_STORAGE_TEMPLATES_KEY = "fishbuddy_list_templates_v1";
+
+function getLocalData(): ListNotesData {
+  try {
+    const rawFolders = localStorage.getItem(LOCAL_STORAGE_FOLDERS_KEY);
+    const rawLists = localStorage.getItem(LOCAL_STORAGE_LISTS_KEY);
+    const rawGroups = localStorage.getItem(LOCAL_STORAGE_GROUPS_KEY);
+    const rawNotes = localStorage.getItem(LOCAL_STORAGE_NOTES_KEY);
+    const rawTemplates = localStorage.getItem(LOCAL_STORAGE_TEMPLATES_KEY);
+
+    return {
+      folders: rawFolders ? JSON.parse(rawFolders) : [],
+      lists: rawLists ? JSON.parse(rawLists) : [],
+      groups: rawGroups ? JSON.parse(rawGroups) : [],
+      notes: rawNotes ? JSON.parse(rawNotes) : [],
+      templates: rawTemplates ? JSON.parse(rawTemplates) : [],
+    };
+  } catch {
+    return {
+      folders: [],
+      lists: [],
+      groups: [],
+      notes: [],
+      templates: [],
+    };
+  }
+}
+
+function saveLocalData(data: Partial<ListNotesData>): void {
+  try {
+    if (data.folders !== undefined) {
+      localStorage.setItem(LOCAL_STORAGE_FOLDERS_KEY, JSON.stringify(data.folders));
+    }
+    if (data.lists !== undefined) {
+      localStorage.setItem(LOCAL_STORAGE_LISTS_KEY, JSON.stringify(data.lists));
+    }
+    if (data.groups !== undefined) {
+      localStorage.setItem(LOCAL_STORAGE_GROUPS_KEY, JSON.stringify(data.groups));
+    }
+    if (data.notes !== undefined) {
+      localStorage.setItem(LOCAL_STORAGE_NOTES_KEY, JSON.stringify(data.notes));
+    }
+    if (data.templates !== undefined) {
+      localStorage.setItem(LOCAL_STORAGE_TEMPLATES_KEY, JSON.stringify(data.templates));
+    }
+  } catch (e) {
+    console.error("Failed to save local list notes data:", e);
+  }
+}
+
+export const listNotesApi = {
+  // 1. 全量加载数据
+  loadAll: async (): Promise<ListNotesData> => {
+    try {
+      const [foldersRes, listsRes, groupsRes, notesRes, templatesRes] = await Promise.all([
+        supabase
+          .from("list_folders")
+          .select("*")
+          .is("deleted_at", null)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("list_lists")
+          .select("*")
+          .is("deleted_at", null)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("list_note_groups")
+          .select("*")
+          .is("deleted_at", null)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("list_notes")
+          .select("*")
+          .is("deleted_at", null)
+          .order("sort_order", { ascending: true })
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("list_templates")
+          .select("*")
+          .is("deleted_at", null)
+          .order("created_at", { ascending: true }),
+      ]);
+
+      if (foldersRes.error || listsRes.error || groupsRes.error || notesRes.error || templatesRes.error) {
+        console.warn("Supabase list_notes query warning, fallback to local storage");
+        return getLocalData();
+      }
+
+      const folders: ListFolder[] = (foldersRes.data || []).map((f: ListFolderRow) => ({
+        id: f.id,
+        userId: f.user_id,
+        name: f.name,
+        isPinned: Boolean(f.is_pinned),
+        sortOrder: f.sort_order,
+        createdAt: f.created_at ? new Date(f.created_at).getTime() : undefined,
+        updatedAt: f.updated_at ? new Date(f.updated_at).getTime() : undefined,
+      }));
+
+      const lists: ListList[] = (listsRes.data || []).map((l: ListListRow) => ({
+        id: l.id,
+        userId: l.user_id,
+        folderId: l.folder_id || undefined,
+        name: l.name,
+        icon: l.icon,
+        color: l.color,
+        viewType: l.view_type,
+        isPinned: Boolean(l.is_pinned),
+        sortOrder: l.sort_order,
+        createdAt: l.created_at ? new Date(l.created_at).getTime() : undefined,
+        updatedAt: l.updated_at ? new Date(l.updated_at).getTime() : undefined,
+      }));
+
+      const groups: ListNoteGroup[] = (groupsRes.data || []).map((g: ListNoteGroupRow) => ({
+        id: g.id,
+        userId: g.user_id,
+        listId: g.list_id,
+        name: g.name,
+        sortOrder: g.sort_order,
+        createdAt: g.created_at ? new Date(g.created_at).getTime() : undefined,
+        updatedAt: g.updated_at ? new Date(g.updated_at).getTime() : undefined,
+      }));
+
+      const notes: ListNote[] = (notesRes.data || []).map((n: ListNoteRow) => ({
+        id: n.id,
+        userId: n.user_id,
+        listId: n.list_id,
+        groupId: n.group_id || undefined,
+        title: n.title,
+        content: n.content,
+        isPinned: Boolean(n.is_pinned),
+        sortOrder: n.sort_order,
+        createdAt: n.created_at ? new Date(n.created_at).getTime() : undefined,
+        updatedAt: n.updated_at ? new Date(n.updated_at).getTime() : undefined,
+      }));
+
+      const templates: ListTemplate[] = (templatesRes.data || []).map((t: ListTemplateRow) => ({
+        id: t.id,
+        userId: t.user_id,
+        name: t.name,
+        content: t.content || {},
+        createdAt: t.created_at ? new Date(t.created_at).getTime() : undefined,
+        updatedAt: t.updated_at ? new Date(t.updated_at).getTime() : undefined,
+      }));
+
+      const data: ListNotesData = { folders, lists, groups, notes, templates };
+      saveLocalData(data);
+      return data;
+    } catch (err) {
+      console.warn("Using local storage fallback for list notes:", err);
+      return getLocalData();
+    }
+  },
+
+  // 2. 文件夹 CRUD
+  upsertFolder: async (folder: ListFolder): Promise<void> => {
+    const local = getLocalData();
+    const idx = local.folders.findIndex((f) => f.id === folder.id);
+    if (idx >= 0) {
+      local.folders[idx] = folder;
+    } else {
+      local.folders.push(folder);
+    }
+    saveLocalData({ folders: local.folders });
+
+    try {
+      const payload = {
+        id: folder.id,
+        name: folder.name,
+        is_pinned: folder.isPinned,
+        sort_order: folder.sortOrder,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from("list_folders").upsert(payload);
+      if (error) console.warn("Supabase upsertFolder error:", error.message);
+    } catch (e) {
+      console.warn("Supabase upsertFolder exception:", e);
+    }
+  },
+
+  deleteFolder: async (id: string): Promise<void> => {
+    const local = getLocalData();
+    local.folders = local.folders.filter((f) => f.id !== id);
+    saveLocalData({ folders: local.folders });
+
+    try {
+      const { error } = await supabase
+        .from("list_folders")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) console.warn("Supabase deleteFolder error:", error.message);
+    } catch (e) {
+      console.warn("Supabase deleteFolder exception:", e);
+    }
+  },
+
+  // 3. 清单 CRUD
+  upsertList: async (list: ListList): Promise<void> => {
+    const local = getLocalData();
+    const idx = local.lists.findIndex((l) => l.id === list.id);
+    if (idx >= 0) {
+      local.lists[idx] = list;
+    } else {
+      local.lists.push(list);
+    }
+    saveLocalData({ lists: local.lists });
+
+    try {
+      const payload = {
+        id: list.id,
+        folder_id: list.folderId || null,
+        name: list.name,
+        icon: list.icon,
+        color: list.color,
+        view_type: list.viewType,
+        is_pinned: list.isPinned,
+        sort_order: list.sortOrder,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from("list_lists").upsert(payload);
+      if (error) console.warn("Supabase upsertList error:", error.message);
+    } catch (e) {
+      console.warn("Supabase upsertList exception:", e);
+    }
+  },
+
+  deleteList: async (id: string): Promise<void> => {
+    const local = getLocalData();
+    local.lists = local.lists.filter((l) => l.id !== id);
+    saveLocalData({ lists: local.lists });
+
+    try {
+      const { error } = await supabase
+        .from("list_lists")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) console.warn("Supabase deleteList error:", error.message);
+    } catch (e) {
+      console.warn("Supabase deleteList exception:", e);
+    }
+  },
+
+  // 4. 分组 CRUD
+  upsertGroup: async (group: ListNoteGroup): Promise<void> => {
+    const local = getLocalData();
+    const idx = local.groups.findIndex((g) => g.id === group.id);
+    if (idx >= 0) {
+      local.groups[idx] = group;
+    } else {
+      local.groups.push(group);
+    }
+    saveLocalData({ groups: local.groups });
+
+    try {
+      const payload = {
+        id: group.id,
+        list_id: group.listId,
+        name: group.name,
+        sort_order: group.sortOrder,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from("list_note_groups").upsert(payload);
+      if (error) console.warn("Supabase upsertGroup error:", error.message);
+    } catch (e) {
+      console.warn("Supabase upsertGroup exception:", e);
+    }
+  },
+
+  deleteGroup: async (id: string): Promise<void> => {
+    const local = getLocalData();
+    local.groups = local.groups.filter((g) => g.id !== id);
+    saveLocalData({ groups: local.groups });
+
+    try {
+      const { error } = await supabase
+        .from("list_note_groups")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) console.warn("Supabase deleteGroup error:", error.message);
+    } catch (e) {
+      console.warn("Supabase deleteGroup exception:", e);
+    }
+  },
+
+  // 5. 笔记/条目 CRUD
+  upsertNote: async (note: ListNote): Promise<void> => {
+    const local = getLocalData();
+    const idx = local.notes.findIndex((n) => n.id === note.id);
+    if (idx >= 0) {
+      local.notes[idx] = note;
+    } else {
+      local.notes.push(note);
+    }
+    saveLocalData({ notes: local.notes });
+
+    try {
+      const payload = {
+        id: note.id,
+        list_id: note.listId,
+        group_id: note.groupId || null,
+        title: note.title,
+        content: note.content,
+        is_pinned: note.isPinned,
+        sort_order: note.sortOrder,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from("list_notes").upsert(payload);
+      if (error) console.warn("Supabase upsertNote error:", error.message);
+    } catch (e) {
+      console.warn("Supabase upsertNote exception:", e);
+    }
+  },
+
+  deleteNote: async (id: string): Promise<void> => {
+    const local = getLocalData();
+    local.notes = local.notes.filter((n) => n.id !== id);
+    saveLocalData({ notes: local.notes });
+
+    try {
+      const { error } = await supabase
+        .from("list_notes")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) console.warn("Supabase deleteNote error:", error.message);
+    } catch (e) {
+      console.warn("Supabase deleteNote exception:", e);
+    }
+  },
+
+  // 6. 模板 CRUD
+  upsertTemplate: async (template: ListTemplate): Promise<void> => {
+    const local = getLocalData();
+    const idx = local.templates.findIndex((t) => t.id === template.id);
+    if (idx >= 0) {
+      local.templates[idx] = template;
+    } else {
+      local.templates.push(template);
+    }
+    saveLocalData({ templates: local.templates });
+
+    try {
+      const payload = {
+        id: template.id,
+        name: template.name,
+        content: template.content,
+        updated_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from("list_templates").upsert(payload);
+      if (error) console.warn("Supabase upsertTemplate error:", error.message);
+    } catch (e) {
+      console.warn("Supabase upsertTemplate exception:", e);
+    }
+  },
+
+  deleteTemplate: async (id: string): Promise<void> => {
+    const local = getLocalData();
+    local.templates = local.templates.filter((t) => t.id !== id);
+    saveLocalData({ templates: local.templates });
+
+    try {
+      const { error } = await supabase
+        .from("list_templates")
+        .update({ deleted_at: new Date().toISOString() })
+        .eq("id", id);
+      if (error) console.warn("Supabase deleteTemplate error:", error.message);
+    } catch (e) {
+      console.warn("Supabase deleteTemplate exception:", e);
+    }
+  },
+
+  // 7. 排序与移动 Helper 方法
+  reorderFolders: async (items: Array<[string, number]>): Promise<void> => {
+    const local = getLocalData();
+    const orderMap = new Map(items);
+    local.folders = local.folders.map((f) =>
+      orderMap.has(f.id) ? { ...f, sortOrder: orderMap.get(f.id)! } : f
+    );
+    saveLocalData({ folders: local.folders });
+
+    try {
+      for (const [id, sort_order] of items) {
+        await supabase
+          .from("list_folders")
+          .update({ sort_order, updated_at: new Date().toISOString() })
+          .eq("id", id);
+      }
+    } catch (e) {
+      console.warn("Supabase reorderFolders exception:", e);
+    }
+  },
+
+  reorderLists: async (items: Array<[string, number]>): Promise<void> => {
+    const local = getLocalData();
+    const orderMap = new Map(items);
+    local.lists = local.lists.map((l) =>
+      orderMap.has(l.id) ? { ...l, sortOrder: orderMap.get(l.id)! } : l
+    );
+    saveLocalData({ lists: local.lists });
+
+    try {
+      for (const [id, sort_order] of items) {
+        await supabase
+          .from("list_lists")
+          .update({ sort_order, updated_at: new Date().toISOString() })
+          .eq("id", id);
+      }
+    } catch (e) {
+      console.warn("Supabase reorderLists exception:", e);
+    }
+  },
+
+  moveList: async (listId: string, folderId: string | null, sortOrder: number): Promise<void> => {
+    const local = getLocalData();
+    const idx = local.lists.findIndex((l) => l.id === listId);
+    if (idx >= 0) {
+      local.lists[idx] = { ...local.lists[idx], folderId: folderId || undefined, sortOrder };
+      saveLocalData({ lists: local.lists });
+    }
+
+    try {
+      await supabase
+        .from("list_lists")
+        .update({
+          folder_id: folderId,
+          sort_order: sortOrder,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", listId);
+    } catch (e) {
+      console.warn("Supabase moveList exception:", e);
+    }
+  },
+
+  reorderNotes: async (items: Array<[string, number]>): Promise<void> => {
+    const local = getLocalData();
+    const orderMap = new Map(items);
+    local.notes = local.notes.map((n) =>
+      orderMap.has(n.id) ? { ...n, sortOrder: orderMap.get(n.id)! } : n
+    );
+    saveLocalData({ notes: local.notes });
+
+    try {
+      for (const [id, sort_order] of items) {
+        await supabase
+          .from("list_notes")
+          .update({ sort_order, updated_at: new Date().toISOString() })
+          .eq("id", id);
+      }
+    } catch (e) {
+      console.warn("Supabase reorderNotes exception:", e);
+    }
+  },
+
+  moveNote: async (
+    noteId: string,
+    listId: string,
+    groupId: string | null,
+    sortOrder: number
+  ): Promise<void> => {
+    const local = getLocalData();
+    const idx = local.notes.findIndex((n) => n.id === noteId);
+    if (idx >= 0) {
+      local.notes[idx] = {
+        ...local.notes[idx],
+        listId,
+        groupId: groupId || undefined,
+        sortOrder,
+      };
+      saveLocalData({ notes: local.notes });
+    }
+
+    try {
+      await supabase
+        .from("list_notes")
+        .update({
+          list_id: listId,
+          group_id: groupId,
+          sort_order: sortOrder,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", noteId);
+    } catch (e) {
+      console.warn("Supabase moveNote exception:", e);
+    }
+  },
+};
+

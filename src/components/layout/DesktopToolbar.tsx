@@ -5,6 +5,7 @@ import {
   LayoutGrid,
   Sparkles,
   BookCheck,
+  ClipboardList,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -20,6 +21,7 @@ export const NAV_TOOLS: NavigationTool[] = [
   { id: "today", name: "当日待办", to: "/today", icon: CalendarCheck },
   { id: "four-quadrants", name: "四象限工作台", to: "/four-quadrants", icon: LayoutGrid },
   { id: "habit", name: "习惯追踪", to: "/habit", icon: Sparkles },
+  { id: "lists", name: "清单与笔记", to: "/lists", icon: ClipboardList },
   { id: "daily-review", name: "每日复盘", to: "/daily-review", icon: BookCheck },
 ];
 
@@ -60,7 +62,7 @@ export const DesktopToolbar: React.FC<DesktopToolbarProps> = ({ onSettingsClick 
         <button
           type="button"
           onClick={onSettingsClick}
-          className="relative group flex items-center justify-center w-10 h-[38px] rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/70 transition-all duration-150"
+          className="relative group flex items-center justify-center w-10 h-[38px] rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/70 transition-all duration-150 cursor-pointer"
           title="设置"
           aria-label="设置"
         >

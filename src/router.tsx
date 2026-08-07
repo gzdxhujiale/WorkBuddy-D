@@ -1,9 +1,10 @@
-import { createRootRoute, createRoute, createRouter } from "@tanstack/react-router";
+import { createRootRoute, createRoute, createRouter, redirect } from "@tanstack/react-router";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { TodayPage } from "@/pages/TodayPage";
 import { FourQuadrantsPage } from "@/pages/FourQuadrantsPage";
 import { DailyReviewPage } from "@/pages/DailyReviewPage";
 import { HabitPage } from "@/pages/HabitPage";
+import { ListsPage } from "@/pages/ListsPage";
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -12,7 +13,9 @@ const rootRoute = createRootRoute({
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/",
-  component: TodayPage,
+  beforeLoad: () => {
+    throw redirect({ to: "/today", replace: true });
+  },
 });
 
 const todayRoute = createRoute({
@@ -39,12 +42,19 @@ const dailyReviewRoute = createRoute({
   component: DailyReviewPage,
 });
 
+const listsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/lists",
+  component: ListsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   todayRoute,
   fourQuadrantsRoute,
   habitRoute,
   dailyReviewRoute,
+  listsRoute,
 ]);
 
 export const router = createRouter({ routeTree });

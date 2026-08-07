@@ -60,7 +60,7 @@ export interface DailyReviewRow {
   content: Record<string, unknown> | string;
   created_at: string;
   updated_at: string;
-  deleted_at: string | null;
+  deleted_at?: string | null;
 }
 
 export type InsertDailyReview = Omit<
@@ -130,5 +130,136 @@ export type InsertHabitCheckin = Omit<
 };
 
 export type UpdateHabitCheckin = Partial<InsertHabitCheckin>;
+
+// Lists & Notes Module Database Types
+
+export type ListViewType = 'list' | 'kanban' | 'grid';
+
+export interface ListFolderRow {
+  id: string;
+  user_id: string;
+  name: string;
+  is_pinned: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export type InsertListFolder = Omit<
+  ListFolderRow,
+  'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'
+> & {
+  id?: string;
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+};
+
+export type UpdateListFolder = Partial<InsertListFolder>;
+
+export interface ListListRow {
+  id: string;
+  user_id: string;
+  folder_id: string | null;
+  name: string;
+  icon: string;
+  color: string;
+  view_type: ListViewType;
+  is_pinned: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export type InsertListList = Omit<
+  ListListRow,
+  'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'
+> & {
+  id?: string;
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+};
+
+export type UpdateListList = Partial<InsertListList>;
+
+export interface ListNoteGroupRow {
+  id: string;
+  user_id: string;
+  list_id: string;
+  name: string;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export type InsertListNoteGroup = Omit<
+  ListNoteGroupRow,
+  'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'
+> & {
+  id?: string;
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+};
+
+export type UpdateListNoteGroup = Partial<InsertListNoteGroup>;
+
+export interface ListNoteRow {
+  id: string;
+  user_id: string;
+  list_id: string;
+  group_id: string | null;
+  title: string;
+  content: string;
+  is_pinned: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export type InsertListNote = Omit<
+  ListNoteRow,
+  'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'
+> & {
+  id?: string;
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+};
+
+export type UpdateListNote = Partial<InsertListNote>;
+
+export interface ListTemplateRow {
+  id: string;
+  user_id: string;
+  name: string;
+  content: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  deleted_at: string | null;
+}
+
+export type InsertListTemplate = Omit<
+  ListTemplateRow,
+  'id' | 'user_id' | 'created_at' | 'updated_at' | 'deleted_at'
+> & {
+  id?: string;
+  user_id?: string;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+};
+
+export type UpdateListTemplate = Partial<InsertListTemplate>;
+
 
 

@@ -27,7 +27,6 @@ export const dailyReviewApi = {
       const { data: dbReviews, error } = await supabase
         .from("daily_reviews")
         .select("*")
-        .is("deleted_at", null)
         .order("date", { ascending: false });
 
       if (error) {
@@ -72,7 +71,6 @@ export const dailyReviewApi = {
         .from("daily_reviews")
         .select("*")
         .eq("date", date)
-        .is("deleted_at", null)
         .maybeSingle();
 
       if (!error && data) {
@@ -137,11 +135,11 @@ export const dailyReviewApi = {
     const current = getLocalReviews().filter((r) => r.id !== id);
     saveLocalReviews(current);
 
-    // 2. Soft delete in Supabase
+    // 2. Delete from Supabase
     try {
       const { error } = await supabase
         .from("daily_reviews")
-        .update({ deleted_at: new Date().toISOString() })
+        .delete()
         .eq("id", id);
 
       if (error) {
