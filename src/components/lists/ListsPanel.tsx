@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import {
   ArrowDownUp, MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen, CheckCircle, AlertCircle,
   ChevronRight, Check, Sidebar, ExternalLink, Folder as FolderIcon, BookOpen, Briefcase, Home,
-  Package, Activity, Star, ChevronDown, FileText, Search, Cloud, X, LayoutList, Columns, Trash2
+  Package, Activity, Star, ChevronDown, FileText, Search, Cloud, X, LayoutList, Columns, Trash2, Library
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverEvent, useDroppable } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -149,13 +149,14 @@ const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo((
   return (
     <div
       ref={setNodeRef}
-      className={`group relative flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer text-sm transition-all duration-150 select-none ${
-        isNested ? 'pl-10' : 'pl-6'
-      } ${
+      className={cn(
+        'group relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-all duration-150',
+        isNested ? 'pl-10' : 'pl-6',
         isActive
-          ? 'bg-primary/8 text-primary font-medium'
-          : 'text-foreground hover:bg-muted'
-      } ${isTarget ? 'ring-2 ring-ring bg-primary/10' : ''}`}
+          ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+          : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+        isTarget && 'bg-sidebar-primary/10 ring-2 ring-sidebar-ring'
+      )}
       onClick={() => onSelectList(list.id)}
       onDragOver={(e) => {
         e.preventDefault();
@@ -211,7 +212,7 @@ interface ListsSidebarProps {
 }
 
 const ICON_MAP: Record<string, ReactNode> = {
-  BookOpen: <BookOpen size={16} />,
+  BookOpen: <FolderIcon size={16} />,
   Briefcase: <Briefcase size={16} />,
   Home: <Home size={16} />,
   Package: <Package size={16} />,
@@ -236,7 +237,7 @@ function ListsSidebar({
   onDeleteList,
   isCollapsed
 }: ListsSidebarProps) {
-  const { confirm: confirmDelete } = useConfirmDialog();
+  const { confirm: confirmDelete, dialogElement } = useConfirmDialog();
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
   const [activeDropdown, setActiveDropdown] = useState<{ type: 'folder' | 'list', id: string } | null>(null);
 
@@ -273,7 +274,7 @@ function ListsSidebar({
         onSelectList={onSelectList}
         isNested={isNested}
       >
-        <div className="shrink-0 text-muted-foreground group-hover:text-primary transition-colors">
+        <div className="shrink-0 text-sidebar-foreground/60 transition-colors group-hover:text-sidebar-primary">
           {getIcon(list.icon, list.color)}
         </div>
         <span className="truncate flex-1">{list.name}</span>
@@ -281,7 +282,7 @@ function ListsSidebar({
 
         <div className="ml-auto flex items-center gap-1">
           {list.itemCount !== undefined && list.itemCount > 0 && (
-            <span className="text-xs font-normal text-muted-foreground group-hover:hidden">
+            <span className="text-xs font-normal text-sidebar-foreground/60 group-hover:hidden">
               {list.itemCount}
             </span>
           )}
@@ -327,8 +328,8 @@ function ListsSidebar({
                               e.stopPropagation();
                               setActiveDropdown(null);
                               const confirmed = await confirmDelete({
-                                title: '删除清单',
-                                description: `确定要删除清单 "${list.name}" 吗？`,
+                                title: '删除文件夹',
+                                description: `确定要删除文件夹 "${list.name}" 吗？其中的笔记也会被删除。`,
                                 confirmText: '删除',
                               });
                               if (confirmed) {
@@ -349,26 +350,28 @@ function ListsSidebar({
   const isTargetStandalone = dragOverFolderId === 'standalone-area';
 
   return (
-    <aside
-      className={cn(
-        'w-[200px] flex-none bg-background border-r border-border flex flex-col transition-all duration-[250ms] ease-in-out overflow-hidden',
-        isCollapsed && '!w-0 opacity-0 border-r-transparent pointer-events-none'
-      )}
-    >
-      <div className="group/header flex items-center justify-between px-5 pt-4 pb-2 text-sm font-medium text-muted-foreground select-none">
-        <span>清单</span>
+    <>
+      {dialogElement}
+      <aside
+        className={cn(
+        'flex w-64 flex-none flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-[250ms] ease-in-out',
+        isCollapsed && 'pointer-events-none !w-0 border-r-transparent opacity-0'
+        )}
+      >
+      <div className="group/header flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-4 text-sm font-semibold select-none">
+        <span>知识库</span>
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-md opacity-0 group-hover/header:opacity-100 transition-opacity"
+          className="rounded-md text-sidebar-foreground opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover/header:opacity-100"
           onClick={() => onAddClick()}
-          title="新建清单"
+          title="新建文件夹"
         >
           <Plus size={16} />
         </Button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-0.5">
+      <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 py-3">
         <SortableContext items={folders.map(f => f.id)} strategy={verticalListSortingStrategy}>
           {folders.map(folder => {
             const isCollapsedFolder = collapsedFolders[folder.id];
@@ -376,29 +379,30 @@ function ListsSidebar({
             const isTarget = dragOverFolderId === folder.id;
 
             return (
-              <div key={folder.id} className="space-y-0.5">
+              <div key={folder.id} className="flex flex-col gap-0.5">
                 <SortableItem id={folder.id}>
                   <DroppableArea
                     id={folder.id}
                     data={{ type: 'folder' }}
-                    className={`group relative flex items-center gap-2 px-2 py-1.5 pl-6 rounded-md cursor-pointer text-sm text-foreground hover:bg-muted transition-colors select-none ${
-                      isTarget ? 'ring-2 ring-ring bg-primary/10' : ''
-                    }`}
+                    className={cn(
+                      'group relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 pl-6 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                      isTarget && 'bg-sidebar-primary/10 ring-2 ring-sidebar-ring'
+                    )}
                     onClick={() => toggleFolder(folder.id)}
                   >
                     <ChevronDown
                       size={14}
-                      className={`text-muted-foreground transition-transform duration-200 ${isCollapsedFolder ? '-rotate-90' : ''}`}
+                      className={cn('text-sidebar-foreground/60 transition-transform duration-200', isCollapsedFolder && '-rotate-90')}
                     />
-                    <FolderIcon size={16} className="text-amber-500/90 dark:text-amber-400/90 shrink-0" />
-                    <span className="truncate flex-1 text-foreground">{folder.name}</span>
+                    <Library size={16} className="shrink-0 text-sidebar-foreground/70" />
+                    <span className="flex-1 truncate">{folder.name}</span>
                     {folder.isPinned && <span className="text-[10px] text-amber-500">📌</span>}
 
                     <div className="relative ml-auto" onClick={e => e.stopPropagation()}>
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                        className="rounded-md text-sidebar-foreground opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover:opacity-100"
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveDropdown(activeDropdown?.id === folder.id ? null : { type: 'folder', id: folder.id });
@@ -416,7 +420,7 @@ function ListsSidebar({
                             className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                             onClick={() => { setActiveDropdown(null); onAddClick(folder.id); }}
                           >
-                            添加清单
+                            添加文件夹
                           </button>
                           <button
                             className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
@@ -436,8 +440,8 @@ function ListsSidebar({
                               e.stopPropagation();
                               setActiveDropdown(null);
                               const confirmed = await confirmDelete({
-                                title: '解散文件夹',
-                                description: `确定要解散文件夹 "${folder.name}" 吗？（其中的清单不会被删除）`,
+                                title: '删除知识库',
+                                description: `确定要删除知识库 "${folder.name}" 吗？其中的文件夹和笔记也会被删除。`,
                                 confirmText: '解散',
                               });
                               if (confirmed) {
@@ -455,7 +459,7 @@ function ListsSidebar({
 
                 {!isCollapsedFolder && (
                   <SortableContext items={folderLists.map(l => l.id)} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-0.5">
+                    <div className="flex flex-col gap-0.5">
                       {folderLists.map(list => renderSidebarItem(list, true))}
                     </div>
                   </SortableContext>
@@ -470,14 +474,15 @@ function ListsSidebar({
         <DroppableArea
           id="standalone-area"
           data={{ type: 'folder' }}
-          className={`flex-1 min-h-[50px] pb-5 space-y-0.5 rounded-lg ${isTargetStandalone ? 'ring-2 ring-ring bg-accent/70' : ''}`}
+          className={cn('min-h-[50px] flex-1 rounded-md pb-5', isTargetStandalone && 'bg-sidebar-primary/10 ring-2 ring-sidebar-ring')}
         >
           <SortableContext items={standaloneLists.map(l => l.id)} strategy={verticalListSortingStrategy}>
             {standaloneLists.map(list => renderSidebarItem(list, false))}
           </SortableContext>
         </DroppableArea>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 
@@ -564,7 +569,7 @@ function NoteItem({ note, allLists, onClick, onPin, onDuplicate, onDelete, onMov
                     <Search size={13} className="text-muted-foreground shrink-0" />
                     <input
                       type="text"
-                      placeholder="搜索清单..."
+                      placeholder="搜索文件夹..."
                       value={searchQuery}
                       onChange={e => setSearchQuery(e.target.value)}
                       className="w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
@@ -573,7 +578,7 @@ function NoteItem({ note, allLists, onClick, onPin, onDuplicate, onDelete, onMov
                 </div>
                 <div className="max-h-40 overflow-y-auto">
                   {otherLists.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground text-center">无匹配清单</div>
+                    <div className="p-2 text-sm text-muted-foreground text-center">无匹配文件夹</div>
                   ) : (
                     otherLists.map(list => (
                       <button
@@ -824,7 +829,7 @@ function NoteDrawerContent({
   onDelete: (note: Note) => void;
   showToast?: (message: string, type?: 'success' | 'error') => void;
 }) {
-  const { confirm: confirmDelete } = useConfirmDialog();
+  const { confirm: confirmDelete, dialogElement } = useConfirmDialog();
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || '');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
@@ -896,6 +901,7 @@ function NoteDrawerContent({
 
   return (
     <>
+      {dialogElement}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
         <Input
           type="text"
@@ -1063,7 +1069,7 @@ function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSav
 }
 
 // ============================================================================
-// 5. Modal Components (FolderModal, AddListModal, ListSettingsModal, BatchExportModal)
+// 5. Modal Components (KnowledgeBaseModal, FolderModal, ListSettingsModal, BatchExportModal)
 // ============================================================================
 interface FolderModalProps {
   initialData?: Folder;
@@ -1082,7 +1088,7 @@ function FolderModal({ initialData, onClose, onSave }: FolderModalProps) {
 
   return (
     <ModalShell
-      title={initialData ? '编辑文件夹' : '添加文件夹'}
+      title={initialData ? '编辑知识库' : '添加知识库'}
       onClose={onClose}
       footer={
         <>
@@ -1097,10 +1103,10 @@ function FolderModal({ initialData, onClose, onSave }: FolderModalProps) {
     >
       <div className="pt-2">
         <div className="flex items-center gap-2.5 px-3 py-2 bg-card border border-input rounded-lg focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 transition-all">
-          <FolderIcon size={18} className="text-amber-500 shrink-0" />
+          <Library size={18} className="text-primary shrink-0" />
           <Input
             type="text"
-            placeholder="文件夹名称"
+            placeholder="知识库名称"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
@@ -1148,7 +1154,7 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
 
   return (
     <ModalShell
-      title={initialData ? '编辑清单' : '添加清单'}
+      title={initialData ? '编辑文件夹' : '添加文件夹'}
       onClose={onClose}
       footer={
         <>
@@ -1166,7 +1172,7 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
           <BookOpen size={18} className="text-primary shrink-0" />
           <Input
             type="text"
-            placeholder="清单名称"
+            placeholder="文件夹名称"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
@@ -1226,7 +1232,7 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
         </div>
 
         <div className="flex items-center justify-between relative">
-          <span className="text-xs font-semibold text-muted-foreground">所属文件夹</span>
+              <span className="text-xs font-semibold text-muted-foreground">所属知识库</span>
           <div className="relative flex-1 max-w-[220px]" ref={dropdownRef}>
             <Button
               variant="outline"
@@ -1265,7 +1271,7 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
                     type="text"
                     value={newFolderName}
                     onChange={(e) => setNewFolderName(e.target.value)}
-                    placeholder="新建文件夹..."
+                    placeholder="新建知识库..."
                     className="border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto text-xs"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
@@ -1323,7 +1329,7 @@ function ListSettingsModal({ onClose, showToast }: ListSettingsModalProps) {
 
   return (
     <ModalShell
-      title="清单设置"
+      title="文件夹设置"
       onClose={onClose}
       width="460px"
       footer={
@@ -1438,7 +1444,7 @@ function BatchExportModal({ notes, onExport, onClose }: BatchExportModalProps) {
     >
       <div className="overflow-y-auto max-h-[50vh] space-y-1">
         {notes.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">当前清单暂无笔记。</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">当前文件夹暂无笔记。</div>
         ) : (
           <>
             <label className="flex items-center gap-3 px-3 py-2 border-b border-border cursor-pointer text-sm font-semibold text-foreground select-none">
@@ -1775,7 +1781,7 @@ export function ListsPanel() {
         const targetList = listMap.get(targetListId);
         moveNoteToList(activeId, targetListId);
         if (targetList) {
-          showToast(`已成功移动笔记到清单「${targetList.name}」`);
+          showToast(`已成功移动笔记到文件夹「${targetList.name}」`);
         }
         return;
       }
@@ -1786,7 +1792,7 @@ export function ListsPanel() {
         if (folderLists.length > 0) {
           const targetList = folderLists[0];
           moveNoteToList(activeId, targetList.id);
-          showToast(`已成功移动笔记到清单「${targetList.name}」`);
+          showToast(`已成功移动笔记到文件夹「${targetList.name}」`);
         }
         return;
       }
@@ -2307,7 +2313,7 @@ export function ListsPanel() {
             </>
           ) : (
             <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-              请在左侧选择或创建一个清单
+              请在左侧选择或创建一个文件夹
             </div>
           )}
         </main>

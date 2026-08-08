@@ -30,6 +30,15 @@
   --color-input: oklch(92% 0.01 264);
   --color-ring: oklch(55% 0.2 250);
 
+  --color-sidebar: oklch(97.5% 0.006 264);
+  --color-sidebar-foreground: oklch(22% 0.02 264);
+  --color-sidebar-primary: oklch(55% 0.2 250);
+  --color-sidebar-primary-foreground: oklch(98% 0.01 264);
+  --color-sidebar-accent: oklch(93.5% 0.012 264);
+  --color-sidebar-accent-foreground: oklch(18% 0.02 264);
+  --color-sidebar-border: oklch(89% 0.012 264);
+  --color-sidebar-ring: oklch(55% 0.2 250);
+
   /* Quadrant Specific OKLCH Tokens */
   --color-quadrant-q1: oklch(62% 0.22 25);
   --color-quadrant-q2: oklch(55% 0.18 250);
@@ -97,6 +106,15 @@
   --color-border: oklch(26% 0.02 264);
   --color-input: oklch(26% 0.02 264);
   --color-ring: oklch(75% 0.04 264);
+
+  --color-sidebar: oklch(17% 0.025 264);
+  --color-sidebar-foreground: oklch(92% 0.008 264);
+  --color-sidebar-primary: oklch(65% 0.2 250);
+  --color-sidebar-primary-foreground: oklch(14% 0.025 264);
+  --color-sidebar-accent: oklch(24% 0.02 264);
+  --color-sidebar-accent-foreground: oklch(98% 0.005 264);
+  --color-sidebar-border: oklch(28% 0.02 264);
+  --color-sidebar-ring: oklch(75% 0.04 264);
 }
 
 body {

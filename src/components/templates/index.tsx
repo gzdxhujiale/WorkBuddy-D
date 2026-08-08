@@ -6,7 +6,7 @@ import { FileText, Trash2, X } from 'lucide-react';
 
 export function useTemplateData() {
   return useQuery({
-    queryKey: ['list_templates'],
+    queryKey: ['knowledge_base_templates'],
     queryFn: async () => {
       const data = await listNotesApi.loadAll();
       return data.templates;
@@ -26,7 +26,7 @@ export function useTemplateActions() {
       updatedAt: Date.now(),
     };
     await listNotesApi.upsertTemplate(newTpl);
-    queryClient.invalidateQueries({ queryKey: ['list_templates'] });
+    queryClient.invalidateQueries({ queryKey: ['knowledge_base_templates'] });
     queryClient.invalidateQueries({ queryKey: ['lists', 'all'] });
   };
 
@@ -35,14 +35,14 @@ export function useTemplateActions() {
     const target = data.templates.find((t) => t.id === id);
     if (target) {
       await listNotesApi.upsertTemplate({ ...target, ...updates, updatedAt: Date.now() });
-      queryClient.invalidateQueries({ queryKey: ['list_templates'] });
+      queryClient.invalidateQueries({ queryKey: ['knowledge_base_templates'] });
       queryClient.invalidateQueries({ queryKey: ['lists', 'all'] });
     }
   };
 
   const deleteTemplate = async (id: string) => {
     await listNotesApi.deleteTemplate(id);
-    queryClient.invalidateQueries({ queryKey: ['list_templates'] });
+    queryClient.invalidateQueries({ queryKey: ['knowledge_base_templates'] });
     queryClient.invalidateQueries({ queryKey: ['lists', 'all'] });
   };
 

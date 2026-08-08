@@ -75,31 +75,31 @@ export const listNotesApi = {
     try {
       const [foldersRes, listsRes, groupsRes, notesRes, templatesRes] = await Promise.all([
         supabase
-          .from("list_folders")
+          .from("knowledge_bases")
           .select("*")
           .is("deleted_at", null)
           .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true }),
         supabase
-          .from("list_lists")
+          .from("knowledge_base_folders")
           .select("*")
           .is("deleted_at", null)
           .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true }),
         supabase
-          .from("list_note_groups")
+          .from("folder_note_groups")
           .select("*")
           .is("deleted_at", null)
           .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true }),
         supabase
-          .from("list_notes")
+          .from("notes")
           .select("*")
           .is("deleted_at", null)
           .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true }),
         supabase
-          .from("list_templates")
+          .from("knowledge_base_templates")
           .select("*")
           .is("deleted_at", null)
           .order("created_at", { ascending: true }),
@@ -123,7 +123,7 @@ export const listNotesApi = {
       const lists: ListList[] = (listsRes.data || []).map((l: ListListRow) => ({
         id: l.id,
         userId: l.user_id,
-        folderId: l.folder_id || undefined,
+        folderId: l.knowledge_base_id || undefined,
         name: l.name,
         icon: l.icon,
         color: l.color,
@@ -137,7 +137,7 @@ export const listNotesApi = {
       const groups: ListNoteGroup[] = (groupsRes.data || []).map((g: ListNoteGroupRow) => ({
         id: g.id,
         userId: g.user_id,
-        listId: g.list_id,
+        listId: g.folder_id,
         name: g.name,
         sortOrder: g.sort_order,
         createdAt: g.created_at ? new Date(g.created_at).getTime() : undefined,
@@ -147,7 +147,7 @@ export const listNotesApi = {
       const notes: ListNote[] = (notesRes.data || []).map((n: ListNoteRow) => ({
         id: n.id,
         userId: n.user_id,
-        listId: n.list_id,
+        listId: n.folder_id,
         groupId: n.group_id || undefined,
         title: n.title,
         content: n.content,
@@ -194,7 +194,7 @@ export const listNotesApi = {
         sort_order: folder.sortOrder,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("list_folders").upsert(payload);
+      const { error } = await supabase.from("knowledge_bases").upsert(payload);
       if (error) console.warn("Supabase upsertFolder error:", error.message);
     } catch (e) {
       console.warn("Supabase upsertFolder exception:", e);
@@ -212,12 +212,12 @@ export const listNotesApi = {
       const now = new Date().toISOString();
       // Detach lists from the folder
       await supabase
-        .from("list_lists")
-        .update({ folder_id: null, updated_at: now })
-        .eq("folder_id", id)
+        .from("knowledge_base_folders")
+        .update({ knowledge_base_id: null, updated_at: now })
+        .eq("knowledge_base_id", id)
         .is("deleted_at", null);
       const { error } = await supabase
-        .from("list_folders")
+        .from("knowledge_bases")
         .update({ deleted_at: now })
         .eq("id", id);
       if (error) console.warn("Supabase deleteFolder error:", error.message);
@@ -240,7 +240,7 @@ export const listNotesApi = {
     try {
       const payload = {
         id: list.id,
-        folder_id: list.folderId || null,
+        knowledge_base_id: list.folderId || null,
         name: list.name,
         icon: list.icon,
         color: list.color,
@@ -249,7 +249,7 @@ export const listNotesApi = {
         sort_order: list.sortOrder,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("list_lists").upsert(payload);
+      const { error } = await supabase.from("knowledge_base_folders").upsert(payload);
       if (error) console.warn("Supabase upsertList error:", error.message);
     } catch (e) {
       console.warn("Supabase upsertList exception:", e);
@@ -269,7 +269,7 @@ export const listNotesApi = {
       // Database trigger cascade_soft_delete_list() handles cascading soft-delete
       // of associated notes and groups automatically
       const { error } = await supabase
-        .from("list_lists")
+        .from("knowledge_base_folders")
         .update({ deleted_at: now })
         .eq("id", id);
       if (error) console.warn("Supabase deleteList error:", error.message);
@@ -292,12 +292,12 @@ export const listNotesApi = {
     try {
       const payload = {
         id: group.id,
-        list_id: group.listId,
+        folder_id: group.listId,
         name: group.name,
         sort_order: group.sortOrder,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("list_note_groups").upsert(payload);
+      const { error } = await supabase.from("folder_note_groups").upsert(payload);
       if (error) console.warn("Supabase upsertGroup error:", error.message);
     } catch (e) {
       console.warn("Supabase upsertGroup exception:", e);
@@ -311,7 +311,7 @@ export const listNotesApi = {
 
     try {
       const { error } = await supabase
-        .from("list_note_groups")
+        .from("folder_note_groups")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id);
       if (error) console.warn("Supabase deleteGroup error:", error.message);
@@ -334,7 +334,7 @@ export const listNotesApi = {
     try {
       const payload = {
         id: note.id,
-        list_id: note.listId,
+        folder_id: note.listId,
         group_id: note.groupId || null,
         title: note.title,
         content: note.content,
@@ -342,7 +342,7 @@ export const listNotesApi = {
         sort_order: note.sortOrder,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("list_notes").upsert(payload);
+      const { error } = await supabase.from("notes").upsert(payload);
       if (error) console.warn("Supabase upsertNote error:", error.message);
     } catch (e) {
       console.warn("Supabase upsertNote exception:", e);
@@ -356,7 +356,7 @@ export const listNotesApi = {
 
     try {
       const { error } = await supabase
-        .from("list_notes")
+        .from("notes")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id);
       if (error) console.warn("Supabase deleteNote error:", error.message);
@@ -383,7 +383,7 @@ export const listNotesApi = {
         content: template.content,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("list_templates").upsert(payload);
+      const { error } = await supabase.from("knowledge_base_templates").upsert(payload);
       if (error) console.warn("Supabase upsertTemplate error:", error.message);
     } catch (e) {
       console.warn("Supabase upsertTemplate exception:", e);
@@ -397,7 +397,7 @@ export const listNotesApi = {
 
     try {
       const { error } = await supabase
-        .from("list_templates")
+        .from("knowledge_base_templates")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id);
       if (error) console.warn("Supabase deleteTemplate error:", error.message);
@@ -418,7 +418,7 @@ export const listNotesApi = {
     try {
       for (const [id, sort_order] of items) {
         await supabase
-          .from("list_folders")
+          .from("knowledge_bases")
           .update({ sort_order, updated_at: new Date().toISOString() })
           .eq("id", id);
       }
@@ -438,7 +438,7 @@ export const listNotesApi = {
     try {
       for (const [id, sort_order] of items) {
         await supabase
-          .from("list_lists")
+          .from("knowledge_base_folders")
           .update({ sort_order, updated_at: new Date().toISOString() })
           .eq("id", id);
       }
@@ -457,9 +457,9 @@ export const listNotesApi = {
 
     try {
       await supabase
-        .from("list_lists")
+        .from("knowledge_base_folders")
         .update({
-          folder_id: folderId,
+          knowledge_base_id: folderId,
           sort_order: sortOrder,
           updated_at: new Date().toISOString(),
         })
@@ -480,7 +480,7 @@ export const listNotesApi = {
     try {
       for (const [id, sort_order] of items) {
         await supabase
-          .from("list_notes")
+          .from("notes")
           .update({ sort_order, updated_at: new Date().toISOString() })
           .eq("id", id);
       }
@@ -509,9 +509,9 @@ export const listNotesApi = {
 
     try {
       await supabase
-        .from("list_notes")
+        .from("notes")
         .update({
-          list_id: listId,
+          folder_id: listId,
           group_id: groupId,
           sort_order: sortOrder,
           updated_at: new Date().toISOString(),
@@ -522,4 +522,3 @@ export const listNotesApi = {
     }
   },
 };
-
