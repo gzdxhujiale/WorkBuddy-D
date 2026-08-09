@@ -5,7 +5,7 @@ import {
   LayoutGrid,
   Sparkles,
   BookCheck,
-  ClipboardList,
+  Library,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -21,7 +21,7 @@ export const NAV_TOOLS: NavigationTool[] = [
   { id: "today", name: "当日待办", to: "/today", icon: CalendarCheck },
   { id: "four-quadrants", name: "四象限工作台", to: "/four-quadrants", icon: LayoutGrid },
   { id: "habit", name: "习惯追踪", to: "/habit", icon: Sparkles },
-  { id: "lists", name: "清单与笔记", to: "/lists", icon: ClipboardList },
+  { id: "lists", name: "知识库", to: "/lists", icon: Library },
   { id: "daily-review", name: "每日复盘", to: "/daily-review", icon: BookCheck },
 ];
 

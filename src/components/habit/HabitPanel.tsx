@@ -465,9 +465,10 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="flex items-center gap-4 mb-2">
-            <HabitAvatar size="lg" />
-            <div className="flex-1">
+          <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3 mb-2">
+            <label className="text-sm font-medium text-muted-foreground">习惯名称</label>
+            <div className="flex items-center">
+            <div className="w-full">
               <Input
                 type="text"
                 value={name}
@@ -476,9 +477,10 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
                   if (errorMsg) setErrorMsg("");
                 }}
                 placeholder="习惯名称（例：每天阅读30分钟）"
-                className={`h-12 text-base ${errorMsg ? "border-destructive bg-destructive/10" : ""}`}
+                className={`h-10 flex-1 rounded-md ${errorMsg ? "border-destructive bg-destructive/10" : "bg-background"}`}
               />
               {errorMsg && <p className="text-xs text-destructive mt-1 pl-1">{errorMsg}</p>}
+            </div>
             </div>
           </div>
 

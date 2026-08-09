@@ -354,11 +354,11 @@ function ListsSidebar({
       {dialogElement}
       <aside
         className={cn(
-        'flex w-64 flex-none flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-[250ms] ease-in-out',
+        'flex w-[206px] flex-none flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-[250ms] ease-in-out',
         isCollapsed && 'pointer-events-none !w-0 border-r-transparent opacity-0'
         )}
       >
-      <div className="group/header flex h-14 shrink-0 items-center justify-between border-b border-sidebar-border px-4 text-sm font-semibold select-none">
+      <div className="group/header flex h-12 shrink-0 items-center justify-between border-b border-sidebar-border px-4 text-sm font-semibold select-none">
         <span>知识库</span>
         <Button
           variant="ghost"
@@ -902,7 +902,7 @@ function NoteDrawerContent({
   return (
     <>
       {dialogElement}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+      <div className="flex h-12 items-center justify-between border-b border-border px-4 shrink-0">
         <Input
           type="text"
           value={title}
@@ -913,12 +913,14 @@ function NoteDrawerContent({
         <div className="flex items-center gap-2 shrink-0">
           <span
             title={saveStatus === 'saving' ? '保存中...' : '已自动保存'}
-            className="p-1.5 rounded-lg text-primary bg-primary/10"
+            aria-live="polite"
+            className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-2 py-1.5 text-xs text-primary"
           >
             <Cloud
               size={18}
               className={cn('transition-all duration-300', saveStatus === 'saving' ? 'opacity-50 animate-pulse' : 'opacity-100')}
             />
+            <span>{saveStatus === 'saving' ? '保存中' : '已保存'}</span>
           </span>
           <div className="relative" ref={menuRef}>
             <Button
@@ -1036,7 +1038,7 @@ function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSav
     <>
       {isOpen && (
         <div
-          className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-2xs z-20 transition-opacity"
+          className="fixed bottom-0 left-[58px] right-0 top-[38px] z-20 bg-black/20 backdrop-blur-2xs transition-opacity dark:bg-black/40"
           onClick={() => onClose()}
         />
       )}
@@ -1101,8 +1103,9 @@ function FolderModal({ initialData, onClose, onSave }: FolderModalProps) {
         </>
       }
     >
-      <div className="pt-2">
-        <div className="flex items-center gap-2.5 px-3 py-2 bg-card border border-input rounded-lg focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 transition-all">
+      <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3 pt-2">
+        <label className="text-sm font-medium text-muted-foreground">知识库名称</label>
+        <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
           <Library size={18} className="text-primary shrink-0" />
           <Input
             type="text"
@@ -1110,7 +1113,7 @@ function FolderModal({ initialData, onClose, onSave }: FolderModalProps) {
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
-            className="border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto"
+            className="h-full border-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
           />
         </div>
@@ -1167,18 +1170,21 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
         </>
       }
     >
-      <div className="space-y-4">
-        <div className="flex items-center gap-2.5 px-3 py-2 bg-card border border-input rounded-lg focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 transition-all">
-          <BookOpen size={18} className="text-primary shrink-0" />
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3">
+          <label className="text-sm font-medium text-muted-foreground">文件夹名称</label>
+          <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
+          <FolderIcon size={18} className="text-primary shrink-0" />
           <Input
             type="text"
             placeholder="文件夹名称"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
-            className="border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto"
+            className="h-full border-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
           />
+          </div>
         </div>
 
         <div className="flex items-center justify-between">
@@ -2106,7 +2112,7 @@ export function ListsPanel() {
         >
           {activeList ? (
             <>
-              <div className="flex items-center justify-between px-8 pt-6 pb-4 border-b border-border shrink-0">
+              <div className="flex h-12 items-center justify-between border-b border-border px-6 shrink-0">
                 <div className="flex items-center gap-3 font-bold text-xl text-foreground">
                   <Button
                     variant="ghost"

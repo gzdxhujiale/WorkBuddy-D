@@ -380,9 +380,10 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
         <ReactjsTiptapEditor
           key={note.id}
           content={content}
-          initialContent={content}
           onChange={setContent}
+          initialContent={content}
           enableCustomTemplates={true}
+          className="note-drawer-reactjs-tiptap"
         />
       </div>
     </div>

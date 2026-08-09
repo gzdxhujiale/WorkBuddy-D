@@ -152,9 +152,15 @@ const SlashCommandList: React.FC<SlashCommandListProps> = ({ items, command }) =
   );
 
   useEffect(() => {
-    document.addEventListener('keydown', onKeyDown, true);
-    return () => document.removeEventListener('keydown', onKeyDown, true);
-  }, [onKeyDown]);
+    if (items.length === 0) return;
+    const handleDocumentKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest('.ProseMirror')) return;
+      onKeyDown(event);
+    };
+    document.addEventListener('keydown', handleDocumentKeyDown);
+    return () => document.removeEventListener('keydown', handleDocumentKeyDown);
+  }, [items.length, onKeyDown]);
 
   if (items.length === 0) return null;
 
@@ -229,6 +235,8 @@ export const SlashCommand = Extension.create({
             popup.className = 'slash-command-popup';
             popup.style.position = 'fixed';
             popup.style.zIndex = '100';
+            popup.style.maxHeight = 'min(24rem, calc(100vh - 1rem))';
+            popup.style.overflowY = 'auto';
             document.body.appendChild(popup);
             popup.appendChild(component.element as unknown as HTMLElement);
           },
@@ -241,10 +249,16 @@ export const SlashCommand = Extension.create({
             });
             if (!popup) return;
             const rect = props.clientRect?.();
-            if (rect) {
-              popup.style.left = `${rect.left}px`;
-              popup.style.top = `${rect.bottom + 4}px`;
-            }
+            if (!rect) return;
+            const popupWidth = 240;
+            const popupHeight = Math.min(384, window.innerHeight - 16);
+            const left = Math.max(8, Math.min(rect.left, window.innerWidth - popupWidth - 8));
+            const below = rect.bottom + 4;
+            const top = below + popupHeight <= window.innerHeight - 8
+              ? below
+              : Math.max(8, rect.top - popupHeight - 4);
+            popup.style.left = `${left}px`;
+            popup.style.top = `${top}px`;
           },
           onKeyDown(props) {
             if (component?.ref) {
