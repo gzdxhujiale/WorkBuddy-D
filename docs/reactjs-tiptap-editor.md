@@ -112,6 +112,7 @@ const extensions = [
 | 查找替换 | `searchandreplace` | `RichTextSearchAndReplace` |
 | 清除格式 | `clear` | `RichTextClear` |
 | 表格 | `table` | `RichTextTable` |
+| Drawer | `drawer` | `RichTextDrawer` |
 | 分割线 | `horizontalrule` | `RichTextHorizontalRule` |
 
 ## 6. 气泡菜单和斜杠命令
@@ -166,7 +167,7 @@ themeActions.setBorderRadius('0.5rem')
 
 每日复盘使用 `src/components/daily-review/DailyReviewEditor.tsx`：
 
-- 以 `StarterKit@3.29.2` 为基础，叠加官方 `TaskList`、`TextAlign`、`Highlight`、`Color`、`SearchAndReplace` 和 `SlashCommand`。
+- 以 `StarterKit@3.29.2` 为基础，叠加官方 `TaskList`、`TextAlign`、`Highlight`、`Color`、`Table`、`Drawer`、`SearchAndReplace` 和 `SlashCommand`。
 - 使用官方 `RichTextProvider`、工具栏按钮、气泡菜单、`RichTextBubbleMenuDragHandle` 和 `style.css`。
 - 编辑内容以 Tiptap JSON 字符串保存到现有 `daily_reviews.content`，不改变数据库字段和同步接口。
 - `useDailyReview` 继续负责乐观更新、500ms 防抖持久化和空文档清理。

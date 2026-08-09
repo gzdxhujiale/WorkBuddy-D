@@ -176,6 +176,24 @@ html.tqe-window #root {
   outline: none;
 }
 
+.daily-review-editor-shell
+  .daily-review-prosemirror.ProseMirror.ProseMirror.ProseMirror
+  :not(.image-view)::selection,
+.daily-review-editor-shell
+  .daily-review-prosemirror.ProseMirror.ProseMirror.ProseMirror
+  :not(.search-result)::selection {
+  background: #bfdbfe !important;
+  background-color: #bfdbfe !important;
+  color: #172554 !important;
+  -webkit-text-fill-color: #172554 !important;
+}
+
+.daily-review-editor-shell .daily-review-prosemirror .selection {
+  background: #bfdbfe !important;
+  background-color: #bfdbfe !important;
+  color: #172554 !important;
+}
+
 /* Official reactjs-tiptap-editor drag handle */
 .daily-review-editor-shell .drag-handle {
   display: flex;

@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { Selection } from "@tiptap/extensions";
 import StarterKit from "@tiptap/starter-kit";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { RichTextProvider } from "reactjs-tiptap-editor";
@@ -17,6 +18,8 @@ import { RichTextBulletList } from "reactjs-tiptap-editor/bulletlist";
 import { RichTextOrderedList } from "reactjs-tiptap-editor/orderedlist";
 import { RichTextTaskList, TaskList } from "reactjs-tiptap-editor/tasklist";
 import { RichTextBlockquote } from "reactjs-tiptap-editor/blockquote";
+import { Drawer, RichTextDrawer } from "reactjs-tiptap-editor/drawer";
+import { RichTextTable, Table } from "reactjs-tiptap-editor/table";
 import { RichTextCode } from "reactjs-tiptap-editor/code";
 import { RichTextCodeBlock } from "reactjs-tiptap-editor/codeblock";
 import { RichTextLink } from "reactjs-tiptap-editor/link";
@@ -52,6 +55,7 @@ const EDITOR_EXTENSIONS = [
     heading: { levels: [1, 2, 3] },
     link: { openOnClick: false },
   }),
+  Selection,
   Placeholder.configure({
     placeholder: "写下今天的复盘感受、收获与反思，或输入 / 使用命令...",
   }),
@@ -62,6 +66,8 @@ const EDITOR_EXTENSIONS = [
   Highlight.configure({ multicolor: true }),
   TextAlign.configure({ types: ["heading", "paragraph", "list_item"] }),
   TaskList,
+  Table,
+  Drawer,
   SearchAndReplace,
   SlashCommand,
 ];
@@ -108,6 +114,8 @@ function EditorToolbar() {
       <RichTextTaskList />
       <RichTextAlign />
       <RichTextBlockquote />
+      <RichTextTable />
+      <RichTextDrawer />
       <RichTextCode />
       <RichTextCodeBlock />
       <RichTextLink />
