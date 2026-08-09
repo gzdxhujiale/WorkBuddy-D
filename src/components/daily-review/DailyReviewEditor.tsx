@@ -9,21 +9,21 @@ import { Color, RichTextColor } from "reactjs-tiptap-editor/color";
 import { Highlight, RichTextHighlight } from "reactjs-tiptap-editor/highlight";
 import { RichTextAlign, TextAlign } from "reactjs-tiptap-editor/textalign";
 import { Clear, RichTextClear } from "reactjs-tiptap-editor/clear";
-import { RichTextHeading } from "reactjs-tiptap-editor/heading";
-import { RichTextBold } from "reactjs-tiptap-editor/bold";
-import { RichTextItalic } from "reactjs-tiptap-editor/italic";
-import { RichTextUnderline } from "reactjs-tiptap-editor/textunderline";
-import { RichTextStrike } from "reactjs-tiptap-editor/strike";
-import { RichTextBulletList } from "reactjs-tiptap-editor/bulletlist";
-import { RichTextOrderedList } from "reactjs-tiptap-editor/orderedlist";
+import { Heading } from "reactjs-tiptap-editor/heading";
+import { Bold, RichTextBold } from "reactjs-tiptap-editor/bold";
+import { Italic, RichTextItalic } from "reactjs-tiptap-editor/italic";
+import { RichTextUnderline, TextUnderline } from "reactjs-tiptap-editor/textunderline";
+import { RichTextStrike, Strike } from "reactjs-tiptap-editor/strike";
+import { BulletList, RichTextBulletList } from "reactjs-tiptap-editor/bulletlist";
+import { OrderedList, RichTextOrderedList } from "reactjs-tiptap-editor/orderedlist";
 import { RichTextTaskList, TaskList } from "reactjs-tiptap-editor/tasklist";
-import { RichTextBlockquote } from "reactjs-tiptap-editor/blockquote";
+import { Blockquote, RichTextBlockquote } from "reactjs-tiptap-editor/blockquote";
 import { Drawer, RichTextDrawer } from "reactjs-tiptap-editor/drawer";
 import { RichTextTable, Table } from "reactjs-tiptap-editor/table";
-import { RichTextCode } from "reactjs-tiptap-editor/code";
-import { RichTextCodeBlock } from "reactjs-tiptap-editor/codeblock";
-import { RichTextLink } from "reactjs-tiptap-editor/link";
-import { RichTextHorizontalRule } from "reactjs-tiptap-editor/horizontalrule";
+import { Code } from "reactjs-tiptap-editor/code";
+import { CodeBlock, RichTextCodeBlock } from "reactjs-tiptap-editor/codeblock";
+import { Link, RichTextLink } from "reactjs-tiptap-editor/link";
+import { HorizontalRule, RichTextHorizontalRule } from "reactjs-tiptap-editor/horizontalrule";
 import { RichTextUndo, RichTextRedo } from "reactjs-tiptap-editor/history";
 import {
   RichTextSearchAndReplace,
@@ -52,10 +52,31 @@ const EMPTY_DOCUMENT = {
 
 const EDITOR_EXTENSIONS = [
   StarterKit.configure({
-    heading: { levels: [1, 2, 3] },
-    link: { openOnClick: false },
+    heading: false,
+    bold: false,
+    italic: false,
+    link: false,
+    bulletList: false,
+    orderedList: false,
+    strike: false,
+    blockquote: false,
+    code: false,
+    codeBlock: false,
+    horizontalRule: false,
   }),
   Selection,
+  Heading.configure({ levels: [1, 2, 3] }),
+  Bold,
+  Italic,
+  TextUnderline,
+  BulletList,
+  OrderedList,
+  Strike,
+  Blockquote,
+  Code,
+  CodeBlock,
+  Link.configure({ openOnClick: false }),
+  HorizontalRule,
   Placeholder.configure({
     placeholder: "写下今天的复盘感受、收获与反思，或输入 / 使用命令...",
   }),
@@ -101,7 +122,6 @@ function EditorToolbar() {
       <RichTextUndo />
       <RichTextRedo />
       <span className="daily-review-editor-toolbar-divider" />
-      <RichTextHeading />
       <RichTextBold />
       <RichTextItalic />
       <RichTextUnderline />
@@ -116,7 +136,6 @@ function EditorToolbar() {
       <RichTextBlockquote />
       <RichTextTable />
       <RichTextDrawer />
-      <RichTextCode />
       <RichTextCodeBlock />
       <RichTextLink />
       <RichTextHorizontalRule />

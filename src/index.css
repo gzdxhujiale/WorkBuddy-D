@@ -58,6 +58,7 @@
       opacity: 0;
       transform: scale(0.97) translateY(-2px);
     }
+
     to {
       opacity: 1;
       transform: scale(1) translateY(0);
@@ -69,6 +70,7 @@
       opacity: 1;
       transform: scale(1) translateY(0);
     }
+
     to {
       opacity: 0;
       transform: scale(0.97) translateY(-2px);
@@ -176,12 +178,43 @@ html.tqe-window #root {
   outline: none;
 }
 
-.daily-review-editor-shell
-  .daily-review-prosemirror.ProseMirror.ProseMirror.ProseMirror
-  :not(.image-view)::selection,
-.daily-review-editor-shell
-  .daily-review-prosemirror.ProseMirror.ProseMirror.ProseMirror
-  :not(.search-result)::selection {
+.daily-review-editor-shell .daily-review-editor-scroll-area .daily-review-prosemirror.ProseMirror.ProseMirror.ProseMirror {
+  padding-right: 30px !important;
+}
+
+.daily-review-editor-shell .daily-review-prosemirror blockquote {
+  margin: 0.75rem 0;
+  padding: 0.5rem 1rem;
+  border-left: 4px solid color-mix(in oklab, var(--color-primary) 45%, transparent);
+  border-radius: var(--radius-md);
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  background: color-mix(in oklab, var(--color-muted) 50%, transparent);
+  color: var(--color-muted-foreground);
+  font-style: italic;
+}
+
+.daily-review-editor-shell .daily-review-prosemirror pre {
+  margin: 0.75rem 0;
+  padding: 1rem;
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-muted);
+  color: var(--color-foreground);
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-size: 0.875rem;
+}
+
+.daily-review-editor-shell .daily-review-prosemirror pre code {
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+
+.daily-review-editor-shell .daily-review-prosemirror.ProseMirror.ProseMirror.ProseMirror :not(.image-view)::selection,
+.daily-review-editor-shell .daily-review-prosemirror.ProseMirror.ProseMirror.ProseMirror :not(.search-result)::selection {
   background: #bfdbfe !important;
   background-color: #bfdbfe !important;
   color: #172554 !important;
@@ -311,13 +344,13 @@ html.tqe-window #root {
   gap: 0.5rem;
 }
 
-.tiptap-editor-content ul[data-type="taskList"] li > label {
+.tiptap-editor-content ul[data-type="taskList"] li>label {
   flex-shrink: 0;
   margin-top: 0.2rem;
   accent-color: var(--color-primary);
 }
 
-.tiptap-editor-content ul[data-type="taskList"] li[data-checked="true"] > div > p {
+.tiptap-editor-content ul[data-type="taskList"] li[data-checked="true"]>div>p {
   text-decoration: line-through;
   opacity: 0.6;
 }
@@ -418,7 +451,7 @@ html.tqe-window #root {
     @apply min-h-full bg-background text-foreground leading-7 outline-none;
   }
 
-  .tiptap > * {
+  .tiptap>* {
     @apply mx-auto max-w-3xl;
   }
 
@@ -484,11 +517,11 @@ html.tqe-window #root {
     @apply flex items-start gap-2;
   }
 
-  .tiptap ul[data-type="taskList"] li > label {
+  .tiptap ul[data-type="taskList"] li>label {
     @apply mt-1 shrink-0;
   }
 
-  .tiptap ul[data-type="taskList"] li[data-checked="true"] > div > p {
+  .tiptap ul[data-type="taskList"] li[data-checked="true"]>div>p {
     @apply text-muted-foreground line-through;
   }
 
