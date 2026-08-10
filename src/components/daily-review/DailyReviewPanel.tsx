@@ -188,7 +188,7 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
   });
 
   return (
-    <div className="flex-1 flex flex-col bg-card border border-border rounded-xl shadow-2xs overflow-hidden transition-colors">
+    <article className="flex-1 flex flex-col bg-card border border-border rounded-xl shadow-2xs overflow-hidden transition-colors">
       <DailyReviewEditor
         key={date}
         content={content}
@@ -196,7 +196,7 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
       />
 
       {/* Footer: Save Status */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-t border-border bg-muted/40 shrink-0">
+      <footer className="flex items-center justify-between px-4 py-2.5 border-t border-border bg-muted/40 shrink-0">
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <span>{saveStatus === "saving" ? "保存中..." : "已自动保存"}</span>
           <Cloud
@@ -208,8 +208,8 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
             }`}
           />
         </div>
-      </div>
-    </div>
+      </footer>
+    </article>
   );
 });
 
@@ -246,53 +246,53 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
   }, [startDayOfWeek, daysInMonth, currentMonth]);
 
   return (
-    <div className="flex flex-col h-full p-4 gap-4 overflow-y-auto">
+    <section className="flex flex-col h-full p-4 gap-4 overflow-y-auto">
       {/* Stats Section */}
-      <div className="shrink-0">
-        <div className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase mb-3">
+      <section className="shrink-0">
+        <h2 className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase mb-3">
           复利成长
-        </div>
+        </h2>
         <div className="grid grid-cols-2 gap-2.5">
-          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center shadow-2xs dark:bg-amber-950/30">
+          <article className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center shadow-2xs dark:bg-amber-950/30">
             <div className="text-xl font-bold text-amber-600 dark:text-amber-400 tabular-nums flex items-center justify-center gap-1">
               <Zap size={16} className="text-amber-500 shrink-0" />
               {stats.currentStreak}
             </div>
             <div className="text-[11px] text-muted-foreground mt-1">连续天数</div>
-          </div>
+          </article>
 
-          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center shadow-2xs dark:bg-amber-950/30">
+          <article className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center shadow-2xs dark:bg-amber-950/30">
             <div className="text-xl font-bold bg-gradient-to-r from-amber-500 to-amber-600 bg-clip-text text-transparent tabular-nums">
               {stats.compoundValue.toFixed(2)}x
             </div>
             <div className="text-[11px] text-muted-foreground mt-1">复利系数</div>
-          </div>
+          </article>
 
-          <div className="p-3 rounded-lg bg-card border border-border text-center shadow-2xs">
+          <article className="p-3 rounded-lg bg-card border border-border text-center shadow-2xs">
             <div className="text-xl font-bold text-foreground tabular-nums flex items-center justify-center gap-1">
               <BarChart3 size={16} className="text-muted-foreground opacity-60 shrink-0" />
               {stats.totalReviews}
             </div>
             <div className="text-[11px] text-muted-foreground mt-1">总复盘数</div>
-          </div>
+          </article>
 
-          <div className="p-3 rounded-lg bg-card border border-border text-center shadow-2xs">
+          <article className="p-3 rounded-lg bg-card border border-border text-center shadow-2xs">
             <div className="text-xl font-bold text-foreground tabular-nums flex items-center justify-center gap-1">
               <Award size={16} className="text-muted-foreground opacity-60 shrink-0" />
               {stats.longestStreak}
             </div>
             <div className="text-[11px] text-muted-foreground mt-1">最长连续</div>
-          </div>
+          </article>
         </div>
-      </div>
+      </section>
 
       {/* Calendar Section */}
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
+      <section className="flex-1 flex flex-col min-h-0">
+        <header className="flex items-center justify-between mb-2">
+          <h2 className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
             {currentMonth.format("YYYY年 M月")} 打卡记录
-          </div>
-          <div className="flex items-center gap-1">
+          </h2>
+          <nav className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => onSelectDate(todayStr)}
@@ -329,8 +329,8 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
             >
               <ChevronRight size={16} />
             </button>
-          </div>
-        </div>
+          </nav>
+        </header>
 
         <div className="bg-card rounded-xl border border-border p-3 shadow-2xs">
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground font-medium mb-1">
@@ -374,7 +374,7 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
                       : "border-transparent cursor-pointer"
                   } ${levelClass}`}
                 >
-                  <span>{day.date()}</span>
+                  {day.date()}
                 </button>
               );
             })}
@@ -382,7 +382,7 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
         </div>
 
         {/* Legend */}
-        <div className="flex items-center gap-1 mt-3 text-[10px] text-muted-foreground">
+        <footer className="flex items-center gap-1 mt-3 text-[10px] text-muted-foreground">
           <span>少</span>
           <div className="w-2.5 h-2.5 rounded-2xs bg-card border border-border"></div>
           <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-100 dark:bg-emerald-950"></div>
@@ -390,9 +390,9 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
           <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-500"></div>
           <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-700 dark:bg-emerald-600"></div>
           <span>多</span>
-        </div>
-      </div>
-    </div>
+        </footer>
+      </section>
+    </section>
   );
 });
 
@@ -444,10 +444,10 @@ export const DailyReviewPanel: React.FC = () => {
   const isCurrentToday = selectedDate === todayYMD();
 
   return (
-    <div className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
+    <section className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
       {/* Top Bar: Date Navigation */}
-      <div className="flex items-center justify-center px-6 py-3 bg-card border-b border-border shrink-0">
-        <div className="flex items-center gap-3">
+      <header className="flex items-center justify-center px-6 py-3 bg-card border-b border-border shrink-0">
+        <nav className="flex items-center gap-3">
           <button 
             type="button"
             className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer" 
@@ -483,31 +483,31 @@ export const DailyReviewPanel: React.FC = () => {
           >
             <ChevronRight size={18} />
           </button>
-        </div>
-      </div>
+        </nav>
+      </header>
 
       {/* Main Layout: Left Editor + Right Stats */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
+      <section className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left: Editor */}
-        <div className="flex-1 flex flex-col p-4 md:p-5 min-w-0 overflow-hidden">
+        <section className="flex-1 flex flex-col p-4 md:p-5 min-w-0 overflow-hidden">
           <ReviewEditor 
             key={`${selectedDate}-${currentReview?.id || "new"}`}
             date={selectedDate} 
             review={currentReview} 
             onSave={handleSave}
           />
-        </div>
+        </section>
 
         {/* Right: Stats + Calendar */}
-        <div className="w-72 md:w-80 shrink-0 border-l border-border bg-card/40 overflow-y-auto">
+        <aside className="w-72 md:w-80 min-h-0 shrink-0 overflow-hidden border-l border-border bg-card/40">
           <CompoundStats 
             stats={stats} 
             reviews={reviews} 
             onSelectDate={handleSelectDate}
             selectedDate={selectedDate}
           />
-        </div>
-      </div>
-    </div>
+        </aside>
+      </section>
+    </section>
   );
 };

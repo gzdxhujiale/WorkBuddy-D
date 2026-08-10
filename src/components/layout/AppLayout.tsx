@@ -12,12 +12,12 @@ export const AppLayout: React.FC = () => {
       <DesktopToolbar onSettingsClick={() => setIsSettingsOpen(true)} />
 
       {/* Main Body Column */}
-      <div className="flex flex-col flex-1 h-full overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
         {/* Top Header / MenuBar */}
         <DesktopMenuBar />
 
         {/* Main Route Content */}
-        <main className="flex-1 w-full h-full overflow-hidden relative">
+        <main className="relative min-h-0 w-full flex-1 overflow-hidden">
           <React.Suspense
             fallback={
               <div className="flex items-center justify-center h-full w-full text-slate-400 text-sm">
