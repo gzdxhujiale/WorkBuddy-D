@@ -4,7 +4,11 @@ import { Note } from '@/types/lists';
 import { MoreHorizontal, Pin, Cloud, Minus, Square, Copy, X } from 'lucide-react';
 import * as listsService from '@/services/listsService';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import { ReactjsTiptapEditor, convertMarkdownToTipTapJson, convertTipTapJsonToMarkdown } from '../tiptap';
+import {
+  DailyReviewEditor,
+  convertMarkdownToTipTapJson,
+  convertTipTapJsonToMarkdown,
+} from '@/components/daily-review/DailyReviewEditor';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
@@ -377,13 +381,10 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
 
       {/* Main Editor Area */}
       <div className="flex flex-col flex-1 overflow-hidden relative">
-        <ReactjsTiptapEditor
+        <DailyReviewEditor
           key={note.id}
           content={content}
           onChange={setContent}
-          initialContent={content}
-          enableCustomTemplates={true}
-          className="note-drawer-reactjs-tiptap"
         />
       </div>
     </div>

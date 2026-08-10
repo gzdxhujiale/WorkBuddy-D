@@ -63,6 +63,7 @@ const EDITOR_EXTENSIONS = [
     code: false,
     codeBlock: false,
     horizontalRule: false,
+    underline: false,
   }),
   Selection,
   Heading.configure({ levels: [1, 2, 3] }),
@@ -118,17 +119,21 @@ function parseContent(raw: string): EditorContentValue {
 
 function EditorToolbar() {
   return (
-    <div className="daily-review-editor-toolbar" role="toolbar" aria-label="复盘编辑工具栏">
+    <div
+      className="flex min-h-11 shrink-0 flex-wrap items-center gap-0.5 overflow-x-auto border-b border-border bg-muted/45 px-2 py-1"
+      role="toolbar"
+      aria-label="复盘编辑工具栏"
+    >
       <RichTextUndo />
       <RichTextRedo />
-      <span className="daily-review-editor-toolbar-divider" />
+      <span className="mx-0.5 h-6 w-px shrink-0 bg-border" />
       <RichTextBold />
       <RichTextItalic />
       <RichTextUnderline />
       <RichTextStrike />
       <RichTextColor />
       <RichTextHighlight />
-      <span className="daily-review-editor-toolbar-divider" />
+      <span className="mx-0.5 h-6 w-px shrink-0 bg-border" />
       <RichTextBulletList />
       <RichTextOrderedList />
       <RichTextTaskList />
@@ -170,7 +175,6 @@ export function DailyReviewEditor({ content, onChange }: DailyReviewEditorProps)
     },
     editorProps: {
       attributes: {
-        class: "daily-review-prosemirror",
         spellcheck: "true",
       },
     },
@@ -193,18 +197,105 @@ export function DailyReviewEditor({ content, onChange }: DailyReviewEditorProps)
   }, [content, editor]);
 
   if (!editor) {
-    return <div className="daily-review-editor-loading">正在加载编辑器...</div>;
+    return <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">正在加载编辑器...</div>;
   }
 
   return (
-    <div className="daily-review-editor-shell">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-card">
       <RichTextProvider editor={editor}>
         <EditorToolbar />
-        <div className="daily-review-editor-scroll-area">
-          <EditorContent editor={editor} />
-        </div>
+        <EditorContent
+          editor={editor}
+          className={
+            "flex min-h-0 min-w-0 flex-1 overflow-y-auto " +
+            "[&_.ProseMirror]:min-h-full [&_.ProseMirror]:w-full [&_.ProseMirror]:min-w-0 [&_.ProseMirror]:box-border [&_.ProseMirror]:p-5 [&_.ProseMirror]:px-6 [&_.ProseMirror]:pb-12 [&_.ProseMirror]:outline-none " +
+            "[&_.ProseMirror>*]:mx-0 [&_.ProseMirror>*]:max-w-none " +
+            "[&_.ProseMirror_blockquote]:my-3 [&_.ProseMirror_blockquote]:rounded-md [&_.ProseMirror_blockquote]:rounded-l-none [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-primary/45 [&_.ProseMirror_blockquote]:bg-muted/50 [&_.ProseMirror_blockquote]:px-4 [&_.ProseMirror_blockquote]:py-2 [&_.ProseMirror_blockquote]:text-muted-foreground [&_.ProseMirror_blockquote]:italic " +
+            "[&_.ProseMirror_pre]:my-3 [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:rounded-md [&_.ProseMirror_pre]:border [&_.ProseMirror_pre]:border-border [&_.ProseMirror_pre]:bg-muted [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:font-mono [&_.ProseMirror_pre]:text-sm " +
+            "[&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0 [&_.ProseMirror_pre_code]:text-inherit " +
+            "[&_.ProseMirror_.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_.is-editor-empty:first-child::before]:text-muted-foreground [&_.ProseMirror_.is-editor-empty:first-child::before]:opacity-65 [&_.ProseMirror_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]"
+          }
+        />
         <EditorBubbles />
       </RichTextProvider>
     </div>
   );
+}
+
+export function convertMarkdownToTipTapJson(markdown: string): string {
+  if (!markdown) return JSON.stringify(EMPTY_DOCUMENT);
+
+  const trimmed = markdown.trim();
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && parsed.type === "doc") return trimmed;
+    } catch {
+      // Treat invalid JSON as markdown.
+    }
+  }
+
+  return JSON.stringify({
+    type: "doc",
+    content: markdown.split("\n").map((line) => ({
+      type: "paragraph",
+      content: line ? [{ type: "text", text: line }] : [],
+    })),
+  });
+}
+
+export function convertTipTapJsonToMarkdown(jsonOrText: string): string {
+  if (!jsonOrText) return "";
+
+  try {
+    const parsed = JSON.parse(jsonOrText);
+    if (parsed && Array.isArray(parsed.content)) {
+      return parsed.content
+        .map((block: any) => {
+          if (block.type === "heading") {
+            const level = block.attrs?.level || 1;
+            const text = block.content?.map((inline: any) => inline.text || "").join("") || "";
+            return `${"#".repeat(level)} ${text}`;
+          }
+          if (block.type === "bulletList" || block.type === "orderedList") {
+            return block.content?.map((item: any, index: number) => {
+              const prefix = block.type === "orderedList" ? `${index + 1}. ` : "- ";
+              const text = item.content?.[0]?.content?.map((inline: any) => inline.text || "").join("") || "";
+              return prefix + text;
+            }).join("\n") || "";
+          }
+          if (block.type === "taskList") {
+            return block.content?.map((item: any) => {
+              const checked = item.attrs?.checked ? "x" : " ";
+              const text = item.content?.[0]?.content?.map((inline: any) => inline.text || "").join("") || "";
+              return `- [${checked}] ${text}`;
+            }).join("\n") || "";
+          }
+          if (block.type === "blockquote") {
+            const text = block.content?.map((inner: any) => {
+              if (inner.type === "paragraph") {
+                return inner.content?.map((inline: any) => inline.text || "").join("") || "";
+              }
+              return "";
+            }).join("\n") || "";
+            return text.split("\n").map((line: string) => `> ${line}`).join("\n");
+          }
+          if (block.type === "codeBlock") {
+            const language = block.attrs?.language || "";
+            const text = block.content?.map((inline: any) => inline.text || "").join("") || "";
+            return `\`\`\`${language}\n${text}\n\`\`\``;
+          }
+          if (block.type === "horizontalRule") return "---";
+          if (Array.isArray(block.content)) {
+            return block.content.map((inline: any) => inline.text || "").join("");
+          }
+          return "";
+        })
+        .join("\n\n");
+    }
+  } catch {
+    // Return plain text when it is not JSON.
+  }
+
+  return jsonOrText;
 }

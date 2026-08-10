@@ -189,14 +189,11 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
 
   return (
     <div className="flex-1 flex flex-col bg-card border border-border rounded-xl shadow-2xs overflow-hidden transition-colors">
-      {/* Official reactjs-tiptap-editor */}
-      <div className="flex-1 flex flex-col relative min-h-0">
-        <DailyReviewEditor
-          key={date}
-          content={content}
-          onChange={setContent}
-        />
-      </div>
+      <DailyReviewEditor
+        key={date}
+        content={content}
+        onChange={setContent}
+      />
 
       {/* Footer: Save Status */}
       <div className="flex items-center justify-between px-4 py-2.5 border-t border-border bg-muted/40 shrink-0">

@@ -17,7 +17,11 @@ import { TemplateModal, useTemplateData, useTemplateActions } from '../templates
 import * as listsService from '@/services/listsService';
 import { logError, logSilent } from '@/lib/syncEngine';
 import { computeNoteReorder, computeListReorder } from '@/utils/listsReorder';
-import { ReactjsTiptapEditor, convertMarkdownToTipTapJson, convertTipTapJsonToMarkdown } from '../tiptap';
+import {
+  DailyReviewEditor,
+  convertMarkdownToTipTapJson,
+  convertTipTapJsonToMarkdown,
+} from '@/components/daily-review/DailyReviewEditor';
 import { useConfirmDialog } from '@/components/ui/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -992,11 +996,9 @@ function NoteDrawerContent({
         className="flex-1 flex flex-col p-0 overflow-hidden relative"
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <ReactjsTiptapEditor
+        <DailyReviewEditor
           content={content}
-          initialContent={content}
           onChange={setContent}
-          enableCustomTemplates={true}
         />
       </div>
     </>
