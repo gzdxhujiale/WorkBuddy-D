@@ -3,10 +3,13 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { timeManagementApi } from "@/services/timeManagementService";
 import { Task, QuadrantType, TimeManagementData } from "@/types/timeManagement";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
+import { useRealtimeQueryInvalidation } from "@/hooks/useRealtimeQueryInvalidation";
 
 const QUERY_KEY = ["time-management-tasks"];
+const TIME_MANAGEMENT_REALTIME_TABLES = ["mission_roles", "time_management_tasks"] as const;
 
 export function useTimeManagementData() {
+  useRealtimeQueryInvalidation("time-management", TIME_MANAGEMENT_REALTIME_TABLES, QUERY_KEY);
   return useQuery<TimeManagementData>({
     queryKey: QUERY_KEY,
     queryFn: async () => {

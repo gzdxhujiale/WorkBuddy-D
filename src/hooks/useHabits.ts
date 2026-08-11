@@ -3,10 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 import { habitApi } from "@/services/habitService";
 import { Habit, HabitData } from "@/types/habit";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
+import { useRealtimeQueryInvalidation } from "@/hooks/useRealtimeQueryInvalidation";
 
 export const HABITS_QUERY_KEY = ["habits"];
+const HABIT_REALTIME_TABLES = ["habits", "habit_checkins"] as const;
 
 export function useHabitData() {
+  useRealtimeQueryInvalidation("habits", HABIT_REALTIME_TABLES, HABITS_QUERY_KEY);
   return useQuery({
     queryKey: HABITS_QUERY_KEY,
     queryFn: () => habitApi.loadAll(),

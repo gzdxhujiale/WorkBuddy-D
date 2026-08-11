@@ -3,8 +3,10 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { dailyReviewApi } from "@/services/dailyReviewService";
 import { DailyReviewItem } from "@/types/dailyReview";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
+import { useRealtimeQueryInvalidation } from "@/hooks/useRealtimeQueryInvalidation";
 
 export const DAILY_REVIEW_QUERY_KEY = ["dailyReviews"];
+const DAILY_REVIEW_REALTIME_TABLES = ["daily_reviews"] as const;
 
 export function isReviewEmpty(content: string): boolean {
   if (!content) return true;
@@ -27,6 +29,7 @@ export function isReviewEmpty(content: string): boolean {
 }
 
 export function useDailyReviewData() {
+  useRealtimeQueryInvalidation("daily-reviews", DAILY_REVIEW_REALTIME_TABLES, DAILY_REVIEW_QUERY_KEY);
   return useQuery({
     queryKey: DAILY_REVIEW_QUERY_KEY,
     queryFn: () => dailyReviewApi.loadAll(),

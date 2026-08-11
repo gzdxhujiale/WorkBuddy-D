@@ -3,10 +3,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { listNotesApi } from '@/services/listNotesService';
 import { ListTemplate } from '@/types/listNotes';
 import { FileText, Trash2, X } from 'lucide-react';
+import { useRealtimeQueryInvalidation } from '@/hooks/useRealtimeQueryInvalidation';
+
+const TEMPLATE_QUERY_KEY = ['knowledge_base_templates'];
+const TEMPLATE_REALTIME_TABLES = ['knowledge_base_templates'] as const;
 
 export function useTemplateData() {
+  useRealtimeQueryInvalidation('templates', TEMPLATE_REALTIME_TABLES, TEMPLATE_QUERY_KEY);
   return useQuery({
-    queryKey: ['knowledge_base_templates'],
+    queryKey: TEMPLATE_QUERY_KEY,
     queryFn: async () => {
       const data = await listNotesApi.loadAll();
       return data.templates;
@@ -26,7 +31,7 @@ export function useTemplateActions() {
       updatedAt: Date.now(),
     };
     await listNotesApi.upsertTemplate(newTpl);
-    queryClient.invalidateQueries({ queryKey: ['knowledge_base_templates'] });
+    queryClient.invalidateQueries({ queryKey: TEMPLATE_QUERY_KEY });
     queryClient.invalidateQueries({ queryKey: ['lists', 'all'] });
   };
 
@@ -35,14 +40,14 @@ export function useTemplateActions() {
     const target = data.templates.find((t) => t.id === id);
     if (target) {
       await listNotesApi.upsertTemplate({ ...target, ...updates, updatedAt: Date.now() });
-      queryClient.invalidateQueries({ queryKey: ['knowledge_base_templates'] });
+      queryClient.invalidateQueries({ queryKey: TEMPLATE_QUERY_KEY });
       queryClient.invalidateQueries({ queryKey: ['lists', 'all'] });
     }
   };
 
   const deleteTemplate = async (id: string) => {
     await listNotesApi.deleteTemplate(id);
-    queryClient.invalidateQueries({ queryKey: ['knowledge_base_templates'] });
+    queryClient.invalidateQueries({ queryKey: TEMPLATE_QUERY_KEY });
     queryClient.invalidateQueries({ queryKey: ['lists', 'all'] });
   };
 
