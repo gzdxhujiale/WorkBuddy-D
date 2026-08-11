@@ -21,6 +21,7 @@ export default defineConfig(async () => ({
         main: path.resolve(__dirname, "index.html"),
         note: path.resolve(__dirname, "note.html"),
         quickEdit: path.resolve(__dirname, "quick-edit.html"),
+        focusAssistant: path.resolve(__dirname, "focus-assistant.html"),
       },
     },
   },

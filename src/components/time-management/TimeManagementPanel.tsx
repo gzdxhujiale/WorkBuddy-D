@@ -12,6 +12,7 @@ import {
   Circle,
   Clock,
   Tag,
+  Timer,
 } from "lucide-react";
 import { useTimeManagementData, useTaskActions } from "@/hooks/useTimeManagement";
 import { Task, QuadrantType } from "@/types/timeManagement";
@@ -25,6 +26,7 @@ import {
 } from "@/services/quickEditWindow";
 import { startTaskReminderScheduler } from "@/services/taskReminderScheduler";
 import { getTaskEndAt, taskIntersectsDay, taskIntersectsInterval, taskTimeLabel } from "@/lib/taskSchedule";
+import { toggleFocusAssistant } from "@/services/focusAssistantWindow";
 
 export type ViewType = "quadrant" | "day" | "week" | "month";
 export type StatusFilterType = "uncompleted" | "all" | "completed";
@@ -267,6 +269,7 @@ export const TimeManagementPanel: React.FC = () => {
 
         {/* Header Right Actions */}
         <div className="flex items-center gap-3">
+          <button onClick={() => void toggleFocusAssistant()} className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300" title="显示或隐藏悬浮专注助手"><Timer size={14} />悬浮专注</button>
           {/* View Switcher Tabs (筛选组件左侧 Tabs) */}
           <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
             <button

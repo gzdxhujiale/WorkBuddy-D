@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase";
 import { LoginPage } from "@/components/LoginPage";
 import { AuthProvider } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
+import { showFocusAssistant } from "@/services/focusAssistantWindow";
+import { focusAssistantApi } from "@/services/focusAssistantService";
 
 function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -25,6 +27,14 @@ function App() {
 
     return () => subscription.unsubscribe();
   }, []);
+
+  useEffect(() => {
+    if (!session) return;
+    void showFocusAssistant();
+    const onUnload = () => { void focusAssistantApi.markOpenSessionsInterrupted(); };
+    window.addEventListener("beforeunload", onUnload);
+    return () => window.removeEventListener("beforeunload", onUnload);
+  }, [session]);
 
   // 正在检测会话中，显示加载态避免闪烁
   if (session === undefined) {
