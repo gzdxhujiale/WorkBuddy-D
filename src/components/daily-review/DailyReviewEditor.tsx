@@ -201,13 +201,15 @@ export function DailyReviewEditor({ content, onChange }: DailyReviewEditorProps)
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-card [&>.reactjs-tiptap-editor]:flex [&>.reactjs-tiptap-editor]:min-h-0 [&>.reactjs-tiptap-editor]:flex-1 [&>.reactjs-tiptap-editor]:flex-col [&>.reactjs-tiptap-editor]:overflow-hidden">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-card selection:bg-[#bfdbfe] selection:text-slate-900 dark:selection:bg-blue-900/80 dark:selection:text-blue-100 [&>.reactjs-tiptap-editor]:flex [&>.reactjs-tiptap-editor]:min-h-0 [&>.reactjs-tiptap-editor]:flex-1 [&>.reactjs-tiptap-editor]:flex-col [&>.reactjs-tiptap-editor]:overflow-hidden">
       <RichTextProvider editor={editor}>
         <EditorToolbar />
         <EditorContent
           editor={editor}
           className={
-            "flex min-h-0 min-w-0 flex-1 overflow-y-auto !bg-card selection:bg-blue-200 selection:text-blue-950 dark:selection:bg-blue-800/70 dark:selection:text-blue-50 " +
+            "flex min-h-0 min-w-0 flex-1 overflow-y-auto !bg-card " +
+            "[&_*::selection]:!bg-[#bfdbfe] [&_*::selection]:!text-slate-900 dark:[&_*::selection]:!bg-blue-900/90 dark:[&_*::selection]:!text-blue-100 " +
+            "[&_.selection]:!bg-[#bfdbfe] [&_.selection]:!text-slate-900 dark:[&_.selection]:!bg-blue-900/90 dark:[&_.selection]:!text-blue-100 " +
             "[&_.ProseMirror]:min-h-full [&_.ProseMirror]:w-full [&_.ProseMirror]:min-w-0 [&_.ProseMirror]:box-border [&_.ProseMirror]:!bg-card [&_.ProseMirror]:p-5 [&_.ProseMirror]:px-6 [&_.ProseMirror]:pb-12 [&_.ProseMirror]:outline-none " +
             "[&_.ProseMirror>*]:mx-0 [&_.ProseMirror>*]:max-w-none " +
             "[&_.ProseMirror_blockquote]:my-3 [&_.ProseMirror_blockquote]:rounded-md [&_.ProseMirror_blockquote]:rounded-l-none [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-primary/45 [&_.ProseMirror_blockquote]:bg-muted/50 [&_.ProseMirror_blockquote]:px-4 [&_.ProseMirror_blockquote]:py-2 [&_.ProseMirror_blockquote]:text-muted-foreground [&_.ProseMirror_blockquote]:italic " +
