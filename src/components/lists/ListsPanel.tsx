@@ -363,7 +363,10 @@ function ListsSidebar({
         )}
       >
         <div className="group/header flex h-12 shrink-0 items-center justify-between border-b border-slate-200/80 dark:border-slate-800 px-4 text-sm font-semibold select-none">
-        <span>知识库</span>
+        <div className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-slate-100">
+            <Library className="text-indigo-600 dark:text-indigo-400" size={20} />
+            <span>知识库</span>
+          </div>
         <Button
           variant="ghost"
           size="icon"
@@ -2115,7 +2118,7 @@ export function ListsPanel() {
           {activeList ? (
             <>
               <div className="flex h-12 items-center justify-between border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 shrink-0">
-                <div className="flex items-center gap-3 font-bold text-xl text-foreground">
+                <div className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-slate-100">
                   <Button
                     variant="ghost"
                     size="icon"

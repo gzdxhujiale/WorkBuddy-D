@@ -833,7 +833,10 @@ export const HabitPanel: React.FC = () => {
         <div className="flex-shrink-0 bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800 flex flex-col pt-4">
           <div className="flex items-center justify-between px-6 pb-2">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">习惯追踪</h1>
+              <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Sparkles className="text-amber-500 dark:text-amber-400" size={20} />
+                习惯追踪
+              </h1>
             </div>
             <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
               <Button

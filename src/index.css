@@ -281,6 +281,7 @@ html.tqe-window #root {
   cursor: grab;
   position: relative;
   z-index: 20;
+  -webkit-user-select: none;
   user-select: none;
   opacity: 0.35;
   transition: opacity 0.15s ease, background-color 0.15s ease;
