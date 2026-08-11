@@ -166,12 +166,21 @@ export function DailyReviewEditor({ content, onChange }: DailyReviewEditorProps)
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
+  const isUpdatingFromEditorRef = useRef(false);
+  const lastContentRef = useRef(content);
+
   const editor = useEditor({
     immediatelyRender: false,
     extensions: EDITOR_EXTENSIONS,
     content: parseContent(content),
     onUpdate: ({ editor: currentEditor }) => {
-      onChangeRef.current(JSON.stringify(currentEditor.getJSON()));
+      const jsonStr = JSON.stringify(currentEditor.getJSON());
+      lastContentRef.current = jsonStr;
+      isUpdatingFromEditorRef.current = true;
+      onChangeRef.current(jsonStr);
+      queueMicrotask(() => {
+        isUpdatingFromEditorRef.current = false;
+      });
     },
     editorProps: {
       attributes: {
@@ -186,6 +195,11 @@ export function DailyReviewEditor({ content, onChange }: DailyReviewEditorProps)
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
+
+    if (isUpdatingFromEditorRef.current) return;
+    if (content === lastContentRef.current) return;
+
+    lastContentRef.current = content;
 
     const nextContent = parseContent(content);
     if (typeof nextContent === "string") return;
