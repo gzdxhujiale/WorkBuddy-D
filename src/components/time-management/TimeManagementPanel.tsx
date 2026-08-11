@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
+  ListTodo,
   LayoutGrid,
   Sun,
   CalendarRange,
@@ -258,8 +259,8 @@ export const TimeManagementPanel: React.FC = () => {
       <header className="flex items-center justify-between px-6 py-3 border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md flex-shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <LayoutGrid className="text-blue-600 dark:text-blue-400" size={20} />
-            {activeView === "quadrant" && "四象限工作台"}
+            <ListTodo className="text-blue-600 dark:text-blue-400" size={20} />
+            {activeView === "quadrant" && "任务中心"}
             {activeView === "day" && "时间管理 · 日视图"}
             {activeView === "week" && "时间管理 · 周视图"}
             {activeView === "month" && "时间管理 · 月视图"}

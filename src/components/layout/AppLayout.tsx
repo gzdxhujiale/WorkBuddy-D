@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Link, Outlet } from "@tanstack/react-router";
 import {
   CalendarCheck,
-  LayoutGrid,
+  ListTodo,
   Sparkles,
   BookCheck,
   Library,
@@ -27,7 +27,7 @@ export interface NavigationTool {
 
 export const NAV_TOOLS: NavigationTool[] = [
   { id: "today", name: "当日待办", to: "/today", icon: CalendarCheck },
-  { id: "four-quadrants", name: "四象限工作台", to: "/four-quadrants", icon: LayoutGrid },
+  { id: "four-quadrants", name: "任务中心", to: "/four-quadrants", icon: ListTodo },
   { id: "habit", name: "习惯追踪", to: "/habit", icon: Sparkles },
   { id: "lists", name: "知识库", to: "/lists", icon: Library },
   { id: "daily-review", name: "每日复盘", to: "/daily-review", icon: BookCheck },
