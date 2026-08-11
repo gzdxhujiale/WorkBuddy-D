@@ -60,14 +60,12 @@ export function useTaskActions() {
     (
       title: string,
       quadrant: QuadrantType = "Q2",
-      scheduledDate?: string,
       roleId?: string
     ): Task => {
       const newTask: Task = {
         id: crypto.randomUUID(),
         title,
         quadrant,
-        scheduledDate,
         roleId,
         completed: false,
         createdAt: Date.now(),

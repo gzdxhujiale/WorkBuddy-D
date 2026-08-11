@@ -13,6 +13,7 @@ import { DailyReviewItem } from "@/types/dailyReview";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { openQuickEditWindow, requestQuickEditCloseLayer } from "@/services/quickEditWindow";
 import { Badge } from "@/components/ui/badge";
+import { taskIntersectsDay } from "@/lib/taskSchedule";
 
 // ============================================================
 // Constants & Pure Selectors
@@ -35,13 +36,13 @@ const QUADRANT_CHIPS: Record<QuadrantType, { label: string; variant: "q1" | "q2"
   Q4: { label: "常规", variant: "q4" },
 };
 
-function dueLabel(deadline: number, now: number): { text: string; overdue: boolean } {
-  if (deadline < now) {
-    const mins = Math.floor((now - deadline) / 60000);
+function dueLabel(scheduledEndAt: number, now: number): { text: string; overdue: boolean } {
+  if (scheduledEndAt < now) {
+    const mins = Math.floor((now - scheduledEndAt) / 60000);
     const text = mins >= 60 ? `已逾期 ${Math.floor(mins / 60)}h` : `已逾期 ${Math.max(1, mins)}m`;
     return { text, overdue: true };
   }
-  const d = new Date(deadline);
+  const d = new Date(scheduledEndAt);
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
   return { text: `${hh}:${mm} 前`, overdue: false };
@@ -160,11 +161,7 @@ export const TodayPanel: React.FC = () => {
   // Filter tasks due today
   const dueTasks = useMemo(
     () =>
-      tasks.filter(
-        (t) =>
-          (t.deadline && formatDateYMD(new Date(t.deadline)) === today) ||
-          t.scheduledDate === today
-      ),
+      tasks.filter((task) => taskIntersectsDay(task, new Date(`${today}T00:00:00`))),
     [tasks, today]
   );
   const pendingTasks = useMemo(() => dueTasks.filter((t) => !t.completed), [dueTasks]);
@@ -213,7 +210,7 @@ export const TodayPanel: React.FC = () => {
 
   const renderTaskItem = (task: Task) => {
     const chip = QUADRANT_CHIPS[task.quadrant];
-    const due = !task.completed && task.deadline ? dueLabel(task.deadline, now) : null;
+    const due = !task.completed && task.scheduledEndAt ? dueLabel(task.scheduledEndAt, now) : null;
 
     return (
       <div

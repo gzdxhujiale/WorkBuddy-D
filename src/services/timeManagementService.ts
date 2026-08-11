@@ -18,24 +18,14 @@ const DEFAULT_ROLES: Role[] = [
   { id: "role-4", name: "家庭社交", color: "#7657d6", sort_order: 4 },
 ];
 
-function toLocalDateYmd(timestamp?: number): string | undefined {
-  if (!timestamp) return undefined;
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function resolveSchedule(task: Task): {
   scheduleMode: ScheduleMode | undefined;
   scheduledStartAt: number | undefined;
   scheduledEndAt: number | undefined;
 } {
-  // deadline is kept only as a temporary adapter for the not-yet-migrated UI.
-  const scheduleMode = task.scheduleMode ?? (task.deadline ? "point" : undefined);
+  const scheduleMode = task.scheduleMode;
   const scheduledStartAt = task.scheduledStartAt;
-  const scheduledEndAt = task.scheduledEndAt ?? task.deadline;
+  const scheduledEndAt = task.scheduledEndAt;
 
   if (!scheduleMode) {
     return { scheduleMode: undefined, scheduledStartAt: undefined, scheduledEndAt: undefined };
@@ -114,14 +104,9 @@ export const timeManagementApi = {
           scheduleMode: t.schedule_mode || undefined,
           scheduledStartAt: t.scheduled_start_at ? new Date(t.scheduled_start_at).getTime() : undefined,
           scheduledEndAt: t.scheduled_end_at ? new Date(t.scheduled_end_at).getTime() : undefined,
-          // Temporary compatibility for views that still consume the old fields.
-          scheduledDate: t.scheduled_end_at
-            ? toLocalDateYmd(new Date(t.scheduled_end_at).getTime())
-            : undefined,
           completed: Boolean(t.completed),
           completedAt: t.completed_at ? new Date(t.completed_at).getTime() : undefined,
           description: t.description || undefined,
-          deadline: t.scheduled_end_at ? new Date(t.scheduled_end_at).getTime() : undefined,
           reminder: typeof t.reminder === "string" ? t.reminder : t.reminder ? JSON.stringify(t.reminder) : undefined,
           createdAt: t.created_at ? new Date(t.created_at).getTime() : Date.now(),
         }));

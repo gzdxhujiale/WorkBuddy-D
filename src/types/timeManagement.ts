@@ -23,15 +23,9 @@ export interface Task {
   scheduleMode?: ScheduleMode;
   scheduledStartAt?: number;
   scheduledEndAt?: number;
-  /** @deprecated 前端视图迁移期间的兼容字段，不再写入数据库。 */
-  scheduledDate?: string;
-  /** @deprecated 前端视图迁移期间的兼容字段，不再写入数据库。 */
-  timeOfDay?: 'morning' | 'afternoon';
   completed: boolean;
   completedAt?: number;
   description?: string;
-  /** @deprecated 请使用 scheduledEndAt。 */
-  deadline?: number;
   reminder?: string;
   createdAt: number;
 }
@@ -42,10 +36,6 @@ export interface TaskDraft {
   scheduleMode?: ScheduleMode;
   scheduledStartAt?: number;
   scheduledEndAt?: number;
-  /** @deprecated 请使用 scheduledEndAt。 */
-  deadline?: number;
-  /** @deprecated 前端视图迁移期间的兼容字段。 */
-  scheduledDate?: string;
   reminder?: string;
   roleId?: string;
 }

@@ -114,16 +114,18 @@
 | `role_id` | `UUID` | NULL, FOREIGN KEY (`mission_roles.id`) ON DELETE SET NULL | `NULL` | 关联角色ID |
 | `title` | `TEXT` | NOT NULL | - | 任务标题 |
 | `quadrant` | `TEXT` | NOT NULL | - | 所属象限 (`Q1_URGENT_IMPORTANT`, `Q2_NOT_URGENT_IMPORTANT`, `Q3_URGENT_NOT_IMPORTANT`, `Q4_NOT_URGENT_NOT_IMPORTANT`) |
-| `scheduled_date` | `DATE` | NULL | `NULL` | 安排日期 (`YYYY-MM-DD`) |
-| `time_of_day` | `TEXT` | NULL | `NULL` | 具体执行时段 |
+| `schedule_mode` | `TEXT` | NULL, CHECK (`point` / `range`) | `NULL` | 排期模式：`point` 为单个截止时间，`range` 为时间段 |
+| `scheduled_start_at` | `TIMESTAMPTZ` | NULL | `NULL` | 时间段开始时间，仅 `range` 使用 |
+| `scheduled_end_at` | `TIMESTAMPTZ` | NULL | `NULL` | 单时间的截止时间，或时间段的结束时间 |
 | `completed` | `BOOLEAN` | NOT NULL | `FALSE` | 是否完成 |
 | `completed_at` | `TIMESTAMPTZ` | NULL | `NULL` | 完成时间戳 |
 | `description` | `TEXT` | NULL | `NULL` | 任务详细描述 |
-| `deadline` | `TIMESTAMPTZ` | NULL | `NULL` | 截止时间戳 |
 | `reminder` | `JSONB` | NULL | `NULL` | 提醒配置(如提醒时间/推送通道) |
 | `created_at` | `TIMESTAMPTZ` | NOT NULL | `now()` | 创建时间 |
 | `updated_at` | `TIMESTAMPTZ` | NOT NULL | `now()` | 更新时间 |
 | `deleted_at` | `TIMESTAMPTZ` | NULL | `NULL` | 软删除时间 |
+
+> **排期约束**：未设置时间时，三个排期字段均为 `NULL`；`point` 必须填写 `scheduled_end_at`；`range` 必须填写开始与结束时间，且结束时间晚于开始时间。
 
 ---
 
@@ -358,7 +360,8 @@ CREATE INDEX idx_list_notes_pinned ON public.list_notes (user_id, list_id, is_pi
 
 -- 2. 使命与任务相关部分索引
 CREATE INDEX idx_mission_goals_role ON public.mission_goals (user_id, role_id, sort_order) WHERE deleted_at IS NULL;
-CREATE INDEX idx_time_management_tasks_quadrant ON public.time_management_tasks (user_id, quadrant, scheduled_date) WHERE deleted_at IS NULL;
+CREATE INDEX idx_time_management_tasks_quadrant ON public.time_management_tasks (user_id, quadrant) WHERE deleted_at IS NULL;
+CREATE INDEX idx_time_management_tasks_schedule ON public.time_management_tasks (user_id, scheduled_end_at, scheduled_start_at) WHERE deleted_at IS NULL AND scheduled_end_at IS NOT NULL;
 CREATE INDEX idx_time_management_tasks_role ON public.time_management_tasks (role_id) WHERE role_id IS NOT NULL;
 
 -- 3. 习惯打卡与番茄钟部分索引

@@ -61,7 +61,7 @@ export const TimeManagementPanel: React.FC = () => {
     task?: Task,
     quadrant: QuadrantType = "Q2",
     anchorEl?: HTMLElement,
-    scheduledDate?: string
+    initialDate?: string
   ) => {
     const targetEl = anchorEl || document.body;
     void openQuickEditWindow({
@@ -75,23 +75,24 @@ export const TimeManagementPanel: React.FC = () => {
         const newTask = addTask(
           draft.title,
           targetQ,
-          draft.scheduledDate || scheduledDate,
           draft.roleId
         );
+        const fallbackEndAt = initialDate
+          ? new Date(`${initialDate}T23:59:59.999`).getTime()
+          : undefined;
         if (
           draft.description ||
           draft.scheduleMode ||
           draft.scheduledStartAt ||
           draft.scheduledEndAt ||
-          draft.deadline ||
+          fallbackEndAt ||
           draft.reminder
         ) {
           updateTask(newTask.id, {
             description: draft.description,
-            scheduleMode: draft.scheduleMode,
+            scheduleMode: draft.scheduleMode ?? (fallbackEndAt ? "point" : undefined),
             scheduledStartAt: draft.scheduledStartAt,
-            scheduledEndAt: draft.scheduledEndAt,
-            deadline: draft.deadline,
+            scheduledEndAt: draft.scheduledEndAt ?? fallbackEndAt,
             reminder: draft.reminder,
           });
         }
@@ -405,8 +406,8 @@ export const TimeManagementPanel: React.FC = () => {
                     onSelectTask={(t, anchorEl) =>
                       handleOpenTaskEditor(t, t.quadrant, anchorEl)
                     }
-                    onCreateTask={(quadrant, scheduledDate) =>
-                      handleOpenTaskEditor(undefined, quadrant || "Q2", undefined, scheduledDate)
+                    onCreateTask={(quadrant, initialDate) =>
+                      handleOpenTaskEditor(undefined, quadrant || "Q2", undefined, initialDate)
                     }
                   />
                 )}
@@ -419,8 +420,8 @@ export const TimeManagementPanel: React.FC = () => {
                     onSelectTask={(t, anchorEl) =>
                       handleOpenTaskEditor(t, t.quadrant, anchorEl)
                     }
-                    onCreateTask={(quadrant, scheduledDate) =>
-                      handleOpenTaskEditor(undefined, quadrant || "Q2", undefined, scheduledDate)
+                    onCreateTask={(quadrant, initialDate) =>
+                      handleOpenTaskEditor(undefined, quadrant || "Q2", undefined, initialDate)
                     }
                   />
                 )}
@@ -436,8 +437,8 @@ export const TimeManagementPanel: React.FC = () => {
                     onSelectTask={(t, anchorEl) =>
                       handleOpenTaskEditor(t, t.quadrant, anchorEl)
                     }
-                    onCreateTask={(quadrant, scheduledDate) =>
-                      handleOpenTaskEditor(undefined, quadrant || "Q2", undefined, scheduledDate)
+                    onCreateTask={(quadrant, initialDate) =>
+                      handleOpenTaskEditor(undefined, quadrant || "Q2", undefined, initialDate)
                     }
                   />
                 )}

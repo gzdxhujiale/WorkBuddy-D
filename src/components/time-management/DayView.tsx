@@ -9,7 +9,7 @@ interface DayViewProps {
   roles?: Role[];
   onToggleComplete: (taskId: string) => void;
   onSelectTask: (task: Task, anchorEl?: HTMLElement) => void;
-  onCreateTask: (quadrant?: QuadrantType, scheduledDate?: string) => void;
+  onCreateTask: (quadrant?: QuadrantType, initialDate?: string) => void;
 }
 
 const HOURS = Array.from({ length: 13 }, (_, i) => i + 8); // 08:00 - 20:00

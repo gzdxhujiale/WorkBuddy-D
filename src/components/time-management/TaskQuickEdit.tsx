@@ -54,9 +54,9 @@ const L2_WIDTH = 316;
 const L3_WIDTH = 288;
 const MARGIN = 8;
 
-function splitDeadline(deadline?: number): { date: string | null; time: string } {
-  if (!deadline) return { date: null, time: "" };
-  const d = dayjs(deadline);
+function splitScheduleEnd(timestamp?: number): { date: string | null; time: string } {
+  if (!timestamp) return { date: null, time: "" };
+  const d = dayjs(timestamp);
   const hm = d.format("HH:mm");
   const isAllDay = hm === "23:59" || hm === "00:00";
   return { date: d.format("YYYY-MM-DD"), time: isAllDay ? "" : hm };
@@ -154,10 +154,10 @@ export const TaskQuickEditPopover = memo(
       };
 
       // ---------- 日期 / 时间 / 提醒状态 ----------
-      const initialEnd = task?.scheduledEndAt ?? task?.deadline;
+      const initialEnd = task?.scheduledEndAt;
       const initialStart = task?.scheduledStartAt;
-      const { date: initDate, time: initTime } = splitDeadline(initialEnd);
-      const { date: initStartDate, time: initStartTime } = splitDeadline(initialStart);
+      const { date: initDate, time: initTime } = splitScheduleEnd(initialEnd);
+      const { date: initStartDate, time: initStartTime } = splitScheduleEnd(initialStart);
       const [dateSel, setDateSel] = useState<string | null>(initDate);
       const [timeSel, setTimeSel] = useState<string>(initTime);
       const [scheduleMode, setScheduleMode] = useState<"point" | "range">(
@@ -196,9 +196,6 @@ export const TaskQuickEditPopover = memo(
               scheduleMode: nextDate ? "point" : undefined,
               scheduledStartAt: undefined,
               scheduledEndAt,
-              // Compatibility for views not yet migrated to scheduledEndAt.
-              deadline: scheduledEndAt,
-              scheduledDate: nextDate || undefined,
             },
             false
           );
@@ -225,8 +222,6 @@ export const TaskQuickEditPopover = memo(
             scheduleMode: "range",
             scheduledStartAt,
             scheduledEndAt,
-            deadline: scheduledEndAt,
-            scheduledDate: nextEndDate,
           }, false);
         }
       };
@@ -259,8 +254,6 @@ export const TaskQuickEditPopover = memo(
             scheduleMode: "point",
             scheduledStartAt: undefined,
             scheduledEndAt,
-            deadline: scheduledEndAt,
-            scheduledDate: nextDate,
           }, false);
         }
       };
@@ -342,8 +335,6 @@ export const TaskQuickEditPopover = memo(
           scheduleMode: scheduledEndAt ? draft.scheduleMode : undefined,
           scheduledStartAt,
           scheduledEndAt,
-          deadline: scheduledEndAt,
-          scheduledDate: isRange ? draft.rangeEndDate : draft.dateSel || undefined,
           reminder: draft.appliedReminder ? serializeReminder(draft.appliedReminder) : undefined,
         });
       };

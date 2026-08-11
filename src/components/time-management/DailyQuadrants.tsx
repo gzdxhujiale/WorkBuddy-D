@@ -128,25 +128,17 @@ const QUADRANT_CONFIG: Record<
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-function todayYMD(): string {
-  const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function getDeadlineGroup(deadline: number | undefined, now: number): string {
-  if (!deadline) return "无日期";
-  if (deadline < now) return "已过期";
-  const diffDays = (deadline - now) / MS_PER_DAY;
+function getScheduleGroup(scheduledEndAt: number | undefined, now: number): string {
+  if (!scheduledEndAt) return "无日期";
+  if (scheduledEndAt < now) return "已过期";
+  const diffDays = (scheduledEndAt - now) / MS_PER_DAY;
   if (diffDays <= 1) return "一天内";
   if (diffDays <= 3) return "三天内";
   if (diffDays <= 7) return "一周内";
   return "一周外";
 }
 
-function getDefaultDeadlineForGroup(groupName: string, now: number): number | undefined {
+function getDefaultScheduleEndForGroup(groupName: string, now: number): number | undefined {
   if (groupName === "已过期") return now - 3600 * 1000;
   if (groupName === "一天内") {
     const d = new Date(now + MS_PER_DAY);
@@ -252,13 +244,13 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
       const filteredTasks = hideCompleted ? targetQTasks.filter((t) => !t.completed) : targetQTasks;
 
       const now = Date.now();
-      const targetGroup = getDeadlineGroup(targetTask.deadline, now);
+      const targetGroup = getScheduleGroup(targetTask.scheduledEndAt, now);
 
       const sameGroupTasks = [...filteredTasks]
         .filter(
           (t) =>
             t.completed === targetTask.completed &&
-            getDeadlineGroup(t.deadline, now) === targetGroup &&
+            getScheduleGroup(t.scheduledEndAt, now) === targetGroup &&
             t.id !== taskId
         )
         .sort((a, b) => b.createdAt - a.createdAt);
@@ -290,7 +282,9 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
 
       onUpdateTask(taskId, {
         quadrant: targetTask.quadrant,
-        deadline: targetTask.deadline,
+        scheduleMode: targetTask.scheduleMode,
+        scheduledStartAt: targetTask.scheduledStartAt,
+        scheduledEndAt: targetTask.scheduledEndAt,
         createdAt: newCreatedAt,
       });
     };
@@ -313,11 +307,13 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
       if (!taskId) return;
 
       const now = Date.now();
-      const targetDeadline = getDefaultDeadlineForGroup(groupName, now);
+      const targetScheduledEndAt = getDefaultScheduleEndForGroup(groupName, now);
 
       onUpdateTask(taskId, {
         quadrant: targetQuadrant,
-        deadline: targetDeadline,
+        scheduleMode: targetScheduledEndAt ? "point" : undefined,
+        scheduledStartAt: undefined,
+        scheduledEndAt: targetScheduledEndAt,
       });
     };
 
@@ -329,7 +325,7 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
       const now = Date.now();
       return taskList.map((task) => {
         const isHovered = dragOverTaskId === task.id;
-        const isExpired = task.deadline && task.deadline < now && !task.completed;
+        const isExpired = task.scheduledEndAt && task.scheduledEndAt < now && !task.completed;
         const hasContent = Boolean(task.description && task.description.trim());
         const role = task.roleId ? roleMap.get(task.roleId) : undefined;
 
@@ -386,8 +382,9 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
                     const today = new Date();
                     today.setHours(23, 59, 59, 999);
                     onUpdateTask(task.id, {
-                      deadline: today.getTime(),
-                      scheduledDate: todayYMD(),
+                      scheduleMode: "point",
+                      scheduledStartAt: undefined,
+                      scheduledEndAt: today.getTime(),
                     });
                   }}
                   title="点击延期至今日"
@@ -445,12 +442,12 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
       const beyond1Week: Task[] = [];
 
       sortedTasks.forEach((t) => {
-        if (!t.deadline) {
+        if (!t.scheduledEndAt) {
           noDate.push(t);
-        } else if (t.deadline < now && !t.completed) {
+        } else if (t.scheduledEndAt < now && !t.completed) {
           expired.push(t);
         } else {
-          const diffDays = (t.deadline - now) / MS_PER_DAY;
+          const diffDays = (t.scheduledEndAt - now) / MS_PER_DAY;
           if (diffDays <= 1) within1Day.push(t);
           else if (diffDays <= 3) within3Days.push(t);
           else if (diffDays <= 7) within1Week.push(t);

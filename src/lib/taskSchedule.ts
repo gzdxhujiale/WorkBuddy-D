@@ -1,7 +1,7 @@
 import { Task } from "@/types/timeManagement";
 
 export function getTaskEndAt(task: Task): number | undefined {
-  return task.scheduledEndAt ?? task.deadline;
+  return task.scheduledEndAt;
 }
 
 export function getTaskStartAt(task: Task): number | undefined {

@@ -8,7 +8,7 @@ interface MonthViewProps {
   roles?: Role[];
   onSelectDay: (date: Date) => void;
   onSelectTask: (task: Task, anchorEl?: HTMLElement) => void;
-  onCreateTask?: (quadrant?: QuadrantType, scheduledDate?: string) => void;
+  onCreateTask?: (quadrant?: QuadrantType, initialDate?: string) => void;
 }
 
 const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];

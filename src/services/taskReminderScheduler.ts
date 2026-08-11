@@ -5,8 +5,7 @@ import { sendDesktopNotification, requestNotificationPermission } from "./notifi
 const notifiedTasks = new Set<string>();
 
 export function getTaskTargetDate(task: Task): dayjs.Dayjs {
-  if (task.deadline) return dayjs(task.deadline);
-  if (task.scheduledDate) return dayjs(task.scheduledDate);
+  if (task.scheduledEndAt) return dayjs(task.scheduledEndAt);
   return dayjs(task.createdAt);
 }
 
@@ -21,8 +20,8 @@ export function computeTaskReminderTime(task: Task): number | null {
     return remTime;
   }
 
-  if (task.deadline) {
-    return task.deadline;
+  if (task.scheduledEndAt) {
+    return task.scheduledEndAt;
   }
 
   return null;
