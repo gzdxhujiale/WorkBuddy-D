@@ -257,7 +257,7 @@ export function FocusAssistant() {
   const hide = () => void getCurrentWindow().hide().catch(() => undefined);
   const minimize = () => {
     setViewMode("minimized");
-    void getCurrentWindow().setSize(new LogicalSize(130, 130)).catch(() => undefined);
+    void getCurrentWindow().setSize(new LogicalSize(140, 140)).catch(() => undefined);
   };
   const restore = () => {
     setViewMode("normal");
