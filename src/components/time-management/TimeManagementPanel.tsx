@@ -24,6 +24,7 @@ import {
   prewarmQuickEditWindow,
 } from "@/services/quickEditWindow";
 import { startTaskReminderScheduler } from "@/services/taskReminderScheduler";
+import { getTaskEndAt, taskIntersectsDay, taskIntersectsInterval, taskTimeLabel } from "@/lib/taskSchedule";
 
 export type ViewType = "quadrant" | "day" | "week" | "month";
 export type StatusFilterType = "uncompleted" | "all" | "completed";
@@ -77,9 +78,19 @@ export const TimeManagementPanel: React.FC = () => {
           draft.scheduledDate || scheduledDate,
           draft.roleId
         );
-        if (draft.description || draft.deadline || draft.reminder) {
+        if (
+          draft.description ||
+          draft.scheduleMode ||
+          draft.scheduledStartAt ||
+          draft.scheduledEndAt ||
+          draft.deadline ||
+          draft.reminder
+        ) {
           updateTask(newTask.id, {
             description: draft.description,
+            scheduleMode: draft.scheduleMode,
+            scheduledStartAt: draft.scheduledStartAt,
+            scheduledEndAt: draft.scheduledEndAt,
             deadline: draft.deadline,
             reminder: draft.reminder,
           });
@@ -173,33 +184,19 @@ export const TimeManagementPanel: React.FC = () => {
   // Day View = 当日任务, Week View = 当周任务, Month View = 当月任务
   const periodTasks = useMemo(() => {
     return filteredTasks.filter((t) => {
-      let td: Date | null = null;
-      if (t.deadline) {
-        td = new Date(t.deadline);
-      } else if (t.scheduledDate) {
-        td = new Date(t.scheduledDate + "T00:00:00");
-      }
-
-      if (!td) return false;
-
       if (activeView === "day") {
-        return (
-          td.getFullYear() === currentDate.getFullYear() &&
-          td.getMonth() === currentDate.getMonth() &&
-          td.getDate() === currentDate.getDate()
-        );
+        return taskIntersectsDay(t, currentDate);
       }
 
       if (activeView === "week") {
         const { monday, sunday } = getWeekRange(currentDate);
-        return td >= monday && td <= sunday;
+        return taskIntersectsInterval(t, monday.getTime(), sunday.getTime() + 1);
       }
 
       if (activeView === "month") {
-        return (
-          td.getFullYear() === currentDate.getFullYear() &&
-          td.getMonth() === currentDate.getMonth()
-        );
+        const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getTime();
+        const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1).getTime();
+        return taskIntersectsInterval(t, monthStart, monthEnd);
       }
 
       return true;
@@ -542,15 +539,13 @@ export const TimeManagementPanel: React.FC = () => {
                         )}
 
                         <div className="flex items-center justify-between pl-6 pt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
-                          {t.deadline && (
+                          {getTaskEndAt(t) && (
                             <span className="flex items-center gap-1 font-mono">
                               <Clock size={11} className="text-blue-500" />
-                              {new Date(t.deadline).toLocaleDateString("zh-CN", {
+                              {new Date(getTaskEndAt(t)!).toLocaleDateString("zh-CN", {
                                 month: "numeric",
                                 day: "numeric",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              })} {taskTimeLabel(t)}
                             </span>
                           )}
 

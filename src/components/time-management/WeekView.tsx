@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { Task, Role, QuadrantType } from "@/types/timeManagement";
+import { getTaskEndAt, getTaskStartAt, taskIntersectsDay, taskTimeLabel } from "@/lib/taskSchedule";
 
 interface WeekViewProps {
   currentDate: Date;
@@ -44,6 +45,17 @@ export const WeekView: React.FC<WeekViewProps> = ({
   const getRoleColor = (roleId?: string) => {
     if (!roleId) return null;
     return roles.find((r) => r.id === roleId)?.color;
+  };
+
+  const taskDisplayHour = (task: Task, date: Date): number | undefined => {
+    if (!taskIntersectsDay(task, date)) return undefined;
+    const end = getTaskEndAt(task);
+    if (!end) return undefined;
+    if (task.scheduleMode !== "range") return new Date(end).getHours();
+
+    const dayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+    const start = getTaskStartAt(task) ?? dayStart;
+    return new Date(Math.max(start, dayStart + 8 * 60 * 60 * 1000)).getHours();
   };
 
   return (
@@ -95,23 +107,7 @@ export const WeekView: React.FC<WeekViewProps> = ({
               {weekDays.map((dateObj) => {
                 const dateStr = formatDateYMD(dateObj);
 
-                // Filter tasks for this day & hour
-                const cellTasks = tasks.filter((t) => {
-                  if (t.deadline) {
-                    const d = new Date(t.deadline);
-                    return (
-                      d.getFullYear() === dateObj.getFullYear() &&
-                      d.getMonth() === dateObj.getMonth() &&
-                      d.getDate() === dateObj.getDate() &&
-                      d.getHours() === hour
-                    );
-                  }
-                  if (t.scheduledDate === dateStr) {
-                    // Default scheduledDate tasks without hour place in 09:00 slot
-                    return hour === 9;
-                  }
-                  return false;
-                });
+                const cellTasks = tasks.filter((task) => taskDisplayHour(task, dateObj) === hour);
 
                 return (
                   <div
@@ -157,6 +153,11 @@ export const WeekView: React.FC<WeekViewProps> = ({
                             />
                           )}
                           <span className="truncate">{t.title}</span>
+                          {t.scheduleMode === "range" && (
+                            <span className="ml-auto text-[9px] tabular-nums opacity-80 shrink-0">
+                              {taskTimeLabel(t)}
+                            </span>
+                          )}
                         </div>
                       );
                     })}

@@ -28,12 +28,12 @@ export interface TimeManagementTask {
   role_id: string | null;
   title: string;
   quadrant: QuadrantType;
-  scheduled_date: string | null; // YYYY-MM-DD
-  time_of_day: string | null;
+  schedule_mode: 'point' | 'range' | null;
+  scheduled_start_at: string | null;
+  scheduled_end_at: string | null;
   completed: boolean;
   completed_at: string | null;
   description: string | null;
-  deadline: string | null;
   reminder: ReminderConfig | null;
   created_at: string;
   updated_at: string;

@@ -1,4 +1,5 @@
 export type QuadrantType = 'Q1' | 'Q2' | 'Q3' | 'Q4';
+export type ScheduleMode = 'point' | 'range';
 
 export interface Role {
   id: string;
@@ -18,11 +19,18 @@ export interface Task {
   title: string;
   quadrant: QuadrantType;
   roleId?: string;
+  /** 单个截止时间（point）或时间段结束时间（range）。 */
+  scheduleMode?: ScheduleMode;
+  scheduledStartAt?: number;
+  scheduledEndAt?: number;
+  /** @deprecated 前端视图迁移期间的兼容字段，不再写入数据库。 */
   scheduledDate?: string;
+  /** @deprecated 前端视图迁移期间的兼容字段，不再写入数据库。 */
   timeOfDay?: 'morning' | 'afternoon';
   completed: boolean;
   completedAt?: number;
   description?: string;
+  /** @deprecated 请使用 scheduledEndAt。 */
   deadline?: number;
   reminder?: string;
   createdAt: number;
@@ -31,7 +39,12 @@ export interface Task {
 export interface TaskDraft {
   title: string;
   description?: string;
+  scheduleMode?: ScheduleMode;
+  scheduledStartAt?: number;
+  scheduledEndAt?: number;
+  /** @deprecated 请使用 scheduledEndAt。 */
   deadline?: number;
+  /** @deprecated 前端视图迁移期间的兼容字段。 */
   scheduledDate?: string;
   reminder?: string;
   roleId?: string;

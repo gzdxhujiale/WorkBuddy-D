@@ -1,6 +1,7 @@
 import React from "react";
 import { Task, Role, QuadrantType } from "@/types/timeManagement";
 import { CheckCircle2, Circle, Clock, Plus, Tag } from "lucide-react";
+import { getTaskEndAt, getTaskStartAt, taskIntersectsDay, taskTimeLabel } from "@/lib/taskSchedule";
 
 interface DayViewProps {
   currentDate: Date;
@@ -37,21 +38,21 @@ export const DayView: React.FC<DayViewProps> = ({
 
   const currentDateStr = formatDateYMD(currentDate);
 
-  // Filter tasks for current date
-  const dayTasks = tasks.filter((t) => {
-    if (t.deadline) {
-      const d = new Date(t.deadline);
-      return (
-        d.getFullYear() === currentDate.getFullYear() &&
-        d.getMonth() === currentDate.getMonth() &&
-        d.getDate() === currentDate.getDate()
-      );
-    }
-    if (t.scheduledDate) {
-      return t.scheduledDate === currentDateStr;
-    }
-    return false;
-  });
+  const dayTasks = tasks.filter((task) => taskIntersectsDay(task, currentDate));
+
+  const taskDisplayHour = (task: Task): number | undefined => {
+    const end = getTaskEndAt(task);
+    if (!end) return undefined;
+    if (task.scheduleMode !== "range") return new Date(end).getHours();
+
+    const dayStart = new Date(
+      currentDate.getFullYear(),
+      currentDate.getMonth(),
+      currentDate.getDate()
+    ).getTime();
+    const start = getTaskStartAt(task) ?? dayStart;
+    return new Date(Math.max(start, dayStart + 8 * 60 * 60 * 1000)).getHours();
+  };
 
   const getRole = (roleId?: string) => {
     if (!roleId) return null;
@@ -77,11 +78,7 @@ export const DayView: React.FC<DayViewProps> = ({
       <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1">
         {HOURS.map((hour) => {
           const hourSlotTasks = dayTasks.filter((t) => {
-            if (t.deadline) {
-              return new Date(t.deadline).getHours() === hour;
-            }
-            // For tasks with scheduledDate but no hour, place in 09:00 slot
-            return hour === 9;
+            return taskDisplayHour(t) === hour;
           });
 
           return (
@@ -149,8 +146,14 @@ export const DayView: React.FC<DayViewProps> = ({
                                   : "text-slate-800 dark:text-slate-200"
                               }`}
                             >
-                              {t.title}
+                             {t.title}
                             </div>
+
+                            {t.scheduleMode === "range" && (
+                              <div className="text-[10px] text-blue-600 dark:text-blue-400 tabular-nums mt-0.5">
+                                时间段 · {taskTimeLabel(t)}
+                              </div>
+                            )}
 
                             {t.description && (
                               <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">

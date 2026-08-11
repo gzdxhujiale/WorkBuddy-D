@@ -71,6 +71,13 @@ function composeDeadline(dateYMD: string, time: string): number {
   return base.endOf("day").valueOf();
 }
 
+function composeStart(dateYMD: string, time: string): number {
+  const base = dayjs(dateYMD);
+  if (!time) return base.startOf("day").valueOf();
+  const [h, m] = time.split(":").map(Number);
+  return base.hour(h).minute(m).second(0).millisecond(0).valueOf();
+}
+
 export interface AnchorRect {
   top: number;
   left: number;
@@ -147,9 +154,24 @@ export const TaskQuickEditPopover = memo(
       };
 
       // ---------- 日期 / 时间 / 提醒状态 ----------
-      const { date: initDate, time: initTime } = splitDeadline(task?.deadline);
+      const initialEnd = task?.scheduledEndAt ?? task?.deadline;
+      const initialStart = task?.scheduledStartAt;
+      const { date: initDate, time: initTime } = splitDeadline(initialEnd);
+      const { date: initStartDate, time: initStartTime } = splitDeadline(initialStart);
       const [dateSel, setDateSel] = useState<string | null>(initDate);
       const [timeSel, setTimeSel] = useState<string>(initTime);
+      const [scheduleMode, setScheduleMode] = useState<"point" | "range">(
+        task?.scheduleMode === "range" ? "range" : "point"
+      );
+      const [rangeStartDate, setRangeStartDate] = useState(
+        initStartDate ?? initDate ?? dayjs().format("YYYY-MM-DD")
+      );
+      const [rangeStartTime, setRangeStartTime] = useState(initStartTime || "09:00");
+      const [rangeEndDate, setRangeEndDate] = useState(initDate ?? dayjs().format("YYYY-MM-DD"));
+      const [rangeEndTime, setRangeEndTime] = useState(initTime || "10:00");
+      const [rangeAllDay, setRangeAllDay] = useState(
+        task?.scheduleMode === "range" && !initStartTime && !initTime
+      );
       const [appliedReminder, setAppliedReminder] = useState<TaskReminder | null>(() =>
         parseReminder(task?.reminder)
       );
@@ -167,14 +189,79 @@ export const TaskQuickEditPopover = memo(
         setDateSel(nextDate);
         setTimeSel(nextTime);
         if (task && onSave) {
+          const scheduledEndAt = nextDate ? composeDeadline(nextDate, nextTime) : undefined;
           onSave(
             task.id,
             {
-              deadline: nextDate ? composeDeadline(nextDate, nextTime) : undefined,
+              scheduleMode: nextDate ? "point" : undefined,
+              scheduledStartAt: undefined,
+              scheduledEndAt,
+              // Compatibility for views not yet migrated to scheduledEndAt.
+              deadline: scheduledEndAt,
               scheduledDate: nextDate || undefined,
             },
             false
           );
+        }
+      };
+
+      const commitRange = (
+        nextStartDate = rangeStartDate,
+        nextStartTime = rangeStartTime,
+        nextEndDate = rangeEndDate,
+        nextEndTime = rangeEndTime,
+        allDay = rangeAllDay
+      ) => {
+        const scheduledStartAt = composeStart(nextStartDate, allDay ? "" : nextStartTime);
+        const scheduledEndAt = composeDeadline(nextEndDate, allDay ? "" : nextEndTime);
+        if (scheduledEndAt <= scheduledStartAt) return;
+
+        setRangeStartDate(nextStartDate);
+        setRangeStartTime(nextStartTime);
+        setRangeEndDate(nextEndDate);
+        setRangeEndTime(nextEndTime);
+        if (task && onSave) {
+          onSave(task.id, {
+            scheduleMode: "range",
+            scheduledStartAt,
+            scheduledEndAt,
+            deadline: scheduledEndAt,
+            scheduledDate: nextEndDate,
+          }, false);
+        }
+      };
+
+      const switchScheduleMode = (nextMode: "point" | "range") => {
+        setScheduleMode(nextMode);
+        setThird(null);
+        if (nextMode === "range") {
+          const endDate = dateSel ?? todayStr;
+          const endTime = timeSel || "10:00";
+          const start = dayjs(composeDeadline(endDate, endTime)).subtract(1, "hour");
+          const startDate = start.format("YYYY-MM-DD");
+          const startTime = start.format("HH:mm");
+          setRangeStartDate(startDate);
+          setRangeStartTime(startTime);
+          setRangeEndDate(endDate);
+          setRangeEndTime(endTime);
+          setRangeAllDay(false);
+          commitRange(startDate, startTime, endDate, endTime, false);
+          return;
+        }
+
+        const nextDate = dateSel ?? rangeEndDate;
+        const nextTime = timeSel || rangeEndTime;
+        setDateSel(nextDate);
+        setTimeSel(nextTime);
+        const scheduledEndAt = composeDeadline(nextDate, nextTime);
+        if (task && onSave) {
+          onSave(task.id, {
+            scheduleMode: "point",
+            scheduledStartAt: undefined,
+            scheduledEndAt,
+            deadline: scheduledEndAt,
+            scheduledDate: nextDate,
+          }, false);
         }
       };
 
@@ -209,22 +296,55 @@ export const TaskQuickEditPopover = memo(
       };
 
       // ---------- 新建模式提交 ----------
-      const draftRef = useRef({ dateSel, timeSel, appliedReminder });
-      useEffect(() => {
-        draftRef.current = { dateSel, timeSel, appliedReminder };
+      const draftRef = useRef({
+        dateSel,
+        timeSel,
+        scheduleMode,
+        rangeStartDate,
+        rangeStartTime,
+        rangeEndDate,
+        rangeEndTime,
+        rangeAllDay,
+        appliedReminder,
       });
+      useEffect(() => {
+        draftRef.current = {
+          dateSel,
+          timeSel,
+          scheduleMode,
+          rangeStartDate,
+          rangeStartTime,
+          rangeEndDate,
+          rangeEndTime,
+          rangeAllDay,
+          appliedReminder,
+        };
+      }, [dateSel, timeSel, scheduleMode, rangeStartDate, rangeStartTime, rangeEndDate, rangeEndTime, rangeAllDay, appliedReminder]);
 
       const submitCreate = () => {
         const t = latestTitle.current.trim();
         if (!t) return;
-        const { dateSel: d, timeSel: tm, appliedReminder: r } = draftRef.current;
+        const draft = draftRef.current;
         const finalDesc = latestDescription.current.trim();
+        const isRange = draft.scheduleMode === "range";
+        const scheduledStartAt = isRange
+          ? composeStart(draft.rangeStartDate, draft.rangeAllDay ? "" : draft.rangeStartTime)
+          : undefined;
+        const scheduledEndAt = isRange
+          ? composeDeadline(draft.rangeEndDate, draft.rangeAllDay ? "" : draft.rangeEndTime)
+          : draft.dateSel
+            ? composeDeadline(draft.dateSel, draft.timeSel)
+            : undefined;
+        if (isRange && (!scheduledStartAt || !scheduledEndAt || scheduledEndAt <= scheduledStartAt)) return;
         onCreate?.({
           title: t,
           description: finalDesc || undefined,
-          deadline: d ? composeDeadline(d, tm) : undefined,
-          scheduledDate: d || undefined,
-          reminder: r ? serializeReminder(r) : undefined,
+          scheduleMode: scheduledEndAt ? draft.scheduleMode : undefined,
+          scheduledStartAt,
+          scheduledEndAt,
+          deadline: scheduledEndAt,
+          scheduledDate: isRange ? draft.rangeEndDate : draft.dateSel || undefined,
+          reminder: draft.appliedReminder ? serializeReminder(draft.appliedReminder) : undefined,
         });
       };
 
@@ -284,7 +404,7 @@ export const TaskQuickEditPopover = memo(
         let top = fieldRect ? fieldRect.top : baseTop;
         top = Math.min(Math.max(top, MARGIN), vh - h - MARGIN);
         setL2Pos({ top, left });
-      }, [dateOpen, l1Pos, viewYM]);
+      }, [dateOpen, l1Pos, viewYM, scheduleMode, rangeAllDay]);
 
       useLayoutEffect(() => {
         if (!third) {
@@ -360,13 +480,19 @@ export const TaskQuickEditPopover = memo(
 
       // ---------- 字段文本 ----------
       const fieldText = useMemo(() => {
+        if (scheduleMode === "range") {
+          const start = dayjs(rangeStartDate).format("M月D日");
+          const end = dayjs(rangeEndDate).format("M月D日");
+          const time = rangeAllDay ? "全天" : `${rangeStartTime}–${rangeEndTime}`;
+          return `${start}–${end} ${time}`;
+        }
         if (!dateSel) return "日期与提醒";
         const d = dayjs(dateSel);
         let text = `${d.month() + 1}月${d.date()}日`;
         if (timeSel) text += ` ${timeSel}`;
         if (appliedReminder) text += ` · ${reminderLabel(appliedReminder)}提醒`;
         return text;
-      }, [dateSel, timeSel, appliedReminder]);
+      }, [scheduleMode, rangeStartDate, rangeEndDate, rangeStartTime, rangeEndTime, rangeAllDay, dateSel, timeSel, appliedReminder]);
 
       // ---------- 月历 ----------
       const calendarCells = useMemo(() => {
@@ -447,7 +573,7 @@ export const TaskQuickEditPopover = memo(
                 ref={dateFieldRef}
                 type="button"
                 className={`flex-1 inline-flex items-center gap-2 text-[13.5px] px-2 py-1 rounded-lg transition-colors cursor-pointer min-w-0 ${
-                  dateSel
+                  (scheduleMode === "range" ? rangeEndDate : dateSel)
                     ? "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/50 dark:bg-blue-950/30"
                     : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
@@ -532,6 +658,26 @@ export const TaskQuickEditPopover = memo(
               }}
               className="fixed z-[1060] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl p-3.5 text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none"
             >
+              <div className="grid grid-cols-2 gap-1 p-1 mb-3 rounded-xl bg-slate-100 dark:bg-slate-800/80">
+                {(["point", "range"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={scheduleMode === mode}
+                    className={`py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                      scheduleMode === mode
+                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs"
+                        : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                    }`}
+                    onClick={() => switchScheduleMode(mode)}
+                  >
+                    {mode === "point" ? "时间" : "时间段"}
+                  </button>
+                ))}
+              </div>
+
+              {scheduleMode === "point" ? (
+                <>
               {/* 快捷日期图标 */}
               <div className="flex justify-around mb-3">
                 <button
@@ -634,9 +780,86 @@ export const TaskQuickEditPopover = memo(
                   </button>
                 ))}
               </div>
+                </>
+              ) : (
+                <div className="flex flex-col gap-3 mb-3">
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 flex flex-col gap-1.5">
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">开始</span>
+                      <input
+                        type="date"
+                        value={rangeStartDate}
+                        className="w-full bg-transparent text-xs font-semibold outline-none text-slate-800 dark:text-slate-100"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setRangeStartDate(value);
+                          commitRange(value);
+                        }}
+                      />
+                      {!rangeAllDay && (
+                        <input
+                          type="time"
+                          value={rangeStartTime}
+                          className="w-full bg-transparent text-xs tabular-nums outline-none text-blue-600 dark:text-blue-400"
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setRangeStartTime(value);
+                            commitRange(rangeStartDate, value);
+                          }}
+                        />
+                      )}
+                    </label>
+                    <label className="rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 flex flex-col gap-1.5">
+                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">结束</span>
+                      <input
+                        type="date"
+                        value={rangeEndDate}
+                        min={rangeStartDate}
+                        className="w-full bg-transparent text-xs font-semibold outline-none text-slate-800 dark:text-slate-100"
+                        onChange={(e) => {
+                          const value = e.target.value;
+                          setRangeEndDate(value);
+                          commitRange(rangeStartDate, rangeStartTime, value);
+                        }}
+                      />
+                      {!rangeAllDay && (
+                        <input
+                          type="time"
+                          value={rangeEndTime}
+                          className="w-full bg-transparent text-xs tabular-nums outline-none text-blue-600 dark:text-blue-400"
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            setRangeEndTime(value);
+                            commitRange(rangeStartDate, rangeStartTime, rangeEndDate, value);
+                          }}
+                        />
+                      )}
+                    </label>
+                  </div>
+                  <div className="flex items-center justify-between px-2 py-1 text-xs text-slate-600 dark:text-slate-300">
+                    <span>全天</span>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={rangeAllDay}
+                      className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
+                        rangeAllDay ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"
+                      }`}
+                      onClick={() => {
+                        const next = !rangeAllDay;
+                        setRangeAllDay(next);
+                        commitRange(rangeStartDate, rangeStartTime, rangeEndDate, rangeEndTime, next);
+                      }}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-xs transition-transform ${rangeAllDay ? "translate-x-4" : "translate-x-0"}`} />
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* 时间 & 提醒 入口 */}
               <div className="border-t border-slate-200/60 dark:border-slate-800 mt-2.5 pt-1.5 flex flex-col gap-0.5">
+                {scheduleMode === "point" && (
                 <button
                   ref={timeRowRef}
                   type="button"
@@ -656,6 +879,7 @@ export const TaskQuickEditPopover = memo(
                   </span>
                   <span className="text-slate-400 text-xs ml-0.5">›</span>
                 </button>
+                )}
                 <button
                   ref={remindRowRef}
                   type="button"

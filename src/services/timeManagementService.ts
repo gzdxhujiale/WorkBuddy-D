@@ -6,6 +6,7 @@ import {
   QUADRANT_DB_MAP,
   DB_QUADRANT_MAP,
   QuadrantType,
+  ScheduleMode,
 } from "@/types/timeManagement";
 
 const LOCAL_STORAGE_KEY = "fishbuddy_tm_tasks_v1";
@@ -16,6 +17,44 @@ const DEFAULT_ROLES: Role[] = [
   { id: "role-3", name: "健康生活", color: "#d97706", sort_order: 3 },
   { id: "role-4", name: "家庭社交", color: "#7657d6", sort_order: 4 },
 ];
+
+function toLocalDateYmd(timestamp?: number): string | undefined {
+  if (!timestamp) return undefined;
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function resolveSchedule(task: Task): {
+  scheduleMode: ScheduleMode | undefined;
+  scheduledStartAt: number | undefined;
+  scheduledEndAt: number | undefined;
+} {
+  // deadline is kept only as a temporary adapter for the not-yet-migrated UI.
+  const scheduleMode = task.scheduleMode ?? (task.deadline ? "point" : undefined);
+  const scheduledStartAt = task.scheduledStartAt;
+  const scheduledEndAt = task.scheduledEndAt ?? task.deadline;
+
+  if (!scheduleMode) {
+    return { scheduleMode: undefined, scheduledStartAt: undefined, scheduledEndAt: undefined };
+  }
+
+  if (!scheduledEndAt) {
+    throw new Error("任务时间必须包含截止时间");
+  }
+
+  if (scheduleMode === "point") {
+    return { scheduleMode, scheduledStartAt: undefined, scheduledEndAt };
+  }
+
+  if (!scheduledStartAt || scheduledEndAt <= scheduledStartAt) {
+    throw new Error("任务时间段的结束时间必须晚于开始时间");
+  }
+
+  return { scheduleMode, scheduledStartAt, scheduledEndAt };
+}
 
 function getLocalTasks(): Task[] {
   try {
@@ -72,12 +111,17 @@ export const timeManagementApi = {
           title: t.title,
           quadrant: (DB_QUADRANT_MAP[t.quadrant] || "Q2") as QuadrantType,
           roleId: t.role_id || undefined,
-          scheduledDate: t.scheduled_date || undefined,
-          timeOfDay: t.time_of_day || undefined,
+          scheduleMode: t.schedule_mode || undefined,
+          scheduledStartAt: t.scheduled_start_at ? new Date(t.scheduled_start_at).getTime() : undefined,
+          scheduledEndAt: t.scheduled_end_at ? new Date(t.scheduled_end_at).getTime() : undefined,
+          // Temporary compatibility for views that still consume the old fields.
+          scheduledDate: t.scheduled_end_at
+            ? toLocalDateYmd(new Date(t.scheduled_end_at).getTime())
+            : undefined,
           completed: Boolean(t.completed),
           completedAt: t.completed_at ? new Date(t.completed_at).getTime() : undefined,
           description: t.description || undefined,
-          deadline: t.deadline ? new Date(t.deadline).getTime() : undefined,
+          deadline: t.scheduled_end_at ? new Date(t.scheduled_end_at).getTime() : undefined,
           reminder: typeof t.reminder === "string" ? t.reminder : t.reminder ? JSON.stringify(t.reminder) : undefined,
           createdAt: t.created_at ? new Date(t.created_at).getTime() : Date.now(),
         }));
@@ -93,6 +137,8 @@ export const timeManagementApi = {
   },
 
   upsertTask: async (task: Task): Promise<void> => {
+    const schedule = resolveSchedule(task);
+
     // 1. Always update local storage for immediate responsiveness
     const current = getLocalTasks();
     const idx = current.findIndex((t) => t.id === task.id);
@@ -110,12 +156,16 @@ export const timeManagementApi = {
         title: task.title,
         quadrant: QUADRANT_DB_MAP[task.quadrant] || task.quadrant,
         role_id: task.roleId || null,
-        scheduled_date: task.scheduledDate || null,
-        time_of_day: task.timeOfDay || null,
+        schedule_mode: schedule.scheduleMode || null,
+        scheduled_start_at: schedule.scheduledStartAt
+          ? new Date(schedule.scheduledStartAt).toISOString()
+          : null,
+        scheduled_end_at: schedule.scheduledEndAt
+          ? new Date(schedule.scheduledEndAt).toISOString()
+          : null,
         completed: task.completed,
         completed_at: task.completedAt ? new Date(task.completedAt).toISOString() : null,
         description: task.description || null,
-        deadline: task.deadline ? new Date(task.deadline).toISOString() : null,
         reminder: task.reminder ? JSON.parse(task.reminder) : null,
         created_at: task.createdAt ? new Date(task.createdAt).toISOString() : new Date().toISOString(),
         updated_at: new Date().toISOString(),

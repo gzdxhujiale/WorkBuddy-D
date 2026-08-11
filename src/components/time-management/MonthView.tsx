@@ -1,5 +1,6 @@
 import React from "react";
 import { Task, Role, QuadrantType } from "@/types/timeManagement";
+import { taskIntersectsDay, taskTimeLabel } from "@/lib/taskSchedule";
 
 interface MonthViewProps {
   currentDate: Date;
@@ -64,22 +65,7 @@ export const MonthView: React.FC<MonthViewProps> = ({
 
           const cellDate = new Date(year, month, dayNum);
 
-          // Match tasks for this day
-          const dayTasks = tasks.filter((t) => {
-            if (t.deadline) {
-              const d = new Date(t.deadline);
-              return (
-                d.getFullYear() === year &&
-                d.getMonth() === month &&
-                d.getDate() === dayNum
-              );
-            }
-            if (t.scheduledDate) {
-              const [y, m, day] = t.scheduledDate.split("-").map(Number);
-              return y === year && m === month + 1 && day === dayNum;
-            }
-            return false;
-          });
+          const dayTasks = tasks.filter((task) => taskIntersectsDay(task, cellDate));
 
           return (
             <div
@@ -137,6 +123,11 @@ export const MonthView: React.FC<MonthViewProps> = ({
                         />
                       )}
                       <span className="truncate">{t.title}</span>
+                      {t.scheduleMode === "range" && (
+                        <span className="ml-auto text-[9px] tabular-nums opacity-75 shrink-0" title={taskTimeLabel(t)}>
+                          ↔
+                        </span>
+                      )}
                     </div>
                   );
                 })}
