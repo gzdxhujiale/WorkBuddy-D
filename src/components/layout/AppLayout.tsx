@@ -14,6 +14,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SettingsDialog } from "./SettingsDialog";
+import { invoke } from "@tauri-apps/api/core";
 
 // ============================================================
 // Navigation Tool Items Config
@@ -75,10 +76,9 @@ export const DesktopMenuBar: React.FC = () => {
 
   const handleClose = async () => {
     try {
-      const { getCurrentWindow } = await import("@tauri-apps/api/window");
-      await getCurrentWindow().close();
+      await invoke("quit_app");
     } catch (e) {
-      console.log("Close window (web fallback):", e);
+      console.log("Quit app (web fallback):", e);
     }
   };
 

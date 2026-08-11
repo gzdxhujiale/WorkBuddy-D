@@ -9,6 +9,7 @@ import { queryClient } from "@/lib/queryClient";
 import { showFocusAssistant } from "@/services/focusAssistantWindow";
 import { focusAssistantApi } from "@/services/focusAssistantService";
 import { shouldOpenFocusAssistantOnStart } from "@/lib/preferences";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -31,9 +32,18 @@ function App() {
 
   useEffect(() => {
     if (!session) return;
-    if (shouldOpenFocusAssistantOnStart()) {
-      void showFocusAssistant();
-    }
+    // Only the primary webview owns app-start behavior.  Secondary webviews
+    // share the same auth storage, so without this guard a note window could
+    // also be treated as a new application start.
+    void (async () => {
+      try {
+        if (getCurrentWindow().label === "main" && shouldOpenFocusAssistantOnStart()) {
+          await showFocusAssistant();
+        }
+      } catch {
+        // Browser builds do not expose a Tauri window label.
+      }
+    })();
     const onUnload = () => { void focusAssistantApi.markOpenSessionsInterrupted(); };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);

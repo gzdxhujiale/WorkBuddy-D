@@ -74,6 +74,7 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const noteRef = useRef(note);
 
   const dragStartPosRef = useRef<{ x: number; y: number } | null>(null);
   const isDraggingRef = useRef(false);
@@ -114,22 +115,29 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
     latestDataRef.current = { title: note.title, content: note.content || '', noteId: note.id };
   }, [note.id, note.title, note.content]);
 
+  useEffect(() => {
+    noteRef.current = note;
+  }, [note]);
+
   const latestDataRef = useRef({ title, content, noteId: note.id });
   useEffect(() => {
     latestDataRef.current = { title, content, noteId: note.id };
   }, [title, content, note.id]);
 
-  // Save changes on unmount or window close
+  // Save only when the editor is actually unmounted.  Depending on note
+  // fields here makes React run this cleanup on every optimistic cache update,
+  // which can write stale content back into the cache and cause a render loop.
   useEffect(() => {
     return () => {
       const currentId = latestDataRef.current.noteId;
       const currentTitle = latestDataRef.current.title;
       const currentContent = latestDataRef.current.content;
-      if (currentId && (currentTitle !== note.title || currentContent !== note.content)) {
+      const currentNote = noteRef.current;
+      if (currentId && (currentTitle !== currentNote.title || currentContent !== currentNote.content)) {
         updateNote(currentId, { title: currentTitle, content: currentContent });
       }
     };
-  }, [updateNote, note.title, note.content]);
+  }, [updateNote]);
 
   // Debounced auto-save effect
   useEffect(() => {
