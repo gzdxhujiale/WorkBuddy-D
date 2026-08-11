@@ -358,11 +358,11 @@ function ListsSidebar({
       {dialogElement}
       <aside
         className={cn(
-        'flex w-[206px] flex-none flex-col overflow-hidden border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-all duration-[250ms] ease-in-out',
-        isCollapsed && 'pointer-events-none !w-0 border-r-transparent opacity-0'
+          'flex w-[206px] flex-none flex-col overflow-hidden border-r border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 text-slate-900 dark:text-slate-100 transition-all duration-[250ms] ease-in-out',
+          isCollapsed && 'pointer-events-none !w-0 border-r-transparent opacity-0'
         )}
       >
-      <div className="group/header flex h-12 shrink-0 items-center justify-between border-b border-sidebar-border px-4 text-sm font-semibold select-none">
+        <div className="group/header flex h-12 shrink-0 items-center justify-between border-b border-slate-200/80 dark:border-slate-800 px-4 text-sm font-semibold select-none">
         <span>知识库</span>
         <Button
           variant="ghost"
@@ -2089,7 +2089,7 @@ export function ListsPanel() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-      <section className="flex h-full w-full bg-background overflow-hidden text-foreground">
+      <section className="flex h-full w-full bg-transparent overflow-hidden text-foreground">
         <ListsSidebar
           lists={lists}
           folders={folders}
@@ -2109,12 +2109,12 @@ export function ListsPanel() {
         />
 
         <main
-          className="flex-1 flex flex-col bg-background relative overflow-hidden"
+          className="flex-1 flex flex-col bg-transparent relative overflow-hidden"
           onClick={() => setListMenuOpen(false)}
         >
           {activeList ? (
             <>
-              <div className="flex h-12 items-center justify-between border-b border-border px-6 shrink-0">
+              <div className="flex h-12 items-center justify-between border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 shrink-0">
                 <div className="flex items-center gap-3 font-bold text-xl text-foreground">
                   <Button
                     variant="ghost"

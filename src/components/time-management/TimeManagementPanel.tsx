@@ -253,9 +253,9 @@ export const TimeManagementPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full bg-slate-50/70 dark:bg-slate-950/80 overflow-hidden backdrop-blur-xs select-none">
+    <div className="flex flex-col h-full w-full bg-transparent overflow-hidden select-none">
       {/* Panel Header */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md flex-shrink-0">
+      <header className="flex items-center justify-between px-6 py-3 border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md flex-shrink-0">
         <div className="flex items-center gap-3">
           <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
             <LayoutGrid className="text-blue-600 dark:text-blue-400" size={20} />

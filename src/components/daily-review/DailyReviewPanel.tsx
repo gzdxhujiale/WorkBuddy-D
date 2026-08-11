@@ -444,9 +444,9 @@ export const DailyReviewPanel: React.FC = () => {
   const isCurrentToday = selectedDate === todayYMD();
 
   return (
-    <section className="flex flex-col h-full w-full bg-background text-foreground overflow-hidden">
+    <section className="flex flex-col h-full w-full bg-transparent text-foreground overflow-hidden">
       {/* Top Bar: Date Navigation */}
-      <header className="flex items-center justify-center px-6 py-3 bg-card border-b border-border shrink-0">
+      <header className="flex items-center justify-center px-6 py-3 bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800 shrink-0">
         <nav className="flex items-center gap-3">
           <button 
             type="button"

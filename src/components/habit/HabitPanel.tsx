@@ -826,16 +826,16 @@ export const HabitPanel: React.FC = () => {
   const handleCloseSidebar = useCallback(() => setSelectedHabitId(null), []);
 
   return (
-    <div className="flex w-full h-full bg-background relative overflow-hidden select-none">
+    <div className="flex w-full h-full bg-transparent relative overflow-hidden select-none">
       {/* Main Content Area */}
       <div className="flex flex-col flex-1 w-full h-full transition-all duration-300">
         {/* Top Header & Date Switcher */}
-        <div className="flex-shrink-0 bg-card border-b border-border flex flex-col pt-4">
+        <div className="flex-shrink-0 bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800 flex flex-col pt-4">
           <div className="flex items-center justify-between px-6 pb-2">
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-foreground">习惯追踪</h1>
+              <h1 className="text-xl font-bold text-slate-900 dark:text-slate-100">习惯追踪</h1>
             </div>
-            <div className="flex items-center gap-3 text-muted-foreground">
+            <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
               <Button
                 type="button"
                 size="sm"
@@ -851,7 +851,7 @@ export const HabitPanel: React.FC = () => {
         </div>
 
         {/* Habit List Area */}
-        <div className="flex-1 bg-background overflow-y-auto p-6 space-y-3">
+        <div className="flex-1 bg-transparent overflow-y-auto p-6 space-y-3">
           {habits.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center p-8 border border-dashed border-border rounded-2xl">
               <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
