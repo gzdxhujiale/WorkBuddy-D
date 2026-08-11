@@ -133,8 +133,11 @@ export interface DesktopToolbarProps {
 
 export const DesktopToolbar: React.FC<DesktopToolbarProps> = ({ onSettingsClick }) => {
   return (
-    <aside className="w-[58px] h-full bg-[#f5f5f5] dark:bg-slate-900 flex flex-col items-center py-3 px-1 flex-shrink-0 select-none">
-      <nav className="flex flex-col gap-1.5 w-full items-center" aria-label="Main Navigation">
+    <aside
+      className="w-[58px] h-full bg-[#f5f5f5] dark:bg-slate-900 flex flex-col items-center pb-3 pt-[38px] px-1 flex-shrink-0 select-none"
+      data-tauri-drag-region
+    >
+      <nav className="flex flex-col gap-1.5 w-full items-center pt-1" aria-label="Main Navigation">
         {NAV_TOOLS.map((tool) => {
           const Icon = tool.icon;
           return (
