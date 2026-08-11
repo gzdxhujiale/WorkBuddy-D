@@ -358,12 +358,12 @@ function ListsSidebar({
       {dialogElement}
       <aside
         className={cn(
-          'flex w-[206px] flex-none flex-col overflow-hidden border-r border-slate-200/80 dark:border-slate-800 bg-white/80 dark:bg-slate-900/80 text-slate-900 dark:text-slate-100 transition-all duration-[250ms] ease-in-out',
+          'flex w-[206px] flex-none flex-col overflow-hidden border-r border-border bg-sidebar text-sidebar-foreground transition-all duration-[250ms] ease-in-out',
           isCollapsed && 'pointer-events-none !w-0 border-r-transparent opacity-0'
         )}
       >
-        <div className="group/header flex h-12 shrink-0 items-center justify-between border-b border-slate-200/80 dark:border-slate-800 px-4 text-sm font-semibold select-none">
-        <div className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-slate-100">
+        <div className="group/header flex h-12 shrink-0 items-center justify-between border-b border-border px-4 text-sm font-semibold select-none">
+          <div className="flex items-center gap-2 text-base font-bold text-sidebar-foreground">
             <Library className="text-indigo-600 dark:text-indigo-400" size={20} />
             <span>知识库</span>
           </div>
@@ -450,7 +450,7 @@ function ListsSidebar({
                                 title: '删除知识库',
                                 description: `确定要删除知识库 "${folder.name}" 吗？其中的文件夹和笔记也会被删除。`,
                                 confirmText: '解散',
-                              });
+                              }, e);
                               if (confirmed) {
                                 onDissolveFolder(folder);
                               }
@@ -980,7 +980,7 @@ function NoteDrawerContent({
                       title: '删除笔记',
                       description: `确定要删除笔记"${note.title || '未命名笔记'}"吗？`,
                       confirmText: '删除',
-                    });
+                    }, e);
                     if (confirmed) {
                       onDelete(note);
                       onClose();
@@ -1039,17 +1039,17 @@ function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSav
 
   if (!note) return null;
 
-  return (
+  return createPortal(
     <>
       {isOpen && (
         <div
-          className="fixed bottom-0 left-[58px] right-0 top-[38px] z-20 bg-black/20 backdrop-blur-2xs transition-opacity dark:bg-black/40"
+          className="fixed bottom-0 left-[58px] right-0 top-[38px] z-[50] bg-black/30 backdrop-blur-2xs transition-opacity dark:bg-black/50 animate-in fade-in duration-200"
           onClick={() => onClose()}
         />
       )}
       <div
         className={cn(
-          'absolute top-0 bottom-0 z-30 bg-card text-card-foreground border-l border-border shadow-2xl flex flex-col transition-all duration-300 ease-out',
+          'fixed top-[38px] bottom-0 z-[60] bg-card text-card-foreground border-l border-border shadow-2xl flex flex-col transition-all duration-300 ease-out',
           isOpen ? 'right-0' : '-right-full'
         )}
         style={{ width: drawerWidth }}
@@ -1071,7 +1071,8 @@ function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSav
           showToast={showToast}
         />
       </div>
-    </>
+    </>,
+    document.body
   );
 }
 
@@ -2117,8 +2118,8 @@ export function ListsPanel() {
         >
           {activeList ? (
             <>
-              <div className="flex h-12 items-center justify-between border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md px-6 shrink-0">
-                <div className="flex items-center gap-2 text-base font-bold text-slate-900 dark:text-slate-100">
+              <div className="flex h-12 items-center justify-between border-b border-border bg-card px-6 shrink-0 z-30 relative">
+                <div className="flex items-center gap-2 text-base font-bold text-foreground">
                   <Button
                     variant="ghost"
                     size="icon"
@@ -2144,14 +2145,14 @@ export function ListsPanel() {
                       <MoreHorizontal size={18} />
                     </Button>
                     {listMenuOpen && (
-                      <div className="absolute right-0 top-full mt-2 z-20 min-w-44 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95">
+                      <div className="absolute right-0 top-full mt-2 z-[100] min-w-44 p-1 bg-popover text-popover-foreground border border-border rounded-xl shadow-2xl flex flex-col animate-in fade-in zoom-in-95">
                         <div className="group/sub relative before:absolute before:-left-2.5 before:inset-y-0 before:w-3">
                           <button className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors flex items-center justify-between cursor-pointer">
                             <span>笔记打开方式</span>
                             <ChevronRight size={14} className="text-muted-foreground" />
                           </button>
 
-                          <div className="hidden group-hover/sub:flex absolute right-full top-0 mr-0 min-w-40 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex-col">
+                          <div className="hidden group-hover/sub:flex absolute right-full top-0 mr-1 min-w-40 p-1 bg-popover text-popover-foreground border border-border rounded-xl shadow-2xl flex-col z-[110]">
                             <button
                               className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors flex items-center justify-between cursor-pointer"
                               onClick={async (e) => {

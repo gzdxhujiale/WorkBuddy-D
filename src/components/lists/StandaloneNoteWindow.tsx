@@ -10,6 +10,7 @@ import {
   convertTipTapJsonToMarkdown,
 } from '@/components/daily-review/DailyReviewEditor';
 import { Button } from '@/components/ui/button';
+import { useConfirmDialog } from '@/components/ui/ConfirmDeleteDialog';
 import { cn } from '@/lib/utils';
 
 const logWarn = console.warn;
@@ -62,6 +63,7 @@ export function StandaloneNoteWindow() {
 }
 
 function StandaloneNoteEditorContent({ note }: { note: Note }) {
+  const { confirm: confirmDelete, dialogElement } = useConfirmDialog();
   const { updateNote, deleteNote, flushNote } = useListsActions();
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || '');
@@ -251,15 +253,22 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
     }
   };
 
-  const handleDelete = () => {
-    if (window.confirm(`确定要删除笔记"${note.title || '未命名笔记'}"吗？`)) {
+  const handleDelete = async (e?: React.MouseEvent) => {
+    const confirmed = await confirmDelete({
+      title: '删除笔记',
+      description: `确定要删除笔记"${note.title || '未命名笔记'}"吗？`,
+      confirmText: '删除',
+    }, e);
+    if (confirmed) {
       deleteNote(note.id);
       handleCloseWindow();
     }
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
+    <>
+      {dialogElement}
+      <div className="flex flex-col h-screen bg-background text-foreground">
       {/* Top Header Bar */}
       <div
         className="flex items-center justify-between px-4 py-2 pl-4 border-b border-border bg-background select-none h-12"
@@ -348,7 +357,7 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
                 </button>
                 <button
                   className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                  onClick={() => { setMenuOpen(false); handleDelete(); }}
+                  onClick={(e) => { setMenuOpen(false); handleDelete(e); }}
                 >
                   删除笔记
                 </button>
@@ -398,5 +407,6 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
         />
       </div>
     </div>
+    </>
   );
 }

@@ -201,9 +201,9 @@ export function DatePicker({
                       "h-8 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center justify-center border border-transparent",
                       isDisabled && "opacity-30 pointer-events-none",
                       isSelected
-                        ? "bg-blue-600 text-white font-bold shadow-xs"
+                        ? "bg-primary text-primary-foreground font-bold shadow-xs"
                         : isToday
-                        ? "border-blue-500 text-blue-600 dark:text-blue-400 font-bold hover:bg-accent"
+                        ? "border-primary text-primary font-bold hover:bg-accent"
                         : "hover:bg-accent text-foreground"
                     )}
                   >
@@ -220,7 +220,7 @@ export function DatePicker({
                 variant="ghost"
                 size="sm"
                 onClick={() => handleSelectDate(dayjs().format("YYYY-MM-DD"))}
-                className="text-xs text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 cursor-pointer h-7 px-2"
+                className="text-xs text-primary hover:bg-primary/10 cursor-pointer h-7 px-2"
               >
                 选择今天
               </Button>

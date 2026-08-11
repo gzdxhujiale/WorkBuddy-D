@@ -12,10 +12,12 @@ export interface ConfirmOptions {
 export function useConfirmDialog() {
   const [open, setOpen] = useState(false);
   const [options, setOptions] = useState<ConfirmOptions>({ title: '' });
+  const [target, setTarget] = useState<HTMLElement | React.MouseEvent | null>(null);
   const resolverRef = useRef<((value: boolean) => void) | null>(null);
 
-  const confirm = useCallback((opts: ConfirmOptions): Promise<boolean> => {
+  const confirm = useCallback((opts: ConfirmOptions, triggerTarget?: HTMLElement | React.MouseEvent | null): Promise<boolean> => {
     setOptions(opts);
+    setTarget(triggerTarget || (typeof document !== 'undefined' ? (document.activeElement as HTMLElement) : null));
     setOpen(true);
     return new Promise<boolean>((resolve) => {
       resolverRef.current = resolve;
@@ -45,6 +47,7 @@ export function useConfirmDialog() {
       cancelText={options.cancelText}
       variant={options.variant || 'destructive'}
       onConfirm={handleConfirm}
+      target={target}
     />
   );
 
