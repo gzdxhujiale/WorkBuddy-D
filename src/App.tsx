@@ -8,6 +8,7 @@ import { AuthProvider } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
 import { showFocusAssistant } from "@/services/focusAssistantWindow";
 import { focusAssistantApi } from "@/services/focusAssistantService";
+import { shouldOpenFocusAssistantOnStart } from "@/lib/preferences";
 
 function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -30,7 +31,9 @@ function App() {
 
   useEffect(() => {
     if (!session) return;
-    void showFocusAssistant();
+    if (shouldOpenFocusAssistantOnStart()) {
+      void showFocusAssistant();
+    }
     const onUnload = () => { void focusAssistantApi.markOpenSessionsInterrupted(); };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);

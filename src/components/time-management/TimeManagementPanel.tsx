@@ -366,9 +366,9 @@ export const TimeManagementPanel: React.FC = () => {
             onUpdateTask={updateTask}
           />
         ) : (
-          <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_320px] gap-3.5 items-stretch">
+          <div className="flex-1 min-h-0 flex gap-3.5 items-stretch">
             {/* Left Panel: Card containing Date Navigation Header & Main View */}
-            <div className="bg-white/50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs backdrop-blur-xs flex flex-col min-h-0 h-full overflow-hidden">
+            <div className="min-w-0 flex-1 bg-white/50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs backdrop-blur-xs flex flex-col min-h-0 h-full overflow-hidden">
               {/* Date Navigation Header inside Left Panel (Reference: workbuddy) */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800 shrink-0 gap-2">
                 <div className="text-sm font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
@@ -449,7 +449,7 @@ export const TimeManagementPanel: React.FC = () => {
             </div>
 
             {/* Right Panel: Period Task Overview Sidebar (Reference: workbuddy) */}
-            <div className="bg-white/50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs backdrop-blur-xs flex flex-col min-h-0 h-full overflow-hidden">
+            <aside className="w-80 shrink-0 bg-white/50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs backdrop-blur-xs flex flex-col min-h-0 h-full overflow-hidden">
               <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
                 <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
                   {getSidebarTitle()}
@@ -568,7 +568,7 @@ export const TimeManagementPanel: React.FC = () => {
                   })
                 )}
               </div>
-            </div>
+            </aside>
           </div>
         )}
       </main>
