@@ -15,6 +15,15 @@ export default defineConfig(async () => ({
     },
   },
   clearScreen: false,
+  build: {
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+        note: path.resolve(__dirname, "note.html"),
+        quickEdit: path.resolve(__dirname, "quick-edit.html"),
+      },
+    },
+  },
   server: {
     port: 1420,
     strictPort: true,

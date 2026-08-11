@@ -1,6 +1,6 @@
 export const queryKeys = {
   lists: {
-    all: ['lists', 'all'] as const,
+    all: (userId: string) => ['lists', userId, 'all'] as const,
   },
 };
 
@@ -19,11 +19,14 @@ export function logError(scope: string, msg: string, err?: unknown): void {
 
 class SharedSyncEngine {
   private timers = new Map<string, NodeJS.Timeout>();
+  private pending = new Map<string, () => Promise<void> | void>();
 
   schedule(key: string, fn: () => Promise<void> | void, delayMs: number): void {
     this.cancel(key);
+    this.pending.set(key, fn);
     const timer = setTimeout(() => {
       this.timers.delete(key);
+      this.pending.delete(key);
       Promise.resolve(fn()).catch((e) => logError('SyncEngine', `Task execution failed for ${key}`, e));
     }, delayMs);
     this.timers.set(key, timer);
@@ -35,6 +38,16 @@ class SharedSyncEngine {
       clearTimeout(timer);
       this.timers.delete(key);
     }
+    this.pending.delete(key);
+  }
+
+  async flush(key: string): Promise<void> {
+    const timer = this.timers.get(key);
+    if (timer) clearTimeout(timer);
+    this.timers.delete(key);
+    const job = this.pending.get(key);
+    this.pending.delete(key);
+    if (job) await job();
   }
 }
 

@@ -10,6 +10,8 @@ export interface OptimisticSyncOptions<TData, TVariables> {
   syncFn: (vars: TVariables) => Promise<void>;
   /** Debounce delay in ms (default: 500ms; set to 0 for instant async persistence) */
   debounceMs?: number;
+  /** Distinguishes concurrent entities so an edit to B never cancels an edit to A. */
+  getSyncKey?: (vars: TVariables) => string;
 }
 
 export function useOptimisticSync<TData, TVariables>({
@@ -17,64 +19,70 @@ export function useOptimisticSync<TData, TVariables>({
   updateCache,
   syncFn,
   debounceMs = 500,
+  getSyncKey = () => "default",
 }: OptimisticSyncOptions<TData, TVariables>) {
   const queryClient = useQueryClient();
-  const pendingVarsRef = useRef<TVariables | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingVarsRef = useRef(new Map<string, TVariables>());
+  const previousDataRef = useRef(new Map<string, TData | undefined>());
+  const timerRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const versionRef = useRef(new Map<string, number>());
 
   const syncFnRef = useRef(syncFn);
   syncFnRef.current = syncFn;
 
   // Flush pending changes to remote persistence layer immediately
-  const flush = useCallback(async () => {
-    if (timerRef.current) {
-      clearTimeout(timerRef.current);
-      timerRef.current = null;
-    }
-    if (pendingVarsRef.current !== null) {
-      const payload = pendingVarsRef.current;
-      pendingVarsRef.current = null;
+  const flush = useCallback(async (onlyKey?: string) => {
+    const keys = onlyKey ? [onlyKey] : [...pendingVarsRef.current.keys()];
+    await Promise.all(keys.map(async (key) => {
+      const timer = timerRef.current.get(key);
+      if (timer) clearTimeout(timer);
+      timerRef.current.delete(key);
+      const payload = pendingVarsRef.current.get(key);
+      if (payload !== undefined) {
+        pendingVarsRef.current.delete(key);
+        const version = versionRef.current.get(key) ?? 0;
       try {
         await syncFnRef.current(payload);
       } catch (err) {
         console.error("[useOptimisticSync] Sync persistence error:", err);
-        queryClient.invalidateQueries({ queryKey });
+        // Do not overwrite a newer local edit made while this request was in flight.
+        if ((versionRef.current.get(key) ?? 0) === version) {
+          queryClient.setQueryData(queryKey, previousDataRef.current.get(key));
+        }
       }
-    }
+      }
+    }));
   }, [queryClient, queryKey]);
 
   // Trigger optimistic cache update and schedule debounced sync
   const trigger = useCallback(
     (vars: TVariables) => {
+      const key = getSyncKey(vars);
       // 1. Immediate optimistic UI update
+      const before = queryClient.getQueryData<TData>(queryKey);
       queryClient.setQueryData<TData>(queryKey, (old) => updateCache(old, vars));
-      pendingVarsRef.current = vars;
+      previousDataRef.current.set(key, before);
+      pendingVarsRef.current.set(key, vars);
+      versionRef.current.set(key, (versionRef.current.get(key) ?? 0) + 1);
 
       if (debounceMs <= 0) {
-        flush();
+        void flush(key);
         return;
       }
 
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
+      const previousTimer = timerRef.current.get(key);
+      if (previousTimer) clearTimeout(previousTimer);
 
-      timerRef.current = setTimeout(() => {
-        flush();
-      }, debounceMs);
+      timerRef.current.set(key, setTimeout(() => { void flush(key); }, debounceMs));
     },
-    [queryClient, queryKey, updateCache, debounceMs, flush]
+    [queryClient, queryKey, updateCache, debounceMs, flush, getSyncKey]
   );
 
   // Unmount / route-change cleanup: ensure pending draft is safely flushed
   useEffect(() => {
     return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-      if (pendingVarsRef.current !== null) {
-        const payload = pendingVarsRef.current;
-        pendingVarsRef.current = null;
+      for (const timer of timerRef.current.values()) clearTimeout(timer);
+      for (const payload of pendingVarsRef.current.values()) {
         syncFnRef.current(payload).catch((err) => {
           console.error("[useOptimisticSync] Unmount flush failed:", err);
         });

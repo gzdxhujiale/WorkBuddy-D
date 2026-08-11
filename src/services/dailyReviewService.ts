@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { DailyReviewItem } from "@/types/dailyReview";
 import { DailyReviewRow } from "@/types/database";
+import { throwOnPostgrestError } from "@/lib/sync";
 
 const LOCAL_STORAGE_KEY = "fishbuddy_daily_reviews_v1";
 
@@ -136,17 +137,13 @@ export const dailyReviewApi = {
     saveLocalReviews(current);
 
     // 2. Delete from Supabase
-    try {
-      const { error } = await supabase
-        .from("daily_reviews")
-        .delete()
-        .eq("id", id);
-
-      if (error) {
-        console.warn("Supabase delete daily review warning:", error.message);
-      }
-    } catch (e) {
-      console.warn("Supabase delete daily review exception:", e);
-    }
+    // Keep this compatible with databases that have not yet applied the optional
+    // RPC migration. This is still a hard delete and is protected by the table's
+    // existing RLS policy.
+    const { error } = await supabase
+      .from("daily_reviews")
+      .delete()
+      .eq("id", id);
+    throwOnPostgrestError(error, "删除每日复盘");
   },
 };

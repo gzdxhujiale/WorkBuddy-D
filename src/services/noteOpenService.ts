@@ -24,7 +24,7 @@ export async function openNoteInNewWindow(noteId: string, title: string = 'ç¬”è®
     }
 
     const currentOrigin = window.location.origin;
-    const url = `${currentOrigin}/index.html?window=note&noteId=${encodeURIComponent(noteId)}`;
+    const url = `${currentOrigin}/note.html?noteId=${encodeURIComponent(noteId)}`;
 
     const webview = new WebviewWindow(safeLabel, {
       url,
@@ -48,7 +48,7 @@ export async function openNoteInNewWindow(noteId: string, title: string = 'ç¬”è®
     });
   } catch (err) {
     console.warn('Tauri WebviewWindow unavailable, falling back to window.open', err);
-    const url = `${window.location.origin}/index.html?window=note&noteId=${encodeURIComponent(noteId)}`;
+    const url = `${window.location.origin}/note.html?noteId=${encodeURIComponent(noteId)}`;
     window.open(url, safeLabel, 'width=820,height=680');
   }
 }

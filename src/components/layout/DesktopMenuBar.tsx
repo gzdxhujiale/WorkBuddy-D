@@ -1,7 +1,18 @@
 import React from "react";
-import { Minus, X } from "lucide-react";
+import { Copy, Minus, Square, X } from "lucide-react";
 
 export const DesktopMenuBar: React.FC = () => {
+  const [isMaximized, setIsMaximized] = React.useState(false);
+
+  React.useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+      const current = getCurrentWindow();
+      setIsMaximized(await current.isMaximized());
+      unlisten = await current.onResized(() => { void current.isMaximized().then(setIsMaximized); });
+    }).catch(() => undefined);
+    return () => unlisten?.();
+  }, []);
   const handleMinimize = async () => {
     try {
       const { getCurrentWindow } = await import("@tauri-apps/api/window");
@@ -9,6 +20,15 @@ export const DesktopMenuBar: React.FC = () => {
     } catch (e) {
       console.log("Minimize window (web fallback):", e);
     }
+  };
+
+  const handleToggleMaximize = async () => {
+    try {
+      const { getCurrentWindow } = await import("@tauri-apps/api/window");
+      const current = getCurrentWindow();
+      await current.toggleMaximize();
+      setIsMaximized(await current.isMaximized());
+    } catch (e) { console.log("Toggle maximize window (web fallback):", e); }
   };
 
   const handleClose = async () => {
@@ -32,6 +52,15 @@ export const DesktopMenuBar: React.FC = () => {
         FishBuddy
       </div>
       <div className="flex h-full">
+        <button
+          type="button"
+          onClick={handleToggleMaximize}
+          className="inline-flex items-center justify-center w-12 h-full text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+          aria-label={isMaximized ? "向下还原" : "最大化"}
+          title={isMaximized ? "向下还原" : "最大化"}
+        >
+          {isMaximized ? <Copy size={13} /> : <Square size={13} />}
+        </button>
         <button
           type="button"
           onClick={handleMinimize}

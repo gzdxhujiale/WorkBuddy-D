@@ -11,6 +11,8 @@ import {
 import * as listsService from '@/services/listsService';
 import type { List, Folder, Note, NoteGroup } from '@/types/lists';
 import { getNoteGroups as selectNoteGroups, getNotesByListId as selectNotesByListId } from '@/utils/listsSelectors';
+import { useAuth } from '@/lib/auth';
+import { supabase } from '@/lib/supabase';
 
 function genId(_prefix: string): string {
   return crypto.randomUUID();
@@ -84,26 +86,26 @@ async function fetchListsData(): Promise<ListsQueryData> {
   };
 }
 
-function getData(queryClient: QueryClient): ListsQueryData {
-  return queryClient.getQueryData<ListsQueryData>(queryKeys.lists.all) ?? EMPTY_DATA;
+function getData(queryClient: QueryClient, userId: string): ListsQueryData {
+  return queryClient.getQueryData<ListsQueryData>(queryKeys.lists.all(userId)) ?? EMPTY_DATA;
 }
 
-function setData(queryClient: QueryClient, updater: (prev: ListsQueryData) => ListsQueryData) {
-  queryClient.setQueryData<ListsQueryData>(queryKeys.lists.all, prev => updater(prev ?? EMPTY_DATA));
+function setData(queryClient: QueryClient, userId: string, updater: (prev: ListsQueryData) => ListsQueryData) {
+  queryClient.setQueryData<ListsQueryData>(queryKeys.lists.all(userId), prev => updater(prev ?? EMPTY_DATA));
 }
 
 // Register the cross-window listeners exactly once per window. Each Tauri window
 // has its own JS context (and thus its own module instance + queryClient), so a
 // module-level guard is per-window — precisely the desired scope.
 let crossWindowRegistered = false;
-function registerCrossWindowSync(queryClient: QueryClient) {
+function registerCrossWindowSync(queryClient: QueryClient, userId: string) {
   if (crossWindowRegistered) return;
   crossWindowRegistered = true;
 
   void listen<NoteSyncPayload>(NOTE_UPDATED_EVENT, (event) => {
     const { source, noteId, updates } = event.payload;
     if (source === SYNC_SOURCE_ID) return;
-    setData(queryClient, (data) => {
+    setData(queryClient, userId, (data) => {
       const index = data.notes.findIndex(n => n.id === noteId);
       if (index === -1) return data;
       const newNotes = [...data.notes];
@@ -118,7 +120,7 @@ function registerCrossWindowSync(queryClient: QueryClient) {
     // Cancel this window's pending debounced save first, so a deleted note is
     // not written back to the database ("resurrected").
     sharedSyncEngine.cancel(`note:${noteId}`);
-    setData(queryClient, (data) => {
+    setData(queryClient, userId, (data) => {
       const note = data.notes.find(n => n.id === noteId);
       if (!note) return data;
       const newLists = [...data.lists];
@@ -134,7 +136,7 @@ function registerCrossWindowSync(queryClient: QueryClient) {
     const { source, items } = event.payload;
     if (source === SYNC_SOURCE_ID) return;
     const orderMap = new Map(items);
-    setData(queryClient, (data) => ({
+    setData(queryClient, userId, (data) => ({
       ...data,
       notes: data.notes.map(n => (orderMap.has(n.id) ? { ...n, sortOrder: orderMap.get(n.id)! } : n)),
     }));
@@ -147,13 +149,25 @@ function registerCrossWindowSync(queryClient: QueryClient) {
  */
 export function useListsData() {
   const queryClient = useQueryClient();
+  const { userId } = useAuth();
 
   useEffect(() => {
-    registerCrossWindowSync(queryClient);
-  }, [queryClient]);
+    registerCrossWindowSync(queryClient, userId);
+  }, [queryClient, userId]);
+
+  useEffect(() => {
+    const channel = supabase.channel(`lists:${userId}`);
+    for (const table of ['knowledge_bases', 'knowledge_base_folders', 'folder_note_groups', 'notes']) {
+      channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${userId}` }, () => {
+        void queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId) });
+      });
+    }
+    channel.subscribe();
+    return () => { void supabase.removeChannel(channel); };
+  }, [queryClient, userId]);
 
   return useQuery({
-    queryKey: queryKeys.lists.all,
+    queryKey: queryKeys.lists.all(userId),
     queryFn: fetchListsData,
   });
 }
@@ -183,40 +197,42 @@ export interface ListsActions {
   addGroup: (listId: string, name: string) => NoteGroup;
   updateGroup: (id: string, updates: Partial<NoteGroup>) => void;
   deleteGroup: (id: string) => void;
+  flushNote: (id: string) => Promise<void>;
 }
 
 export function useListsActions(): ListsActions {
   const queryClient = useQueryClient();
+  const { userId } = useAuth();
 
   return useMemo<ListsActions>(() => {
     // ── Lists ──
     const addList: ListsActions['addList'] = (list) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const newList: List = {
         ...list,
         id: genId('list'),
         itemCount: 0,
         sortOrder: data.lists.length,
       };
-      setData(queryClient, () => ({ ...data, lists: [...data.lists, newList] }));
+      setData(queryClient, userId, () => ({ ...data, lists: [...data.lists, newList] }));
       sharedSyncEngine.schedule(`list:${newList.id}`, () => listsService.upsertList(newList), LOW_FREQ_DELAY);
       return newList;
     };
 
     const updateList: ListsActions['updateList'] = (id, updates) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const index = data.lists.findIndex(l => l.id === id);
       if (index === -1) return;
       const newLists = [...data.lists];
       newLists[index] = { ...newLists[index], ...updates };
       const list = newLists[index];
-      setData(queryClient, () => ({ ...data, lists: newLists }));
+      setData(queryClient, userId, () => ({ ...data, lists: newLists }));
       sharedSyncEngine.schedule(`list:${id}`, () => listsService.upsertList(list), HIGH_FREQ_DELAY);
     };
 
     const deleteList: ListsActions['deleteList'] = (id) => {
-      const data = getData(queryClient);
-      setData(queryClient, () => ({
+      const data = getData(queryClient, userId);
+      setData(queryClient, userId, () => ({
         ...data,
         lists: data.lists.filter(l => l.id !== id),
         notes: data.notes.filter(n => n.listId !== id),
@@ -227,7 +243,7 @@ export function useListsActions(): ListsActions {
     };
 
     const reorderLists: ListsActions['reorderLists'] = (orderedIds) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
       const items: Array<[string, number]> = [];
       const newLists = data.lists.map(l => {
@@ -238,12 +254,12 @@ export function useListsActions(): ListsActions {
         }
         return l;
       });
-      setData(queryClient, () => ({ ...data, lists: newLists }));
+      setData(queryClient, userId, () => ({ ...data, lists: newLists }));
       sharedSyncEngine.schedule('reorder:lists', () => listsService.reorderLists(items), LOW_FREQ_DELAY);
     };
 
     const moveList: ListsActions['moveList'] = (listId, folderId, targetIndex) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const listIndex = data.lists.findIndex(l => l.id === listId);
       if (listIndex === -1) return;
 
@@ -265,7 +281,7 @@ export function useListsActions(): ListsActions {
       siblingLists.forEach((l, idx) => orderMap.set(l.id, idx));
 
       newLists = newLists.map(l => (orderMap.has(l.id) ? { ...l, sortOrder: orderMap.get(l.id) } : l));
-      setData(queryClient, () => ({ ...data, lists: newLists }));
+      setData(queryClient, userId, () => ({ ...data, lists: newLists }));
       const updatedList = newLists.find(l => l.id === listId);
       sharedSyncEngine.schedule(
         `list:${listId}`,
@@ -276,32 +292,32 @@ export function useListsActions(): ListsActions {
 
     // ── Note Groups ──
     const addGroup: ListsActions['addGroup'] = (listId, name) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const newGroup: NoteGroup = {
         id: genId('group'),
         listId,
         name,
         sortOrder: data.noteGroups.filter(g => g.listId === listId).length,
       };
-      setData(queryClient, () => ({ ...data, noteGroups: [...data.noteGroups, newGroup] }));
+      setData(queryClient, userId, () => ({ ...data, noteGroups: [...data.noteGroups, newGroup] }));
       sharedSyncEngine.schedule(`group:${newGroup.id}`, () => listsService.upsertGroup(newGroup), LOW_FREQ_DELAY);
       return newGroup;
     };
 
     const updateGroup: ListsActions['updateGroup'] = (id, updates) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const index = data.noteGroups.findIndex(g => g.id === id);
       if (index === -1) return;
       const newGroups = [...data.noteGroups];
       newGroups[index] = { ...newGroups[index], ...updates };
       const group = newGroups[index];
-      setData(queryClient, () => ({ ...data, noteGroups: newGroups }));
+      setData(queryClient, userId, () => ({ ...data, noteGroups: newGroups }));
       sharedSyncEngine.schedule(`group:${id}`, () => listsService.upsertGroup(group), HIGH_FREQ_DELAY);
     };
 
     const deleteGroup: ListsActions['deleteGroup'] = (id) => {
-      const data = getData(queryClient);
-      setData(queryClient, () => ({
+      const data = getData(queryClient, userId);
+      setData(queryClient, userId, () => ({
         ...data,
         noteGroups: data.noteGroups.filter(g => g.id !== id),
         notes: data.notes.map(n => (n.groupId === id ? { ...n, groupId: null } : n)),
@@ -312,7 +328,7 @@ export function useListsActions(): ListsActions {
 
     // ── Notes ──
     const addNote: ListsActions['addNote'] = (note) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const siblingNotes = data.notes.filter(n => n.listId === note.listId && n.groupId === note.groupId);
       const newNote: Note = {
         ...note,
@@ -326,25 +342,25 @@ export function useListsActions(): ListsActions {
       if (listIndex !== -1) {
         newLists[listIndex] = { ...newLists[listIndex], itemCount: (newLists[listIndex].itemCount || 0) + 1 };
       }
-      setData(queryClient, () => ({ ...data, notes: [...data.notes, newNote], lists: newLists }));
+      setData(queryClient, userId, () => ({ ...data, notes: [...data.notes, newNote], lists: newLists }));
       sharedSyncEngine.schedule(`note:${newNote.id}`, () => listsService.upsertNote(newNote), LOW_FREQ_DELAY);
       return newNote;
     };
 
     const updateNote: ListsActions['updateNote'] = (id, updates) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const index = data.notes.findIndex(n => n.id === id);
       if (index === -1) return;
       const newNotes = [...data.notes];
       newNotes[index] = { ...newNotes[index], ...updates, updatedAt: Date.now() };
       const note = newNotes[index];
-      setData(queryClient, () => ({ ...data, notes: newNotes }));
+      setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       broadcastNoteUpdate(id, updates);
       sharedSyncEngine.schedule(`note:${id}`, () => listsService.upsertNote(note), HIGH_FREQ_DELAY);
     };
 
     const deleteNote: ListsActions['deleteNote'] = (id) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const note = data.notes.find(n => n.id === id);
       if (!note) return;
       const newLists = [...data.lists];
@@ -352,7 +368,7 @@ export function useListsActions(): ListsActions {
       if (listIndex !== -1 && (newLists[listIndex].itemCount || 0) > 0) {
         newLists[listIndex] = { ...newLists[listIndex], itemCount: newLists[listIndex].itemCount! - 1 };
       }
-      setData(queryClient, () => ({
+      setData(queryClient, userId, () => ({
         ...data,
         notes: data.notes.filter(n => n.id !== id),
         lists: newLists,
@@ -363,7 +379,7 @@ export function useListsActions(): ListsActions {
     };
 
     const moveNoteAndReorder: ListsActions['moveNoteAndReorder'] = (noteId, groupId, targetIndex) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const noteIndex = data.notes.findIndex(n => n.id === noteId);
       if (noteIndex === -1) return;
 
@@ -390,7 +406,7 @@ export function useListsActions(): ListsActions {
       siblingNotes.forEach((n, idx) => orderMap.set(n.id, idx));
 
       newNotes = newNotes.map(n => (orderMap.has(n.id) ? { ...n, sortOrder: orderMap.get(n.id)! } : n));
-      setData(queryClient, () => ({ ...data, notes: newNotes }));
+      setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       const updatedNote = newNotes.find(n => n.id === noteId);
       // Sync the group change and affected same-group ordering so a stale copy in
       // a child window does not write back the whole note and undo the move.
@@ -404,7 +420,7 @@ export function useListsActions(): ListsActions {
     };
 
     const moveNoteToList: ListsActions['moveNoteToList'] = (noteId, targetListId, targetGroupId = null) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const noteIndex = data.notes.findIndex(n => n.id === noteId);
       if (noteIndex === -1) return;
 
@@ -431,7 +447,7 @@ export function useListsActions(): ListsActions {
         return l;
       });
 
-      setData(queryClient, () => ({ ...data, notes: newNotes, lists: newLists }));
+      setData(queryClient, userId, () => ({ ...data, notes: newNotes, lists: newLists }));
       broadcastNoteUpdate(noteId, { listId: targetListId, groupId: targetGroupId, sortOrder: newSortOrder });
       sharedSyncEngine.schedule(
         `note:${noteId}`,
@@ -441,7 +457,7 @@ export function useListsActions(): ListsActions {
     };
 
     const reorderNotes: ListsActions['reorderNotes'] = (orderedIds) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
       const items: Array<[string, number]> = [];
       const newNotes = data.notes.map(n => {
@@ -452,37 +468,37 @@ export function useListsActions(): ListsActions {
         }
         return n;
       });
-      setData(queryClient, () => ({ ...data, notes: newNotes }));
+      setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       broadcastNotesReorder(items);
       sharedSyncEngine.schedule('reorder:notes', () => listsService.reorderNotes(items), LOW_FREQ_DELAY);
     };
 
     // ── Folders ──
     const addFolder: ListsActions['addFolder'] = (name) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const newFolder: Folder = {
         id: genId('folder'),
         name,
         sortOrder: data.folders.length,
       };
-      setData(queryClient, () => ({ ...data, folders: [...data.folders, newFolder] }));
+      setData(queryClient, userId, () => ({ ...data, folders: [...data.folders, newFolder] }));
       sharedSyncEngine.schedule(`folder:${newFolder.id}`, () => listsService.upsertFolder(newFolder), LOW_FREQ_DELAY);
       return newFolder;
     };
 
     const updateFolder: ListsActions['updateFolder'] = (id, updates) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const index = data.folders.findIndex(f => f.id === id);
       if (index === -1) return;
       const newFolders = [...data.folders];
       newFolders[index] = { ...newFolders[index], ...updates };
       const folder = newFolders[index];
-      setData(queryClient, () => ({ ...data, folders: newFolders }));
+      setData(queryClient, userId, () => ({ ...data, folders: newFolders }));
       sharedSyncEngine.schedule(`folder:${id}`, () => listsService.upsertFolder(folder), HIGH_FREQ_DELAY);
     };
 
     const reorderFolders: ListsActions['reorderFolders'] = (orderedIds) => {
-      const data = getData(queryClient);
+      const data = getData(queryClient, userId);
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
       const items: Array<[string, number]> = [];
       const newFolders = data.folders.map(f => {
@@ -493,13 +509,13 @@ export function useListsActions(): ListsActions {
         }
         return f;
       });
-      setData(queryClient, () => ({ ...data, folders: newFolders }));
+      setData(queryClient, userId, () => ({ ...data, folders: newFolders }));
       sharedSyncEngine.schedule('reorder:folders', () => listsService.reorderFolders(items), LOW_FREQ_DELAY);
     };
 
     const deleteFolder: ListsActions['deleteFolder'] = (id) => {
-      const data = getData(queryClient);
-      setData(queryClient, () => ({
+      const data = getData(queryClient, userId);
+      setData(queryClient, userId, () => ({
         ...data,
         folders: data.folders.filter(f => f.id !== id),
         lists: data.lists.map(l => (l.folderId === id ? { ...l, folderId: null } : l)),
@@ -512,7 +528,7 @@ export function useListsActions(): ListsActions {
     const duplicateList: ListsActions['duplicateList'] = (list) => {
       const newList = addList({ ...list, name: list.name + ' (副本)', isPinned: false });
 
-      const sourceGroups = selectNoteGroups(getData(queryClient).noteGroups, list.id);
+      const sourceGroups = selectNoteGroups(getData(queryClient, userId).noteGroups, list.id);
       const groupMap = new Map<string, string>();
       sourceGroups.forEach(group => {
         const newGroup = addGroup(newList.id, group.name);
@@ -520,7 +536,7 @@ export function useListsActions(): ListsActions {
         groupMap.set(group.id, newGroup.id);
       });
 
-      const sourceNotes = selectNotesByListId(getData(queryClient).notes, list.id);
+      const sourceNotes = selectNotesByListId(getData(queryClient, userId).notes, list.id);
       sourceNotes.forEach(note => {
         addNote({
           listId: newList.id,
@@ -531,14 +547,15 @@ export function useListsActions(): ListsActions {
         });
       });
 
-      // The server-side duplicate RPC performs the deep copy; cancel the freshly
-      // scheduled list write and any source-list debounced writes to avoid racing it.
-      sharedSyncEngine.cancel(`list:${newList.id}`);
-      selectNoteGroups(getData(queryClient).noteGroups, list.id).forEach(g => sharedSyncEngine.cancel(`group:${g.id}`));
-      selectNotesByListId(getData(queryClient).notes, list.id).forEach(n => sharedSyncEngine.cancel(`note:${n.id}`));
+      // Never cancel source entity writes: a copy must not discard an edit still
+      // queued by the source list or one of its notes.
       listsService.duplicateList(list.id, newList).catch(() => {});
 
       return newList;
+    };
+
+    const flushNote = async (id: string) => {
+      await sharedSyncEngine.flush(`note:${id}`);
     };
 
     return {
@@ -561,6 +578,7 @@ export function useListsActions(): ListsActions {
       addGroup,
       updateGroup,
       deleteGroup,
+      flushNote,
     };
-  }, [queryClient]);
+  }, [queryClient, userId]);
 }

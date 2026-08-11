@@ -14,6 +14,7 @@ import {
   ListNoteRow,
   ListTemplateRow,
 } from "@/types/database";
+import { throwOnPostgrestError } from "@/lib/sync";
 
 const LOCAL_STORAGE_FOLDERS_KEY = "fishbuddy_list_folders_v1";
 const LOCAL_STORAGE_LISTS_KEY = "fishbuddy_list_lists_v1";
@@ -415,16 +416,8 @@ export const listNotesApi = {
     );
     saveLocalData({ folders: local.folders });
 
-    try {
-      for (const [id, sort_order] of items) {
-        await supabase
-          .from("knowledge_bases")
-          .update({ sort_order, updated_at: new Date().toISOString() })
-          .eq("id", id);
-      }
-    } catch (e) {
-      console.warn("Supabase reorderFolders exception:", e);
-    }
+    const { error } = await supabase.rpc("reorder_knowledge_bases", { p_items: items.map(([id, sort_order]) => ({ id, sort_order })) });
+    throwOnPostgrestError(error, "排序知识库");
   },
 
   reorderLists: async (items: Array<[string, number]>): Promise<void> => {
@@ -435,16 +428,8 @@ export const listNotesApi = {
     );
     saveLocalData({ lists: local.lists });
 
-    try {
-      for (const [id, sort_order] of items) {
-        await supabase
-          .from("knowledge_base_folders")
-          .update({ sort_order, updated_at: new Date().toISOString() })
-          .eq("id", id);
-      }
-    } catch (e) {
-      console.warn("Supabase reorderLists exception:", e);
-    }
+    const { error } = await supabase.rpc("reorder_knowledge_base_folders", { p_items: items.map(([id, sort_order]) => ({ id, sort_order })) });
+    throwOnPostgrestError(error, "排序清单");
   },
 
   moveList: async (listId: string, folderId: string | null, sortOrder: number): Promise<void> => {
@@ -477,16 +462,8 @@ export const listNotesApi = {
     );
     saveLocalData({ notes: local.notes });
 
-    try {
-      for (const [id, sort_order] of items) {
-        await supabase
-          .from("notes")
-          .update({ sort_order, updated_at: new Date().toISOString() })
-          .eq("id", id);
-      }
-    } catch (e) {
-      console.warn("Supabase reorderNotes exception:", e);
-    }
+    const { error } = await supabase.rpc("reorder_notes", { p_items: items.map(([id, sort_order]) => ({ id, sort_order })) });
+    throwOnPostgrestError(error, "排序笔记");
   },
 
   moveNote: async (

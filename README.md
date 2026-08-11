@@ -1,5 +1,7 @@
 # Database Schema & Technical Architecture
 
+> **已部署命名说明**：清单模块实际使用 `knowledge_bases`、`knowledge_base_folders`、`folder_note_groups`、`notes` 和 `knowledge_base_templates`（下文的 `list_*` 为早期逻辑模型名称）。知识库/文件夹/笔记继续使用 `deleted_at` 软删除；`daily_reviews` 改为硬删除，并通过 `delete_daily_review` RPC 执行。
+
 > **项目说明**：本项目的后端数据库采用 **Supabase (PostgreSQL 15+)** 引擎。
 > 
 > **前端数据架构**：TanStack Query + Zustand 乐观更新 (Optimistic Updates) 与延迟写入 (Deferred Writes)

@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Outlet } from "@tanstack/react-router";
 import { DesktopMenuBar } from "./DesktopMenuBar";
 import { DesktopToolbar } from "./DesktopToolbar";
+import { SettingsDialog } from "./SettingsDialog";
 
 export const AppLayout: React.FC = () => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -33,26 +34,7 @@ export const AppLayout: React.FC = () => {
         </main>
       </div>
 
-      {/* Settings Modal (Placeholder) */}
-      {isSettingsOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs">
-          <div className="bg-white dark:bg-slate-900 rounded-xl p-6 shadow-xl border border-slate-200 dark:border-slate-800 w-96 max-w-[90vw]">
-            <h2 className="text-lg font-bold mb-4 text-slate-900 dark:text-slate-100">设置</h2>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-6">
-              系统偏好与个人配置面板
-            </p>
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={() => setIsSettingsOpen(false)}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm font-medium transition-colors"
-              >
-                确定
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {isSettingsOpen && <SettingsDialog onClose={() => setIsSettingsOpen(false)} />}
     </div>
   );
 };

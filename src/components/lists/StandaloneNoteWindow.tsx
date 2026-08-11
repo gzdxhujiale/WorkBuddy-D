@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useListsData, useListsActions } from '@/hooks/useListsQuery';
 import { Note } from '@/types/lists';
-import { MoreHorizontal, Pin, Cloud, Minus, Square, Copy, X } from 'lucide-react';
+import { MoreHorizontal, Pin, Cloud, CloudOff, AlertCircle, Minus, Square, Copy, X } from 'lucide-react';
 import * as listsService from '@/services/listsService';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
@@ -62,11 +62,12 @@ export function StandaloneNoteWindow() {
 }
 
 function StandaloneNoteEditorContent({ note }: { note: Note }) {
-  const { updateNote, deleteNote } = useListsActions();
+  const { updateNote, deleteNote, flushNote } = useListsActions();
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || '');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
+  const [saveStatus, setSaveStatus] = useState<'saving' | 'saved' | 'offline' | 'failed'>('saved');
+  const [isClosing, setIsClosing] = useState(false);
   const [isMaximized, setIsMaximized] = useState(false);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -132,13 +133,18 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
   useEffect(() => {
     if (title !== note.title || content !== note.content) {
       setSaveStatus('saving');
-      const timer = setTimeout(() => {
+      const timer = setTimeout(async () => {
         updateNote(note.id, { title, content });
-        setSaveStatus('saved');
+        try {
+          await flushNote(note.id);
+          setSaveStatus('saved');
+        } catch {
+          setSaveStatus(navigator.onLine ? 'failed' : 'offline');
+        }
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [title, content, note.id, note.title, note.content, updateNote]);
+  }, [title, content, note.id, note.title, note.content, updateNote, flushNote]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -169,11 +175,21 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
   };
 
   const handleCloseWindow = async () => {
+    if (isClosing) return;
+    setIsClosing(true);
     try {
       const appWindow = getCurrentWindow();
+      await appWindow.hide();
+      if (title !== note.title || content !== note.content) updateNote(note.id, { title, content });
+      setSaveStatus('saving');
+      await flushNote(note.id);
+      setSaveStatus('saved');
       await appWindow.close();
-    } catch {
-      window.close();
+    } catch (error) {
+      setSaveStatus(navigator.onLine ? 'failed' : 'offline');
+      setIsClosing(false);
+      try { await getCurrentWindow().show(); } catch { /* browser fallback */ }
+      console.error('[note] final save failed; keeping editor open', error);
     }
   };
 
@@ -280,16 +296,10 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
 
         <div className="flex items-center gap-2">
           <span
-            title={saveStatus === 'saving' ? '保存中...' : '已自动保存'}
+            title={{ saving: '保存中…', saved: '已自动保存', offline: '离线：等待网络恢复', failed: '保存失败，请重试' }[saveStatus]}
             className="inline-flex items-center justify-center mr-1 p-1"
           >
-            <Cloud
-              size={18}
-              className={cn(
-                'transition-all duration-300',
-                saveStatus === 'saved' ? 'text-primary fill-primary/20' : 'text-muted-foreground fill-none'
-              )}
-            />
+            {saveStatus === 'offline' ? <CloudOff size={18} className="text-amber-500" /> : saveStatus === 'failed' ? <AlertCircle size={18} className="text-destructive" /> : <Cloud size={18} className={cn('transition-all duration-300', saveStatus === 'saved' ? 'text-primary fill-primary/20' : 'text-muted-foreground fill-none')} />}
           </span>
 
           <Button

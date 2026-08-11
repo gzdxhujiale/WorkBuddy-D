@@ -138,7 +138,7 @@ function ensurePool(): Promise<void> {
       }
 
       const webview = new WebviewWindow(POOL_LABEL, {
-        url: `${window.location.origin}/?window=task-quick-edit`,
+        url: `${window.location.origin}/quick-edit.html`,
         title: '任务快捷编辑',
         x: 0,
         y: 0,

@@ -4,6 +4,8 @@ import { Session } from "@supabase/supabase-js";
 import { router } from "./router";
 import { supabase } from "@/lib/supabase";
 import { LoginPage } from "@/components/LoginPage";
+import { AuthProvider } from "@/lib/auth";
+import { queryClient } from "@/lib/queryClient";
 
 function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -16,6 +18,8 @@ function App() {
 
     // 2. 监听登录 / 登出状态变化
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+      // A cache from the previous account must never render for the next one.
+      queryClient.clear();
       setSession(newSession);
     });
 
@@ -40,7 +44,7 @@ function App() {
   }
 
   // 已登录，进入主应用路由
-  return <RouterProvider router={router} />;
+  return <AuthProvider value={{ session, userId: session.user.id }}><RouterProvider router={router} /></AuthProvider>;
 }
 
 export default App;
