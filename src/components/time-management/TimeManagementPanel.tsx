@@ -24,7 +24,7 @@ import {
   openQuickEditWindow,
 } from "@/services/quickEditWindow";
 import { startTaskReminderScheduler } from "@/services/taskReminderScheduler";
-import { getTaskEndAt, taskIntersectsDay, taskIntersectsInterval, taskTimeLabel } from "@/lib/taskSchedule";
+import { getTaskEndAt, taskIntersectsDay, taskIntersectsInterval, taskTimeLabel, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
 import { toggleFocusAssistant } from "@/services/focusAssistantWindow";
 
 export type ViewType = "quadrant" | "day" | "week" | "month";
@@ -185,7 +185,7 @@ export const TimeManagementPanel: React.FC = () => {
   // Filter tasks based on activeView for right side panel & sub-views
   // Day View = 当日任务, Week View = 当周任务, Month View = 当月任务
   const periodTasks = useMemo(() => {
-    return filteredTasks.filter((t) => {
+    const list = filteredTasks.filter((t) => {
       if (activeView === "day") {
         return taskIntersectsDay(t, currentDate);
       }
@@ -203,6 +203,11 @@ export const TimeManagementPanel: React.FC = () => {
 
       return true;
     });
+
+    if (activeView === "day") {
+      return sortTasksByQuadrantAndDeadline(list);
+    }
+    return list;
   }, [filteredTasks, activeView, currentDate]);
 
   const getSidebarTitle = () => {

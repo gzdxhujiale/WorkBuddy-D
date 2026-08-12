@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { timeManagementApi } from "@/services/timeManagementService";
 import { Task, QuadrantType, TimeManagementData } from "@/types/timeManagement";
@@ -22,6 +22,18 @@ export function useTimeManagementData() {
 }
 
 export function useFocusTaskOptions() {
+  useRealtimeQueryInvalidation("focus-assistant-tasks", ["time_management_tasks"], ["focus-assistant-tasks"]);
+
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    const handleFocus = () => {
+      void queryClient.invalidateQueries({ queryKey: ["focus-assistant-tasks"] });
+    };
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [queryClient]);
+
   return useQuery<Array<Pick<Task, "id" | "title">>>({
     queryKey: ["focus-assistant-tasks"],
     queryFn: async () => {
@@ -34,7 +46,7 @@ export function useFocusTaskOptions() {
       throwOnPostgrestError(error, "加载可专注任务");
       return data ?? [];
     },
-    staleTime: 60_000,
+    staleTime: 5_000,
   });
 }
 

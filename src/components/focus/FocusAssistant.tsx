@@ -6,6 +6,7 @@ import {
   Pin,
   PinOff,
   Play,
+  SkipForward,
   Square,
   X,
 } from "lucide-react";
@@ -92,8 +93,6 @@ export function FocusAssistant() {
   const [session, setSession] = useState<FocusSession | null>(null);
   const [focusSessionId, setFocusSessionId] = useState<string | null>(null);
   const [isPinned, setIsPinned] = useState(true);
-  const [cycleIndex, setCycleIndex] = useState(1);
-  const totalCycles = 2;
 
   const startedAt = useRef<number | null>(null);
   const remainingRef = useRef(secondsLeft);
@@ -102,6 +101,7 @@ export function FocusAssistant() {
   const statusRef = useRef(status);
   const viewModeRef = useRef(viewMode);
   const selectedTaskRef = useRef(selectedTaskId);
+  const isCompletingRef = useRef(false);
 
   useEffect(() => {
     remainingRef.current = secondsLeft;
@@ -149,24 +149,32 @@ export function FocusAssistant() {
   };
 
   const start = async (nextType: FocusSessionType = "focus", existingCycle?: string) => {
+    isCompletingRef.current = false;
     const minutes = nextType === "focus" ? focusMinutes : restMinutes;
-    const created = await focusAssistantApi.create({
-      cycleId: existingCycle ?? crypto.randomUUID(),
-      taskId: nextType === "focus" ? selectedTaskId || null : selectedTaskRef.current || null,
-      type: nextType,
-      status: "running",
-      plannedMinutes: minutes,
-      activeSeconds: 0,
-      restCompleted: false,
-      startedAt: new Date().toISOString(),
-    });
-    if (nextType === "focus") setFocusSessionId(created.id);
-    setSession(created);
+
+    // Synchronously set local state so state & timer transition immediately
     setType(nextType);
     setSecondsLeft(minutes * 60);
     remainingRef.current = minutes * 60;
     startedAt.current = Date.now();
     setStatus("running");
+
+    try {
+      const created = await focusAssistantApi.create({
+        cycleId: existingCycle ?? crypto.randomUUID(),
+        taskId: nextType === "focus" ? selectedTaskId || null : selectedTaskRef.current || null,
+        type: nextType,
+        status: "running",
+        plannedMinutes: minutes,
+        activeSeconds: 0,
+        restCompleted: false,
+        startedAt: new Date().toISOString(),
+      });
+      if (nextType === "focus") setFocusSessionId(created.id);
+      setSession(created);
+    } catch (e) {
+      console.error("Failed to create focus session", e);
+    }
   };
 
   const pause = async () => {
@@ -187,6 +195,7 @@ export function FocusAssistant() {
   };
 
   const stop = async () => {
+    isCompletingRef.current = false;
     if (!session) return;
     const elapsed = activeSeconds();
     await focusAssistantApi.update(session.id, {
@@ -203,14 +212,22 @@ export function FocusAssistant() {
   };
 
   const complete = async () => {
+    if (isCompletingRef.current) return;
     const current = sessionRef.current;
     if (!current) return;
+
+    isCompletingRef.current = true;
+    setStatus("paused"); // Freeze timer interval
+
+    const currentSessionType = typeRef.current; // Snapshot session type
+
     await focusAssistantApi.update(current.id, {
       status: "completed",
       activeSeconds: current.plannedMinutes * 60,
       endedAt: new Date().toISOString(),
     });
-    if (typeRef.current === "focus") {
+
+    if (currentSessionType === "focus") {
       if (viewModeRef.current === "minimized") {
         void sendDesktopNotification("专注完成", "专注完成，请开始休息吧");
       }
@@ -226,8 +243,28 @@ export function FocusAssistant() {
       setSecondsLeft(focusMinutes * 60);
       setStatus("ready");
       startedAt.current = null;
-      setCycleIndex((prev) => (prev >= totalCycles ? 1 : prev + 1));
+      isCompletingRef.current = false;
     }
+  };
+
+  const skipFocus = async () => {
+    if (isCompletingRef.current) return;
+    const current = sessionRef.current;
+    if (!current || typeRef.current !== "focus") return;
+
+    isCompletingRef.current = true;
+    setStatus("paused"); // Freeze timer interval
+
+    const elapsed = activeSeconds();
+    await focusAssistantApi.update(current.id, {
+      status: "completed",
+      activeSeconds: elapsed,
+      endedAt: new Date().toISOString(),
+    });
+    if (viewModeRef.current === "minimized") {
+      void sendDesktopNotification("已跳过专注", "开始休息吧");
+    }
+    await start("rest", current.cycleId);
   };
 
   useEffect(() => {
@@ -315,7 +352,9 @@ export function FocusAssistant() {
         <div className="text-sm font-semibold text-slate-800 dark:text-slate-200" data-tauri-drag-region>
           {status === "ready"
             ? "专注设置"
-            : `${type === "focus" ? "专注时间段" : "休息时间段"} (第 ${cycleIndex} 个/共 ${totalCycles} 个)`}
+            : type === "focus"
+            ? "专注时间段"
+            : "休息时间段"}
         </div>
 
         <div className="flex items-center gap-1" data-tauri-drag-region="false">
@@ -435,6 +474,17 @@ export function FocusAssistant() {
               >
                 {status === "paused" ? <Play size={18} fill="currentColor" /> : <Pause size={18} fill="currentColor" />}
               </button>
+
+              {type === "focus" && (
+                <button
+                  onClick={() => void skipFocus()}
+                  className="flex h-9 w-9 items-center justify-center rounded-full border border-slate-200 bg-slate-100 text-slate-600 hover:bg-slate-200 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-transform hover:scale-105 active:scale-95"
+                  title="跳过当前专注，开始休息"
+                  data-tauri-drag-region="false"
+                >
+                  <SkipForward size={15} />
+                </button>
+              )}
 
               <button
                 onClick={() => void stop()}

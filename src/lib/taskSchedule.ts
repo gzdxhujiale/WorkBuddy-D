@@ -1,4 +1,4 @@
-import { Task } from "@/types/timeManagement";
+import { Task, QuadrantType } from "@/types/timeManagement";
 
 export function getTaskEndAt(task: Task): number | undefined {
   return task.scheduledEndAt;
@@ -33,3 +33,25 @@ export function taskTimeLabel(task: Task): string | undefined {
   const startTime = new Date(start).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit", hour12: false });
   return `${startTime}–${endTime}`;
 }
+
+const QUADRANT_PRIORITY: Record<QuadrantType, number> = {
+  Q2: 1,
+  Q1: 2,
+  Q3: 3,
+  Q4: 4,
+};
+
+export function sortTasksByQuadrantAndDeadline(tasks: Task[]): Task[] {
+  return [...tasks].sort((a, b) => {
+    const pA = QUADRANT_PRIORITY[a.quadrant] ?? 99;
+    const pB = QUADRANT_PRIORITY[b.quadrant] ?? 99;
+    if (pA !== pB) return pA - pB;
+
+    const timeA = a.scheduledEndAt ?? Number.MAX_SAFE_INTEGER;
+    const timeB = b.scheduledEndAt ?? Number.MAX_SAFE_INTEGER;
+    if (timeA !== timeB) return timeA - timeB;
+
+    return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+  });
+}
+

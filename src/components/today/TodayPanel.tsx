@@ -13,7 +13,7 @@ import { DailyReviewItem } from "@/types/dailyReview";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { openQuickEditWindow, requestQuickEditCloseLayer } from "@/services/quickEditWindow";
 import { Badge } from "@/components/ui/badge";
-import { taskIntersectsDay } from "@/lib/taskSchedule";
+import { taskIntersectsDay, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
 
 // ============================================================
 // Constants & Pure Selectors
@@ -158,10 +158,12 @@ export const TodayPanel: React.FC = () => {
   const today = todayYMD();
   const todayDate = useMemo(() => new Date(), []);
 
-  // Filter tasks due today
+  // Filter tasks due today sorted by quadrant (Q2 > Q1 > Q3 > Q4) then deadline
   const dueTasks = useMemo(
     () =>
-      tasks.filter((task) => taskIntersectsDay(task, new Date(`${today}T00:00:00`))),
+      sortTasksByQuadrantAndDeadline(
+        tasks.filter((task) => taskIntersectsDay(task, new Date(`${today}T00:00:00`)))
+      ),
     [tasks, today]
   );
   const pendingTasks = useMemo(() => dueTasks.filter((t) => !t.completed), [dueTasks]);
