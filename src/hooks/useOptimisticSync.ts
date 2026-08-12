@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from "react";
 import { useQueryClient, QueryKey } from "@tanstack/react-query";
+import { markQueryPending, clearQueryPending } from "@/lib/queryPending";
 
 export interface OptimisticSyncOptions<TData, TVariables> {
   /** React Query Cache Key */
@@ -41,13 +42,15 @@ export function useOptimisticSync<TData, TVariables>({
       if (payload !== undefined) {
         pendingVarsRef.current.delete(key);
         const version = versionRef.current.get(key) ?? 0;
-      try {
-        await syncFnRef.current(payload);
-      } catch (err) {
+        try {
+          await syncFnRef.current(payload);
+          clearQueryPending(queryKey);
+        } catch (err) {
         console.error("[useOptimisticSync] Sync persistence error:", err);
         // Do not overwrite a newer local edit made while this request was in flight.
         if ((versionRef.current.get(key) ?? 0) === version) {
           queryClient.setQueryData(queryKey, previousDataRef.current.get(key));
+          clearQueryPending(queryKey);
         }
       }
       }
@@ -63,6 +66,7 @@ export function useOptimisticSync<TData, TVariables>({
       queryClient.setQueryData<TData>(queryKey, (old) => updateCache(old, vars));
       previousDataRef.current.set(key, before);
       pendingVarsRef.current.set(key, vars);
+      markQueryPending(queryKey);
       versionRef.current.set(key, (versionRef.current.get(key) ?? 0) + 1);
 
       if (debounceMs <= 0) {
@@ -83,9 +87,12 @@ export function useOptimisticSync<TData, TVariables>({
     return () => {
       for (const timer of timerRef.current.values()) clearTimeout(timer);
       for (const payload of pendingVarsRef.current.values()) {
-        syncFnRef.current(payload).catch((err) => {
-          console.error("[useOptimisticSync] Unmount flush failed:", err);
-        });
+        syncFnRef.current(payload)
+          .then(() => clearQueryPending(queryKey))
+          .catch((err) => {
+            clearQueryPending(queryKey);
+            console.error("[useOptimisticSync] Unmount flush failed:", err);
+          });
       }
     };
   }, []);

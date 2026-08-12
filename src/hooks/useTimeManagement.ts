@@ -3,15 +3,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { timeManagementApi } from "@/services/timeManagementService";
 import { Task, QuadrantType, TimeManagementData } from "@/types/timeManagement";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
-import { useRealtimeQueryInvalidation } from "@/hooks/useRealtimeQueryInvalidation";
 import { supabase } from "@/lib/supabase";
 import { throwOnPostgrestError } from "@/lib/sync";
-
-const QUERY_KEY = ["time-management-tasks"];
-const TIME_MANAGEMENT_REALTIME_TABLES = ["mission_roles", "time_management_tasks"] as const;
+import { queryKeys } from "@/lib/syncEngine";
+import { useAuth } from "@/lib/auth";
 
 export function useTimeManagementData() {
-  useRealtimeQueryInvalidation("time-management", TIME_MANAGEMENT_REALTIME_TABLES, QUERY_KEY);
+  const { userId } = useAuth();
+  const QUERY_KEY = queryKeys.timeManagement(userId);
   return useQuery<TimeManagementData>({
     queryKey: QUERY_KEY,
     queryFn: async () => {
@@ -22,20 +21,20 @@ export function useTimeManagementData() {
 }
 
 export function useFocusTaskOptions() {
-  useRealtimeQueryInvalidation("focus-assistant-tasks", ["time_management_tasks"], ["focus-assistant-tasks"]);
-
   const queryClient = useQueryClient();
+  const { userId } = useAuth();
+  const QUERY_KEY = queryKeys.focusAssistantTasks(userId);
 
   useEffect(() => {
     const handleFocus = () => {
-      void queryClient.invalidateQueries({ queryKey: ["focus-assistant-tasks"] });
+      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
     };
     window.addEventListener("focus", handleFocus);
     return () => window.removeEventListener("focus", handleFocus);
   }, [queryClient]);
 
   return useQuery<Array<Pick<Task, "id" | "title">>>({
-    queryKey: ["focus-assistant-tasks"],
+    queryKey: QUERY_KEY,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("time_management_tasks")
@@ -52,6 +51,8 @@ export function useFocusTaskOptions() {
 
 export function useTaskActions() {
   const queryClient = useQueryClient();
+  const { userId } = useAuth();
+  const QUERY_KEY = queryKeys.timeManagement(userId);
 
   // Upsert Sync (0ms optimistic cache update + debounced DB persistence for text edits)
   const { trigger: triggerUpsert } = useOptimisticSync<TimeManagementData, Task>({

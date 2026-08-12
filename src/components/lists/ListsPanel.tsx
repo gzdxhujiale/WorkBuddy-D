@@ -29,7 +29,8 @@ import { Input } from '@/components/ui/input';
 import { DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
-import { userStorageKey } from '@/lib/userStorage';
+import { useUiStore } from '@/stores/uiStore';
+import { queryKeys } from '@/lib/syncEngine';
 
 // ============================================================================
 // 0. Shared Helpers & Custom Hooks
@@ -1532,8 +1533,6 @@ const EMPTY_NOTE_GROUPS: NoteGroup[] = [];
 
 export function ListsPanel() {
   const { userId } = useAuth();
-  const activeListStorageKey = useMemo(() => userStorageKey('lists-active-list-id'), [userId]);
-  const sidebarStorageKey = useMemo(() => userStorageKey('lists-sidebar-collapsed'), [userId]);
   // Query-backed data + write actions (connected to listNotesService Supabase backend)
   const { data } = useListsData();
   const rawLists = data?.lists ?? EMPTY_LISTS;
@@ -1570,10 +1569,10 @@ export function ListsPanel() {
   const folderIdSet = useMemo(() => new Set(folders.map(f => f.id)), [folders]);
   const listMap = useMemo(() => new Map(lists.map(l => [l.id, l])), [lists]);
 
-  const [activeListId, setActiveListId] = useState<string | null>(() => {
-    return localStorage.getItem(userStorageKey('lists-active-list-id'));
-  });
-  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  const activeListId = useUiStore((state) => state.activeListId);
+  const setActiveListId = useUiStore((state) => state.setActiveListId);
+  const isTemplateModalOpen = useUiStore((state) => state.isTemplateModalOpen);
+  const setIsTemplateModalOpen = useUiStore((state) => state.setTemplateModalOpen);
   const { isFetching: isListContentsFetching } = useListContents(activeListId);
   const noteMap = useMemo(() => new Map(rawNotes.map(n => [n.id, n])), [rawNotes]);
   const templates = useTemplateData(isTemplateModalOpen).data ?? [];
@@ -1599,16 +1598,12 @@ export function ListsPanel() {
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }, [rawNoteGroups, activeListId]);
 
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    return localStorage.getItem(userStorageKey('lists-sidebar-collapsed')) === 'true';
-  });
+  const isSidebarCollapsed = useUiStore((state) => state.isSidebarCollapsed);
+  const setIsSidebarCollapsed = useUiStore((state) => state.setSidebarCollapsed);
 
   const toggleSidebar = () => {
-    setIsSidebarCollapsed(prev => {
-      const next = !prev;
-      localStorage.setItem(sidebarStorageKey, String(next));
-      return next;
-    });
+    const next = !isSidebarCollapsed;
+    setIsSidebarCollapsed(next);
   };
 
   // Modals state
@@ -1631,14 +1626,16 @@ export function ListsPanel() {
   const [isListSettingsOpen, setIsListSettingsOpen] = useState(false);
 
   // Note state
-  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const activeNoteId = useUiStore((state) => state.activeNoteId);
+  const setActiveNoteId = useUiStore((state) => state.setActiveNoteId);
+  const isDrawerOpen = useUiStore((state) => state.isDrawerOpen);
+  const setIsDrawerOpen = useUiStore((state) => state.setDrawerOpen);
   const activeNote = useMemo(() => {
     if (!activeNoteId) return null;
     return noteMap.get(activeNoteId) || null;
   }, [noteMap, activeNoteId]);
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const { data: activeNoteDetail } = useQuery({
-    queryKey: ['lists', userId, 'note', activeNoteId],
+    queryKey: queryKeys.lists.note(userId, activeNoteId ?? 'none'),
     queryFn: () => listsService.loadNote(activeNoteId!),
     enabled: isDrawerOpen && Boolean(activeNoteId) && !activeNote?.contentLoaded,
   });
@@ -1688,9 +1685,10 @@ export function ListsPanel() {
     if (lists.length === 0) return;
     didInitActiveList.current = true;
 
-    const savedId = localStorage.getItem(activeListStorageKey);
-    const exists = savedId && lists.some(l => l.id === savedId);
-    if (exists) return;
+    const exists = activeListId && lists.some(l => l.id === activeListId);
+    if (exists) {
+      return;
+    }
 
     let defaultListId = lists[0].id;
     if (folders.length > 0) {
@@ -1702,18 +1700,14 @@ export function ListsPanel() {
     }
 
     setActiveListId(defaultListId);
-    localStorage.setItem(activeListStorageKey, defaultListId);
-  }, [lists, folders, activeListStorageKey]);
+  }, [activeListId, lists, folders, setActiveListId]);
 
   useEffect(() => {
     if (activeListId) {
       setActiveNoteId(null);
       setIsDrawerOpen(false);
-      localStorage.setItem(activeListStorageKey, activeListId);
-    } else {
-      localStorage.removeItem(activeListStorageKey);
     }
-  }, [activeListId, activeListStorageKey]);
+  }, [activeListId, setActiveNoteId, setIsDrawerOpen]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),

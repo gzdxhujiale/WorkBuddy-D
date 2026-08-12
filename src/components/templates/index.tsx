@@ -3,15 +3,14 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { listNotesApi } from '@/services/listNotesService';
 import { ListTemplate } from '@/types/listNotes';
 import { FileText, Trash2, X } from 'lucide-react';
-import { useRealtimeQueryInvalidation } from '@/hooks/useRealtimeQueryInvalidation';
-
-const TEMPLATE_QUERY_KEY = ['knowledge_base_templates'];
-const TEMPLATE_REALTIME_TABLES = ['knowledge_base_templates'] as const;
+import { useAuth } from '@/lib/auth';
+import { queryKeys } from '@/lib/syncEngine';
 
 export function useTemplateData(enabled = true) {
-  useRealtimeQueryInvalidation('templates', TEMPLATE_REALTIME_TABLES, TEMPLATE_QUERY_KEY);
+  const { userId } = useAuth();
+  const queryKey = queryKeys.templates(userId);
   return useQuery({
-    queryKey: TEMPLATE_QUERY_KEY,
+    queryKey,
     queryFn: () => listNotesApi.loadTemplates(),
     enabled,
   });
@@ -19,6 +18,8 @@ export function useTemplateData(enabled = true) {
 
 export function useTemplateActions() {
   const queryClient = useQueryClient();
+  const { userId } = useAuth();
+  const TEMPLATE_QUERY_KEY = queryKeys.templates(userId);
 
   const addTemplate = async (name: string, content: string | Record<string, unknown>) => {
     const newTpl: ListTemplate = {

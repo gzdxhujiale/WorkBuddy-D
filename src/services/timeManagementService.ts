@@ -73,24 +73,7 @@ registerOfflineExecutor("task:delete", async (payload) => {
 export const timeManagementApi = {
   loadAll: async (): Promise<TimeManagementData> => {
     try {
-      // 1. Load roles
-      let roles: Role[] = DEFAULT_ROLES;
-      const { data: rolesData, error: rolesErr } = await supabase
-        .from("mission_roles")
-        .select("id,name,color,sort_order")
-        .is("deleted_at", null)
-        .order("sort_order", { ascending: true });
-
-      if (!rolesErr && rolesData && rolesData.length > 0) {
-        roles = rolesData.map((r) => ({
-          id: r.id,
-          name: r.name,
-          color: r.color || "#1f6fd1",
-          sort_order: r.sort_order,
-        }));
-      }
-
-      // 2. Load tasks
+      // Roles are local display metadata. The mission_roles table is retired.
       const { data: dbTasks, error: tasksErr } = await supabase
         .from("time_management_tasks")
         .select("id,title,quadrant,role_id,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,created_at,updated_at")
@@ -120,7 +103,7 @@ export const timeManagementApi = {
           baseUpdatedAt: t.updated_at ? new Date(t.updated_at).getTime() : undefined,
         }));
 
-        return { roles, tasks };
+        return { roles: DEFAULT_ROLES, tasks };
       }
     } catch (err) {
       throw err;

@@ -3,15 +3,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { habitApi } from "@/services/habitService";
 import { Habit, HabitData } from "@/types/habit";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
-import { useRealtimeQueryInvalidation } from "@/hooks/useRealtimeQueryInvalidation";
-
-export const HABITS_QUERY_KEY = ["habits"];
-const HABIT_REALTIME_TABLES = ["habits", "habit_checkins"] as const;
+import { queryKeys } from "@/lib/syncEngine";
+import { useAuth } from "@/lib/auth";
 
 export function useHabitData() {
-  useRealtimeQueryInvalidation("habits", HABIT_REALTIME_TABLES, HABITS_QUERY_KEY);
+  const { userId } = useAuth();
+  const queryKey = queryKeys.habits(userId);
   return useQuery({
-    queryKey: HABITS_QUERY_KEY,
+    queryKey,
     queryFn: () => habitApi.loadAll(),
     staleTime: 1000 * 60 * 5, // 5 mins
   });
@@ -19,6 +18,8 @@ export function useHabitData() {
 
 export function useHabitActions() {
   const queryClient = useQueryClient();
+  const { userId } = useAuth();
+  const HABITS_QUERY_KEY = queryKeys.habits(userId);
   // Create Habit Sync
   const { trigger: triggerCreate } = useOptimisticSync<HabitData, Habit>({
     queryKey: HABITS_QUERY_KEY,

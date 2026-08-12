@@ -12,7 +12,6 @@ import * as listsService from '@/services/listsService';
 import type { List, Folder, Note, NoteGroup } from '@/types/lists';
 import { getNoteGroups as selectNoteGroups, getNotesByListId as selectNotesByListId } from '@/utils/listsSelectors';
 import { useAuth } from '@/lib/auth';
-import { supabase } from '@/lib/supabase';
 
 function genId(_prefix: string): string {
   return crypto.randomUUID();
@@ -160,17 +159,6 @@ export function useListsData() {
     registerCrossWindowSync(queryClient, userId);
   }, [queryClient, userId]);
 
-  useEffect(() => {
-    const channel = supabase.channel(`lists:${userId}`);
-    for (const table of ['knowledge_bases', 'knowledge_base_folders', 'folder_note_groups', 'notes']) {
-      channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${userId}` }, () => {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId) });
-        void queryClient.invalidateQueries({ queryKey: ['lists', userId, 'contents'] });
-      });
-    }
-    channel.subscribe();
-    return () => { void supabase.removeChannel(channel); };
-  }, [queryClient, userId]);
 
   return useQuery({
     queryKey: queryKeys.lists.all(userId),

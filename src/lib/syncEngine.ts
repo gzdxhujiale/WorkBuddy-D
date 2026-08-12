@@ -3,7 +3,13 @@ export const queryKeys = {
     all: (userId: string) => ['lists', userId, 'all'] as const,
     contents: (userId: string, listId: string) => ['lists', userId, 'contents', listId] as const,
     note: (userId: string, noteId: string) => ['lists', userId, 'note', noteId] as const,
+    noteWindow: (userId: string, noteId: string) => ['lists', userId, 'note-window', noteId] as const,
   },
+  habits: (userId: string) => ['habits', userId] as const,
+  dailyReviews: (userId: string) => ['dailyReviews', userId] as const,
+  templates: (userId: string) => ['knowledge_base_templates', userId] as const,
+  timeManagement: (userId: string) => ['time-management-tasks', userId] as const,
+  focusAssistantTasks: (userId: string) => ['focus-assistant-tasks', userId] as const,
 };
 
 export const HIGH_FREQ_DELAY = 300;

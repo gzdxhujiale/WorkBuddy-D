@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useListsActions } from '@/hooks/useListsQuery';
+import { useAuth } from '@/lib/auth';
+import { queryKeys } from '@/lib/syncEngine';
 import { Note } from '@/types/lists';
 import { MoreHorizontal, Pin, Cloud, CloudOff, AlertCircle, Minus, Square, Copy, X } from 'lucide-react';
 import * as listsService from '@/services/listsService';
@@ -16,6 +18,7 @@ import { cn } from '@/lib/utils';
 
 const logWarn = console.warn;
 export function StandaloneNoteWindow() {
+  const { userId } = useAuth();
   const [noteId, setNoteId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -27,7 +30,7 @@ export function StandaloneNoteWindow() {
   }, []);
 
   const { data: noteDetail, isLoading: isLoadingDetail } = useQuery({
-    queryKey: ['lists', 'note-window', noteId],
+    queryKey: queryKeys.lists.noteWindow(userId, noteId ?? 'none'),
     queryFn: () => listsService.loadNote(noteId!),
     enabled: Boolean(noteId),
   });

@@ -11,7 +11,7 @@ import { Habit, HabitCheckIn } from "@/types/habit";
 import { useDailyReviewData } from "@/hooks/useDailyReview";
 import { DailyReviewItem } from "@/types/dailyReview";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
-import { openQuickEditWindow, requestQuickEditCloseLayer } from "@/services/quickEditWindow";
+import { openQuickEditWindow, prewarmQuickEditWindow } from "@/services/quickEditWindow";
 import { Badge } from "@/components/ui/badge";
 import { taskIntersectsDay, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
 
@@ -140,12 +140,18 @@ export const TodayPanel: React.FC = () => {
   const reviews = reviewsData ?? EMPTY_REVIEWS;
 
   const [showDone, setShowDone] = useState(false);
-  const [quickEditOpen, setQuickEditOpen] = useState(false);
   const [meterReady, setMeterReady] = useState(false);
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setMeterReady(true));
     return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // The editor is an event-only window. Warm it after the first paint so the
+  // first task click does not pay the cost of creating a new WebView.
+  useEffect(() => {
+    const timer = window.setTimeout(() => prewarmQuickEditWindow(), 500);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const [, forceTick] = React.useReducer((x: number) => x + 1, 0);
@@ -201,12 +207,11 @@ export const TodayPanel: React.FC = () => {
   );
 
   const openTaskQuickEdit = (task: Task, anchor: HTMLElement) => {
-    setQuickEditOpen(true);
     void openQuickEditWindow({
       task,
       anchorEl: anchor,
       onSave: (taskId, updates) => updateTask(taskId, updates),
-      onClosed: () => setQuickEditOpen(false),
+      onClosed: () => {},
     });
   };
 
@@ -442,7 +447,6 @@ export const TodayPanel: React.FC = () => {
         </div>
       )}
 
-      {quickEditOpen && <div className="fixed inset-0 z-40" onMouseDown={requestQuickEditCloseLayer} aria-hidden />}
     </div>
   );
 };

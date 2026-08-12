@@ -12,6 +12,8 @@ import { shouldOpenFocusAssistantOnStart } from "@/lib/preferences";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { setStorageUserId } from "@/lib/userStorage";
 import { flushOfflineQueue } from "@/lib/offlineSyncQueue";
+import { RealtimeProvider } from "@/components/RealtimeProvider";
+import { useUiStore } from "@/stores/uiStore";
 
 function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -27,6 +29,7 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       // A cache from the previous account must never render for the next one.
       queryClient.clear();
+      useUiStore.getState().setUserId(null);
       setStorageUserId(newSession?.user.id ?? null);
       setSession(newSession);
     });
@@ -79,7 +82,7 @@ function App() {
   }
 
   // 已登录，进入主应用路由
-  return <AuthProvider value={{ session, userId: session.user.id }}><RouterProvider router={router} /></AuthProvider>;
+  return <AuthProvider value={{ session, userId: session.user.id }}><RealtimeProvider><RouterProvider router={router} /></RealtimeProvider></AuthProvider>;
 }
 
 export default App;
