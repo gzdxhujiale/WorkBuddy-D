@@ -145,7 +145,7 @@ export function reorderFolders(items: Array<[string, number]>): Promise<void> {
 
 // ── Notes ────────────────────────────────────────────────────────────────────
 
-export function upsertNote(note: Note): Promise<void> {
+export function upsertNote(note: Note): Promise<number> {
   return listNotesApi.upsertNote({
     id: note.id,
     listId: note.listId,
@@ -156,6 +156,7 @@ export function upsertNote(note: Note): Promise<void> {
     sortOrder: note.sortOrder || 0,
     createdAt: note.createdAt,
     updatedAt: note.updatedAt,
+    baseUpdatedAt: note.baseUpdatedAt,
   });
 }
 

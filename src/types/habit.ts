@@ -15,6 +15,7 @@ export interface Habit {
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
+  baseUpdatedAt?: number;
 }
 
 export interface HabitCheckIn {

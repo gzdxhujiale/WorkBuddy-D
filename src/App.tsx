@@ -10,6 +10,7 @@ import { showFocusAssistant } from "@/services/focusAssistantWindow";
 import { focusAssistantApi } from "@/services/focusAssistantService";
 import { shouldOpenFocusAssistantOnStart } from "@/lib/preferences";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { setStorageUserId } from "@/lib/userStorage";
 
 function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -17,6 +18,7 @@ function App() {
   useEffect(() => {
     // 1. 获取当前会话（首次加载）
     supabase.auth.getSession().then(({ data }) => {
+      setStorageUserId(data.session?.user.id ?? null);
       setSession(data.session);
     });
 
@@ -24,6 +26,7 @@ function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       // A cache from the previous account must never render for the next one.
       queryClient.clear();
+      setStorageUserId(newSession?.user.id ?? null);
       setSession(newSession);
     });
 

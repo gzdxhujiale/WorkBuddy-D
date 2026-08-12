@@ -28,6 +28,8 @@ export interface Task {
   description?: string;
   reminder?: string;
   createdAt: number;
+  updatedAt?: number;
+  baseUpdatedAt?: number;
 }
 
 export interface TaskDraft {

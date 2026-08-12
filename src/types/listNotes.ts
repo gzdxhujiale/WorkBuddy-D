@@ -47,6 +47,7 @@ export interface ListNote {
   sortOrder: number;
   createdAt?: number;
   updatedAt?: number;
+  baseUpdatedAt?: number;
 }
 
 export interface ListTemplate {

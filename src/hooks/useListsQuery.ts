@@ -343,7 +343,17 @@ export function useListsActions(): ListsActions {
         newLists[listIndex] = { ...newLists[listIndex], itemCount: (newLists[listIndex].itemCount || 0) + 1 };
       }
       setData(queryClient, userId, () => ({ ...data, notes: [...data.notes, newNote], lists: newLists }));
-      sharedSyncEngine.schedule(`note:${newNote.id}`, () => listsService.upsertNote(newNote), LOW_FREQ_DELAY);
+      sharedSyncEngine.schedule(`note:${newNote.id}`, async () => {
+        const savedUpdatedAt = await listsService.upsertNote(newNote);
+        setData(queryClient, userId, (current) => ({
+          ...current,
+          notes: current.notes.map((item) =>
+            item.id === newNote.id && item.updatedAt === newNote.updatedAt
+              ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+              : item,
+          ),
+        }));
+      }, LOW_FREQ_DELAY);
       return newNote;
     };
 
@@ -352,11 +362,26 @@ export function useListsActions(): ListsActions {
       const index = data.notes.findIndex(n => n.id === id);
       if (index === -1) return;
       const newNotes = [...data.notes];
-      newNotes[index] = { ...newNotes[index], ...updates, updatedAt: Date.now() };
+      newNotes[index] = {
+        ...newNotes[index],
+        ...updates,
+        updatedAt: Date.now(),
+        baseUpdatedAt: newNotes[index].baseUpdatedAt,
+      };
       const note = newNotes[index];
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       broadcastNoteUpdate(id, updates);
-      sharedSyncEngine.schedule(`note:${id}`, () => listsService.upsertNote(note), HIGH_FREQ_DELAY);
+      sharedSyncEngine.schedule(`note:${id}`, async () => {
+        const savedUpdatedAt = await listsService.upsertNote(note);
+        setData(queryClient, userId, (current) => ({
+          ...current,
+          notes: current.notes.map((item) =>
+            item.id === note.id && item.updatedAt === note.updatedAt
+              ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+              : item,
+          ),
+        }));
+      }, HIGH_FREQ_DELAY);
     };
 
     const deleteNote: ListsActions['deleteNote'] = (id) => {

@@ -6,6 +6,8 @@ export interface DailyReviewItem {
   content: string; // Text or HTML/JSON content string
   createdAt: number; // Timestamp ms
   updatedAt: number; // Timestamp ms
+  /** Server version the pending edit was based on; omitted for a new review. */
+  baseUpdatedAt?: number;
 }
 
 export interface CompoundStats {

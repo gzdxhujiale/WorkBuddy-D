@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { habitApi } from "@/services/habitService";
 import { Habit, HabitData } from "@/types/habit";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
@@ -18,6 +18,7 @@ export function useHabitData() {
 }
 
 export function useHabitActions() {
+  const queryClient = useQueryClient();
   // Create Habit Sync
   const { trigger: triggerCreate } = useOptimisticSync<HabitData, Habit>({
     queryKey: HABITS_QUERY_KEY,
@@ -30,8 +31,13 @@ export function useHabitActions() {
       };
     },
     syncFn: async (newHabit) => {
-      await habitApi.createHabit(newHabit);
+      const savedUpdatedAt = await habitApi.createHabit(newHabit);
+      queryClient.setQueryData<HabitData>(HABITS_QUERY_KEY, (old) => old ? {
+        ...old, habits: old.habits.map((item) => item.id === newHabit.id && item.updatedAt === newHabit.updatedAt
+          ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt } : item),
+      } : old);
     },
+    getSyncKey: (habit) => habit.id,
   });
 
   // Update Habit Sync
@@ -43,12 +49,20 @@ export function useHabitActions() {
     debounceMs: 300,
     updateCache: (old, { id, updates }) => {
       const current = old ?? { habits: [], checkIns: [] };
-      const habits = current.habits.map((h) => (h.id === id ? { ...h, ...updates } : h));
+      const habits = current.habits.map((h) => h.id === id
+        ? { ...h, ...updates, updatedAt: Date.now(), baseUpdatedAt: h.baseUpdatedAt } : h);
       return { ...current, habits };
     },
-    syncFn: async ({ id, updates }) => {
-      await habitApi.updateHabit(id, updates);
+    syncFn: async ({ id }) => {
+      const habit = queryClient.getQueryData<HabitData>(HABITS_QUERY_KEY)?.habits.find((item) => item.id === id);
+      if (!habit) return;
+      const savedUpdatedAt = await habitApi.updateHabit(habit);
+      queryClient.setQueryData<HabitData>(HABITS_QUERY_KEY, (old) => old ? {
+        ...old, habits: old.habits.map((item) => item.id === habit.id && item.updatedAt === habit.updatedAt
+          ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt } : item),
+      } : old);
     },
+    getSyncKey: ({ id }) => id,
   });
 
   // Delete Habit Sync
@@ -65,6 +79,7 @@ export function useHabitActions() {
     syncFn: async (id) => {
       await habitApi.deleteHabit(id);
     },
+    getSyncKey: (id) => id,
   });
 
   // Toggle CheckIn Sync (0ms instant toggle)
@@ -95,6 +110,7 @@ export function useHabitActions() {
     syncFn: async ({ habitId, date, completed }) => {
       await habitApi.toggleCheckIn(habitId, date, completed);
     },
+    getSyncKey: ({ habitId, date }) => `${habitId}:${date}`,
   });
 
   const createHabit = useCallback(

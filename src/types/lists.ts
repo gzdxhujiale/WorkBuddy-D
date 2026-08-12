@@ -36,6 +36,8 @@ export interface Note {
   sortOrder?: number;
   createdAt: number;
   updatedAt: number;
+  /** Server version the pending edit was based on; omitted for a new note. */
+  baseUpdatedAt?: number;
 }
 
 export interface Template {

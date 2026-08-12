@@ -15,6 +15,7 @@ import {
   ListTemplateRow,
 } from "@/types/database";
 import { throwOnPostgrestError } from "@/lib/sync";
+import { userStorageKey } from "@/lib/userStorage";
 
 const LOCAL_STORAGE_FOLDERS_KEY = "fishbuddy_list_folders_v1";
 const LOCAL_STORAGE_LISTS_KEY = "fishbuddy_list_lists_v1";
@@ -24,11 +25,11 @@ const LOCAL_STORAGE_TEMPLATES_KEY = "fishbuddy_list_templates_v1";
 
 function getLocalData(): ListNotesData {
   try {
-    const rawFolders = localStorage.getItem(LOCAL_STORAGE_FOLDERS_KEY);
-    const rawLists = localStorage.getItem(LOCAL_STORAGE_LISTS_KEY);
-    const rawGroups = localStorage.getItem(LOCAL_STORAGE_GROUPS_KEY);
-    const rawNotes = localStorage.getItem(LOCAL_STORAGE_NOTES_KEY);
-    const rawTemplates = localStorage.getItem(LOCAL_STORAGE_TEMPLATES_KEY);
+    const rawFolders = localStorage.getItem(userStorageKey(LOCAL_STORAGE_FOLDERS_KEY));
+    const rawLists = localStorage.getItem(userStorageKey(LOCAL_STORAGE_LISTS_KEY));
+    const rawGroups = localStorage.getItem(userStorageKey(LOCAL_STORAGE_GROUPS_KEY));
+    const rawNotes = localStorage.getItem(userStorageKey(LOCAL_STORAGE_NOTES_KEY));
+    const rawTemplates = localStorage.getItem(userStorageKey(LOCAL_STORAGE_TEMPLATES_KEY));
 
     return {
       folders: rawFolders ? JSON.parse(rawFolders) : [],
@@ -51,19 +52,19 @@ function getLocalData(): ListNotesData {
 function saveLocalData(data: Partial<ListNotesData>): void {
   try {
     if (data.folders !== undefined) {
-      localStorage.setItem(LOCAL_STORAGE_FOLDERS_KEY, JSON.stringify(data.folders));
+      localStorage.setItem(userStorageKey(LOCAL_STORAGE_FOLDERS_KEY), JSON.stringify(data.folders));
     }
     if (data.lists !== undefined) {
-      localStorage.setItem(LOCAL_STORAGE_LISTS_KEY, JSON.stringify(data.lists));
+      localStorage.setItem(userStorageKey(LOCAL_STORAGE_LISTS_KEY), JSON.stringify(data.lists));
     }
     if (data.groups !== undefined) {
-      localStorage.setItem(LOCAL_STORAGE_GROUPS_KEY, JSON.stringify(data.groups));
+      localStorage.setItem(userStorageKey(LOCAL_STORAGE_GROUPS_KEY), JSON.stringify(data.groups));
     }
     if (data.notes !== undefined) {
-      localStorage.setItem(LOCAL_STORAGE_NOTES_KEY, JSON.stringify(data.notes));
+      localStorage.setItem(userStorageKey(LOCAL_STORAGE_NOTES_KEY), JSON.stringify(data.notes));
     }
     if (data.templates !== undefined) {
-      localStorage.setItem(LOCAL_STORAGE_TEMPLATES_KEY, JSON.stringify(data.templates));
+      localStorage.setItem(userStorageKey(LOCAL_STORAGE_TEMPLATES_KEY), JSON.stringify(data.templates));
     }
   } catch (e) {
     console.error("Failed to save local list notes data:", e);
@@ -156,6 +157,7 @@ export const listNotesApi = {
         sortOrder: n.sort_order,
         createdAt: n.created_at ? new Date(n.created_at).getTime() : undefined,
         updatedAt: n.updated_at ? new Date(n.updated_at).getTime() : undefined,
+        baseUpdatedAt: n.updated_at ? new Date(n.updated_at).getTime() : undefined,
       }));
 
       const templates: ListTemplate[] = (templatesRes.data || []).map((t: ListTemplateRow) => ({
@@ -187,19 +189,15 @@ export const listNotesApi = {
     }
     saveLocalData({ folders: local.folders });
 
-    try {
-      const payload = {
+    const payload = {
         id: folder.id,
         name: folder.name,
         is_pinned: folder.isPinned,
         sort_order: folder.sortOrder,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("knowledge_bases").upsert(payload);
-      if (error) console.warn("Supabase upsertFolder error:", error.message);
-    } catch (e) {
-      console.warn("Supabase upsertFolder exception:", e);
-    }
+    const { error } = await supabase.from("knowledge_bases").upsert(payload);
+    throwOnPostgrestError(error, "保存知识库");
   },
 
   deleteFolder: async (id: string): Promise<void> => {
@@ -209,10 +207,9 @@ export const listNotesApi = {
     local.lists = local.lists.map((l) => (l.folderId === id ? { ...l, folderId: undefined } : l));
     saveLocalData({ folders: local.folders, lists: local.lists });
 
-    try {
-      const now = new Date().toISOString();
+    const now = new Date().toISOString();
       // Detach lists from the folder
-      await supabase
+    const detachResult = await supabase
         .from("knowledge_base_folders")
         .update({ knowledge_base_id: null, updated_at: now })
         .eq("knowledge_base_id", id)
@@ -221,10 +218,7 @@ export const listNotesApi = {
         .from("knowledge_bases")
         .update({ deleted_at: now })
         .eq("id", id);
-      if (error) console.warn("Supabase deleteFolder error:", error.message);
-    } catch (e) {
-      console.warn("Supabase deleteFolder exception:", e);
-    }
+    throwOnPostgrestError(detachResult.error || error, "删除知识库");
   },
 
   // 3. 清单 CRUD
@@ -238,8 +232,7 @@ export const listNotesApi = {
     }
     saveLocalData({ lists: local.lists });
 
-    try {
-      const payload = {
+    const payload = {
         id: list.id,
         knowledge_base_id: list.folderId || null,
         name: list.name,
@@ -250,11 +243,8 @@ export const listNotesApi = {
         sort_order: list.sortOrder,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("knowledge_base_folders").upsert(payload);
-      if (error) console.warn("Supabase upsertList error:", error.message);
-    } catch (e) {
-      console.warn("Supabase upsertList exception:", e);
-    }
+    const { error } = await supabase.from("knowledge_base_folders").upsert(payload);
+    throwOnPostgrestError(error, "保存清单");
   },
 
   deleteList: async (id: string): Promise<void> => {
@@ -265,18 +255,14 @@ export const listNotesApi = {
     local.groups = local.groups.filter((g) => g.listId !== id);
     saveLocalData({ lists: local.lists, notes: local.notes, groups: local.groups });
 
-    try {
-      const now = new Date().toISOString();
+    const now = new Date().toISOString();
       // Database trigger cascade_soft_delete_list() handles cascading soft-delete
       // of associated notes and groups automatically
       const { error } = await supabase
         .from("knowledge_base_folders")
         .update({ deleted_at: now })
         .eq("id", id);
-      if (error) console.warn("Supabase deleteList error:", error.message);
-    } catch (e) {
-      console.warn("Supabase deleteList exception:", e);
-    }
+    throwOnPostgrestError(error, "删除清单");
   },
 
   // 4. 分组 CRUD
@@ -290,19 +276,15 @@ export const listNotesApi = {
     }
     saveLocalData({ groups: local.groups });
 
-    try {
-      const payload = {
+    const payload = {
         id: group.id,
         folder_id: group.listId,
         name: group.name,
         sort_order: group.sortOrder,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("folder_note_groups").upsert(payload);
-      if (error) console.warn("Supabase upsertGroup error:", error.message);
-    } catch (e) {
-      console.warn("Supabase upsertGroup exception:", e);
-    }
+    const { error } = await supabase.from("folder_note_groups").upsert(payload);
+    throwOnPostgrestError(error, "保存分组");
   },
 
   deleteGroup: async (id: string): Promise<void> => {
@@ -310,19 +292,15 @@ export const listNotesApi = {
     local.groups = local.groups.filter((g) => g.id !== id);
     saveLocalData({ groups: local.groups });
 
-    try {
-      const { error } = await supabase
+    const { error } = await supabase
         .from("folder_note_groups")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id);
-      if (error) console.warn("Supabase deleteGroup error:", error.message);
-    } catch (e) {
-      console.warn("Supabase deleteGroup exception:", e);
-    }
+    throwOnPostgrestError(error, "删除分组");
   },
 
   // 5. 笔记/条目 CRUD
-  upsertNote: async (note: ListNote): Promise<void> => {
+  upsertNote: async (note: ListNote): Promise<number> => {
     const local = getLocalData();
     const idx = local.notes.findIndex((n) => n.id === note.id);
     if (idx >= 0) {
@@ -332,22 +310,20 @@ export const listNotesApi = {
     }
     saveLocalData({ notes: local.notes });
 
-    try {
-      const payload = {
-        id: note.id,
-        folder_id: note.listId,
-        group_id: note.groupId || null,
-        title: note.title,
-        content: note.content,
-        is_pinned: note.isPinned,
-        sort_order: note.sortOrder,
-        updated_at: new Date().toISOString(),
-      };
-      const { error } = await supabase.from("notes").upsert(payload);
-      if (error) console.warn("Supabase upsertNote error:", error.message);
-    } catch (e) {
-      console.warn("Supabase upsertNote exception:", e);
-    }
+    const { data, error } = await supabase.rpc("save_note", {
+      p_id: note.id,
+      p_folder_id: note.listId,
+      p_group_id: note.groupId || null,
+      p_title: note.title,
+      p_content: note.content,
+      p_is_pinned: note.isPinned,
+      p_sort_order: note.sortOrder,
+      p_created_at: note.createdAt ? new Date(note.createdAt).toISOString() : new Date().toISOString(),
+      p_expected_updated_at: note.baseUpdatedAt ? new Date(note.baseUpdatedAt).toISOString() : null,
+      p_next_updated_at: new Date(note.updatedAt ?? Date.now()).toISOString(),
+    });
+    throwOnPostgrestError(error, "保存笔记");
+    return new Date(data as string).getTime();
   },
 
   deleteNote: async (id: string): Promise<void> => {
@@ -355,15 +331,11 @@ export const listNotesApi = {
     local.notes = local.notes.filter((n) => n.id !== id);
     saveLocalData({ notes: local.notes });
 
-    try {
-      const { error } = await supabase
+    const { error } = await supabase
         .from("notes")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id);
-      if (error) console.warn("Supabase deleteNote error:", error.message);
-    } catch (e) {
-      console.warn("Supabase deleteNote exception:", e);
-    }
+    throwOnPostgrestError(error, "删除笔记");
   },
 
   // 6. 模板 CRUD
@@ -377,18 +349,14 @@ export const listNotesApi = {
     }
     saveLocalData({ templates: local.templates });
 
-    try {
-      const payload = {
+    const payload = {
         id: template.id,
         name: template.name,
         content: template.content,
         updated_at: new Date().toISOString(),
       };
-      const { error } = await supabase.from("knowledge_base_templates").upsert(payload);
-      if (error) console.warn("Supabase upsertTemplate error:", error.message);
-    } catch (e) {
-      console.warn("Supabase upsertTemplate exception:", e);
-    }
+    const { error } = await supabase.from("knowledge_base_templates").upsert(payload);
+    throwOnPostgrestError(error, "保存模板");
   },
 
   deleteTemplate: async (id: string): Promise<void> => {
@@ -396,15 +364,11 @@ export const listNotesApi = {
     local.templates = local.templates.filter((t) => t.id !== id);
     saveLocalData({ templates: local.templates });
 
-    try {
-      const { error } = await supabase
+    const { error } = await supabase
         .from("knowledge_base_templates")
         .update({ deleted_at: new Date().toISOString() })
         .eq("id", id);
-      if (error) console.warn("Supabase deleteTemplate error:", error.message);
-    } catch (e) {
-      console.warn("Supabase deleteTemplate exception:", e);
-    }
+    throwOnPostgrestError(error, "删除模板");
   },
 
   // 7. 排序与移动 Helper 方法
@@ -440,18 +404,15 @@ export const listNotesApi = {
       saveLocalData({ lists: local.lists });
     }
 
-    try {
-      await supabase
-        .from("knowledge_base_folders")
-        .update({
-          knowledge_base_id: folderId,
-          sort_order: sortOrder,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", listId);
-    } catch (e) {
-      console.warn("Supabase moveList exception:", e);
-    }
+    const { error } = await supabase
+      .from("knowledge_base_folders")
+      .update({
+        knowledge_base_id: folderId,
+        sort_order: sortOrder,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", listId);
+    throwOnPostgrestError(error, "移动清单");
   },
 
   reorderNotes: async (items: Array<[string, number]>): Promise<void> => {
@@ -484,18 +445,15 @@ export const listNotesApi = {
       saveLocalData({ notes: local.notes });
     }
 
-    try {
-      await supabase
-        .from("notes")
-        .update({
-          folder_id: listId,
-          group_id: groupId,
-          sort_order: sortOrder,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", noteId);
-    } catch (e) {
-      console.warn("Supabase moveNote exception:", e);
-    }
+    const { error } = await supabase
+      .from("notes")
+      .update({
+        folder_id: listId,
+        group_id: groupId,
+        sort_order: sortOrder,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", noteId);
+    throwOnPostgrestError(error, "移动笔记");
   },
 };

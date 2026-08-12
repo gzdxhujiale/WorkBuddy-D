@@ -2,12 +2,16 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { AuthProvider } from "@/lib/auth";
+import { setStorageUserId } from "@/lib/userStorage";
 
 export function WindowSessionGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    void supabase.auth.getSession().then(({ data }) => {
+      setStorageUserId(data.session?.user.id ?? null);
+      setSession(data.session);
+    });
   }, []);
 
   if (session === undefined) return <WindowMessage message="正在验证登录状态…" />;

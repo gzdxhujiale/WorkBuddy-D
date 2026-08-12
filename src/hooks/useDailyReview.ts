@@ -55,8 +55,16 @@ export function useReviewActions() {
       return [...list, review];
     },
     syncFn: async (review) => {
-      await dailyReviewApi.upsertReview(review);
+      const savedUpdatedAt = await dailyReviewApi.upsertReview(review);
+      queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
+        old?.map((item) =>
+          item.id === review.id && item.updatedAt === review.updatedAt
+            ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+            : item,
+        ) ?? old,
+      );
     },
+    getSyncKey: (review) => review.date,
   });
 
   // Delete Sync Hook (instant deletion)
@@ -70,6 +78,7 @@ export function useReviewActions() {
     syncFn: async (id) => {
       await dailyReviewApi.deleteReview(id);
     },
+    getSyncKey: (id) => id,
   });
 
   const saveReview = useCallback(
@@ -90,6 +99,7 @@ export function useReviewActions() {
             ...existing,
             content,
             updatedAt: Date.now(),
+            baseUpdatedAt: existing.baseUpdatedAt,
           }
         : {
             id: crypto.randomUUID(),

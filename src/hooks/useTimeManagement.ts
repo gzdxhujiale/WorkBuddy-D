@@ -39,8 +39,14 @@ export function useTaskActions() {
       return { ...current, tasks: nextTasks };
     },
     syncFn: async (task) => {
-      await timeManagementApi.upsertTask(task);
+      const savedUpdatedAt = await timeManagementApi.upsertTask(task);
+      queryClient.setQueryData<TimeManagementData>(QUERY_KEY, (old) => old ? {
+        ...old,
+        tasks: old.tasks.map((item) => item.id === task.id && item.updatedAt === task.updatedAt
+          ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt } : item),
+      } : old);
     },
+    getSyncKey: (task) => task.id,
   });
 
   // Delete Sync
@@ -57,6 +63,7 @@ export function useTaskActions() {
     syncFn: async (taskId) => {
       await timeManagementApi.deleteTask(taskId);
     },
+    getSyncKey: (taskId) => taskId,
   });
 
   const addTask = useCallback(
@@ -72,6 +79,7 @@ export function useTaskActions() {
         roleId,
         completed: false,
         createdAt: Date.now(),
+        updatedAt: Date.now(),
       };
 
       triggerUpsert(newTask);
@@ -91,7 +99,7 @@ export function useTaskActions() {
       const current = old ?? { roles: [], tasks: [] };
       const tasks = current.tasks.map((t) => {
         if (t.id !== taskId) return t;
-        return { ...t, ...updates };
+        return { ...t, ...updates, updatedAt: Date.now(), baseUpdatedAt: t.baseUpdatedAt };
       });
       return { ...current, tasks };
     },
@@ -102,6 +110,7 @@ export function useTaskActions() {
         await timeManagementApi.upsertTask(target);
       }
     },
+    getSyncKey: ({ taskId }) => taskId,
   });
 
   const updateTask = useCallback(

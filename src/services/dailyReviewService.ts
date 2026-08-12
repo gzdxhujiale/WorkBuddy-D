@@ -2,12 +2,13 @@ import { supabase } from "@/lib/supabase";
 import { DailyReviewItem } from "@/types/dailyReview";
 import { DailyReviewRow } from "@/types/database";
 import { throwOnPostgrestError } from "@/lib/sync";
+import { userStorageKey } from "@/lib/userStorage";
 
 const LOCAL_STORAGE_KEY = "fishbuddy_daily_reviews_v1";
 
 function getLocalReviews(): DailyReviewItem[] {
   try {
-    const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+    const raw = localStorage.getItem(userStorageKey(LOCAL_STORAGE_KEY));
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -16,7 +17,7 @@ function getLocalReviews(): DailyReviewItem[] {
 
 function saveLocalReviews(reviews: DailyReviewItem[]): void {
   try {
-    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(reviews));
+    localStorage.setItem(userStorageKey(LOCAL_STORAGE_KEY), JSON.stringify(reviews));
   } catch (e) {
     console.error("Failed to save local daily reviews:", e);
   }
@@ -50,6 +51,7 @@ export const dailyReviewApi = {
             content: contentStr,
             createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
             updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : Date.now(),
+            baseUpdatedAt: r.updated_at ? new Date(r.updated_at).getTime() : undefined,
           };
         });
 
@@ -88,6 +90,7 @@ export const dailyReviewApi = {
           content: contentStr,
           createdAt: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
           updatedAt: data.updated_at ? new Date(data.updated_at).getTime() : Date.now(),
+          baseUpdatedAt: data.updated_at ? new Date(data.updated_at).getTime() : undefined,
         };
         return review;
       }
@@ -98,7 +101,7 @@ export const dailyReviewApi = {
     return localMatch || null;
   },
 
-  upsertReview: async (review: DailyReviewItem): Promise<void> => {
+  upsertReview: async (review: DailyReviewItem): Promise<number> => {
     // 1. Immediate local storage optimistic update
     const current = getLocalReviews();
     const idx = current.findIndex((r) => r.id === review.id || r.date === review.date);
@@ -109,26 +112,16 @@ export const dailyReviewApi = {
     }
     saveLocalReviews(current);
 
-    // 2. Sync to Supabase
-    try {
-      const payload = {
-        id: review.id || undefined,
-        date: review.date,
-        content: { text: review.content },
-        created_at: review.createdAt ? new Date(review.createdAt).toISOString() : new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      };
-
-      const { error } = await supabase.from("daily_reviews").upsert(payload, {
-        onConflict: "user_id,date",
-      });
-
-      if (error) {
-        console.warn("Supabase upsert daily review warning:", error.message);
-      }
-    } catch (e) {
-      console.warn("Supabase daily review save exception:", e);
-    }
+    const { data, error } = await supabase.rpc("save_daily_review", {
+      p_id: review.id,
+      p_date: review.date,
+      p_content: { text: review.content },
+      p_created_at: new Date(review.createdAt).toISOString(),
+      p_expected_updated_at: review.baseUpdatedAt ? new Date(review.baseUpdatedAt).toISOString() : null,
+      p_next_updated_at: new Date(review.updatedAt).toISOString(),
+    });
+    throwOnPostgrestError(error, "保存每日复盘");
+    return new Date(data as string).getTime();
   },
 
   deleteReview: async (id: string): Promise<void> => {
