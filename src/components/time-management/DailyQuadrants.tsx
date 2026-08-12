@@ -1,7 +1,6 @@
 import React, { useState, memo } from "react";
 import { Plus, CheckCircle2, Circle, AlignLeft, X, ChevronDown, ChevronRight } from "lucide-react";
-import { Task, QuadrantType, Role } from "@/types/timeManagement";
-import { Badge } from "@/components/ui/badge";
+import { Task, QuadrantType } from "@/types/timeManagement";
 import { Button } from "@/components/ui/button";
 
 interface CollapsibleGroupProps {
@@ -67,7 +66,6 @@ const CollapsibleGroup: React.FC<CollapsibleGroupProps> = memo(
 
 export interface DailyQuadrantsProps {
   tasks: Task[];
-  roles?: Role[];
   onToggleComplete: (taskId: string) => void;
   onCreateTask: (quadrant: QuadrantType, anchorEl?: HTMLElement) => void;
   hideCompleted: boolean;
@@ -166,7 +164,6 @@ function getDefaultScheduleEndForGroup(groupName: string, now: number): number |
 export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
   ({
     tasks,
-    roles = [],
     onToggleComplete,
     onCreateTask,
     hideCompleted,
@@ -317,17 +314,12 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
       });
     };
 
-    const roleMap = React.useMemo(() => {
-      return new Map((roles || []).map((r) => [r.id, r]));
-    }, [roles]);
-
     const renderTasks = (taskList: Task[], iconTextClass: string) => {
       const now = Date.now();
       return taskList.map((task) => {
         const isHovered = dragOverTaskId === task.id;
         const isExpired = task.scheduledEndAt && task.scheduledEndAt < now && !task.completed;
         const hasContent = Boolean(task.description && task.description.trim());
-        const role = task.roleId ? roleMap.get(task.roleId) : undefined;
 
         return (
           <div
@@ -368,11 +360,6 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
                 {task.title}
               </span>
 
-              {role && (
-                <Badge variant="q2" size="sm" className="flex-shrink-0">
-                  {role.name}
-                </Badge>
-              )}
 
               {isExpired && (
                 <button

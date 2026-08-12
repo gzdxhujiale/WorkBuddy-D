@@ -1,0 +1,105 @@
+-- RPCs used by the client. Keep these SECURITY INVOKER so RLS applies.
+create or replace function public.save_time_management_task(
+  p_id uuid, p_title text, p_quadrant text, p_schedule_mode text,
+  p_scheduled_start_at timestamptz, p_scheduled_end_at timestamptz,
+  p_completed boolean, p_completed_at timestamptz, p_description text,
+  p_reminder jsonb, p_created_at timestamptz,
+  p_expected_updated_at timestamptz, p_next_updated_at timestamptz
+) returns timestamptz language plpgsql security invoker set search_path=public as $$
+declare saved_at timestamptz;
+begin
+  if p_expected_updated_at is null then
+    insert into public.time_management_tasks
+      (id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,created_at,updated_at)
+    values
+      (p_id,p_title,p_quadrant,p_schedule_mode,p_scheduled_start_at,p_scheduled_end_at,p_completed,p_completed_at,p_description,p_reminder,p_created_at,p_next_updated_at)
+    on conflict (id) do nothing returning updated_at into saved_at;
+  else
+    update public.time_management_tasks
+       set title=p_title, quadrant=p_quadrant, schedule_mode=p_schedule_mode,
+           scheduled_start_at=p_scheduled_start_at, scheduled_end_at=p_scheduled_end_at,
+           completed=p_completed, completed_at=p_completed_at, description=p_description,
+           reminder=p_reminder, updated_at=p_next_updated_at
+     where id=p_id and user_id=(select auth.uid()) and deleted_at is null
+       and date_trunc('milliseconds',updated_at)=date_trunc('milliseconds',p_expected_updated_at)
+     returning updated_at into saved_at;
+  end if;
+  if saved_at is null then raise exception 'VERSION_CONFLICT' using errcode='40001'; end if;
+  return saved_at;
+end; $$;
+
+create or replace function public.save_daily_review(
+  p_id uuid,p_date date,p_content jsonb,p_created_at timestamptz,
+  p_expected_updated_at timestamptz,p_next_updated_at timestamptz
+) returns timestamptz language plpgsql security invoker set search_path=public as $$
+declare saved_at timestamptz;
+begin
+  if p_expected_updated_at is null then
+    insert into public.daily_reviews(id,date,content,created_at,updated_at)
+    values(p_id,p_date,p_content,p_created_at,p_next_updated_at)
+    on conflict (user_id,date) do nothing returning updated_at into saved_at;
+  else
+    update public.daily_reviews set content=p_content,updated_at=p_next_updated_at
+     where id=p_id and user_id=(select auth.uid())
+       and date_trunc('milliseconds',updated_at)=date_trunc('milliseconds',p_expected_updated_at)
+     returning updated_at into saved_at;
+  end if;
+  if saved_at is null then raise exception 'VERSION_CONFLICT' using errcode='40001'; end if;
+  return saved_at;
+end; $$;
+
+create or replace function public.save_habit(
+  p_id uuid,p_name text,p_frequency_type text,p_frequency_days integer[],p_goal text,
+  p_start_date date,p_duration text,p_category text,p_reminder text,p_auto_popup_log boolean,
+  p_sort_order integer,p_created_at timestamptz,p_expected_updated_at timestamptz,p_next_updated_at timestamptz
+) returns timestamptz language plpgsql security invoker set search_path=public as $$
+declare saved_at timestamptz;
+begin
+  if p_expected_updated_at is null then
+    insert into public.habits(id,name,frequency_type,frequency_days,goal,start_date,duration,category,reminder,auto_popup_log,sort_order,created_at,updated_at)
+    values(p_id,p_name,p_frequency_type,p_frequency_days,p_goal,p_start_date,p_duration,p_category,p_reminder,p_auto_popup_log,p_sort_order,p_created_at,p_next_updated_at)
+    on conflict(id) do nothing returning updated_at into saved_at;
+  else
+    update public.habits set name=p_name,frequency_type=p_frequency_type,frequency_days=p_frequency_days,goal=p_goal,start_date=p_start_date,duration=p_duration,category=p_category,reminder=p_reminder,auto_popup_log=p_auto_popup_log,sort_order=p_sort_order,updated_at=p_next_updated_at
+     where id=p_id and user_id=(select auth.uid()) and deleted_at is null and date_trunc('milliseconds',updated_at)=date_trunc('milliseconds',p_expected_updated_at)
+     returning updated_at into saved_at;
+  end if;
+  if saved_at is null then raise exception 'VERSION_CONFLICT' using errcode='40001'; end if;
+  return saved_at;
+end; $$;
+
+create or replace function public.save_note(
+  p_id uuid,p_folder_id uuid,p_group_id uuid,p_title text,p_content text,p_is_pinned boolean,
+  p_sort_order integer,p_created_at timestamptz,p_expected_updated_at timestamptz,p_next_updated_at timestamptz
+) returns timestamptz language plpgsql security invoker set search_path=public as $$
+declare saved_at timestamptz;
+begin
+  if p_expected_updated_at is null then
+    insert into public.notes(id,folder_id,group_id,title,content,is_pinned,sort_order,created_at,updated_at)
+    values(p_id,p_folder_id,p_group_id,p_title,p_content,p_is_pinned,p_sort_order,p_created_at,p_next_updated_at)
+    on conflict(id) do nothing returning updated_at into saved_at;
+  else
+    update public.notes set folder_id=p_folder_id,group_id=p_group_id,title=p_title,content=p_content,is_pinned=p_is_pinned,sort_order=p_sort_order,updated_at=p_next_updated_at
+     where id=p_id and user_id=(select auth.uid()) and deleted_at is null and date_trunc('milliseconds',updated_at)=date_trunc('milliseconds',p_expected_updated_at)
+     returning updated_at into saved_at;
+  end if;
+  if saved_at is null then raise exception 'VERSION_CONFLICT' using errcode='40001'; end if;
+  return saved_at;
+end; $$;
+
+create or replace function public.reorder_notes(p_items jsonb) returns void language plpgsql security invoker set search_path=public as $$ begin
+  update public.notes n set sort_order=x.sort_order from jsonb_to_recordset(p_items) x(id uuid,sort_order integer) where n.id=x.id and n.user_id=(select auth.uid()) and n.deleted_at is null;
+end; $$;
+create or replace function public.reorder_knowledge_base_folders(p_items jsonb) returns void language plpgsql security invoker set search_path=public as $$ begin
+  update public.knowledge_base_folders f set sort_order=x.sort_order from jsonb_to_recordset(p_items) x(id uuid,sort_order integer) where f.id=x.id and f.user_id=(select auth.uid()) and f.deleted_at is null;
+end; $$;
+create or replace function public.reorder_knowledge_bases(p_items jsonb) returns void language plpgsql security invoker set search_path=public as $$ begin
+  update public.knowledge_bases b set sort_order=x.sort_order from jsonb_to_recordset(p_items) x(id uuid,sort_order integer) where b.id=x.id and b.user_id=(select auth.uid()) and b.deleted_at is null;
+end; $$;
+
+do $$ declare fn record; begin
+  for fn in select p.oid::regprocedure signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.proname in ('save_time_management_task','save_daily_review','save_habit','save_note','reorder_notes','reorder_knowledge_base_folders','reorder_knowledge_bases') loop
+    execute format('revoke execute on function %s from public, anon',fn.signature);
+    execute format('grant execute on function %s to authenticated',fn.signature);
+  end loop;
+end $$;

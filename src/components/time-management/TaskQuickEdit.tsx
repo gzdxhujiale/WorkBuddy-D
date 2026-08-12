@@ -90,7 +90,6 @@ interface TaskQuickEditPopoverProps {
   task?: Task;
   quadrant?: QuadrantType;
   anchorRect?: AnchorRect;
-  roles?: unknown[];
   onSave?: (taskId: string, updates: Partial<Task>, isHighFreq?: boolean) => void;
   onCreate?: (draft: TaskDraft) => void;
   onDelete?: (taskId: string) => void;

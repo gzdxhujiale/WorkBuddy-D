@@ -12,20 +12,9 @@ export interface ReminderConfig {
   [key: string]: unknown;
 }
 
-export interface MissionRole {
-  id: string;
-  user_id: string;
-  name: string;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
-  deleted_at: string | null;
-}
-
 export interface TimeManagementTask {
   id: string;
   user_id: string;
-  role_id: string | null;
   title: string;
   quadrant: QuadrantType;
   schedule_mode: 'point' | 'range' | null;
@@ -260,6 +249,28 @@ export type InsertListTemplate = Omit<
 };
 
 export type UpdateListTemplate = Partial<InsertListTemplate>;
+
+// Supabase client contract. Domain row types above remain the source of truth
+// for UI code; this schema keeps table/RPC calls type-safe enough until fully
+// generated Supabase types are checked in.
+type AnyTable = {
+  Row: Record<string, any>;
+  Insert: Record<string, any>;
+  Update: Record<string, any>;
+  Relationships: [];
+};
+
+export type Database = {
+  public: {
+    Tables: { [table: string]: AnyTable };
+    Views: { [view: string]: never };
+    Functions: {
+      [functionName: string]: { Args: Record<string, any>; Returns: any };
+    };
+    Enums: { [enumName: string]: string };
+    CompositeTypes: { [typeName: string]: never };
+  };
+};
 
 
 

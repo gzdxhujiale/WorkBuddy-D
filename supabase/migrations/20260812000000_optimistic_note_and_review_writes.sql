@@ -47,7 +47,7 @@ end;
 $$;
 
 create or replace function public.save_time_management_task(
-  p_id uuid, p_title text, p_quadrant text, p_role_id uuid, p_schedule_mode text,
+  p_id uuid, p_title text, p_quadrant text, p_schedule_mode text,
   p_scheduled_start_at timestamptz, p_scheduled_end_at timestamptz, p_completed boolean,
   p_completed_at timestamptz, p_description text, p_reminder jsonb, p_created_at timestamptz,
   p_expected_updated_at timestamptz, p_next_updated_at timestamptz
@@ -55,11 +55,11 @@ create or replace function public.save_time_management_task(
 declare saved_at timestamptz;
 begin
   if p_expected_updated_at is null then
-    insert into public.time_management_tasks (id, title, quadrant, role_id, schedule_mode, scheduled_start_at, scheduled_end_at, completed, completed_at, description, reminder, created_at, updated_at)
-    values (p_id, p_title, p_quadrant, p_role_id, p_schedule_mode, p_scheduled_start_at, p_scheduled_end_at, p_completed, p_completed_at, p_description, p_reminder, p_created_at, p_next_updated_at)
+    insert into public.time_management_tasks (id, title, quadrant, schedule_mode, scheduled_start_at, scheduled_end_at, completed, completed_at, description, reminder, created_at, updated_at)
+    values (p_id, p_title, p_quadrant, p_schedule_mode, p_scheduled_start_at, p_scheduled_end_at, p_completed, p_completed_at, p_description, p_reminder, p_created_at, p_next_updated_at)
     on conflict (id) do nothing returning updated_at into saved_at;
   else
-    update public.time_management_tasks set title = p_title, quadrant = p_quadrant, role_id = p_role_id,
+    update public.time_management_tasks set title = p_title, quadrant = p_quadrant,
       schedule_mode = p_schedule_mode, scheduled_start_at = p_scheduled_start_at, scheduled_end_at = p_scheduled_end_at,
       completed = p_completed, completed_at = p_completed_at, description = p_description, reminder = p_reminder,
       updated_at = p_next_updated_at

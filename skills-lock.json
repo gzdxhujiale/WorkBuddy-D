@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "arco-design": {
+      "source": "arco-design/arco-design-skill",
+      "sourceType": "github",
+      "skillPath": "skills/arco-design/SKILL.md",
+      "computedHash": "9be482cfa389f462897f6492d66ef48dff7a004c5b73014da5af002f8e2636e9"
+    },
     "deploy-to-vercel": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",

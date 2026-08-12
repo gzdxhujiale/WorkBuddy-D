@@ -174,18 +174,8 @@ export const listNotesApi = {
   },
 
   deleteFolder: async (id: string): Promise<void> => {
-    const now = new Date().toISOString();
-      // Detach lists from the folder
-    const detachResult = await supabase
-        .from("knowledge_base_folders")
-        .update({ knowledge_base_id: null, updated_at: now })
-        .eq("knowledge_base_id", id)
-        .is("deleted_at", null);
-      const { error } = await supabase
-        .from("knowledge_bases")
-        .update({ deleted_at: now })
-        .eq("id", id);
-    throwOnPostgrestError(detachResult.error || error, "删除知识库");
+    const { error } = await supabase.rpc("soft_delete_knowledge_base", { p_id: id });
+    throwOnPostgrestError(error, "删除知识库");
   },
 
   // 3. 清单 CRUD
@@ -206,13 +196,7 @@ export const listNotesApi = {
   },
 
   deleteList: async (id: string): Promise<void> => {
-    const now = new Date().toISOString();
-      // Database trigger cascade_soft_delete_list() handles cascading soft-delete
-      // of associated notes and groups automatically
-      const { error } = await supabase
-        .from("knowledge_base_folders")
-        .update({ deleted_at: now })
-        .eq("id", id);
+      const { error } = await supabase.rpc("soft_delete_knowledge_base_folder", { p_id: id });
     throwOnPostgrestError(error, "删除清单");
   },
 

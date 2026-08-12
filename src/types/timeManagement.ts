@@ -1,13 +1,6 @@
 export type QuadrantType = 'Q1' | 'Q2' | 'Q3' | 'Q4';
 export type ScheduleMode = 'point' | 'range';
 
-export interface Role {
-  id: string;
-  name: string;
-  color?: string;
-  sort_order?: number;
-}
-
 export interface TaskReminder {
   offsetDays: number;
   time: string;
@@ -18,7 +11,6 @@ export interface Task {
   id: string;
   title: string;
   quadrant: QuadrantType;
-  roleId?: string;
   /** 单个截止时间（point）或时间段结束时间（range）。 */
   scheduleMode?: ScheduleMode;
   scheduledStartAt?: number;
@@ -39,11 +31,9 @@ export interface TaskDraft {
   scheduledStartAt?: number;
   scheduledEndAt?: number;
   reminder?: string;
-  roleId?: string;
 }
 
 export interface TimeManagementData {
-  roles: Role[];
   tasks: Task[];
 }
 

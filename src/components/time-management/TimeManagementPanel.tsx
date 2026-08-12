@@ -11,7 +11,6 @@ import {
   CheckCircle2,
   Circle,
   Clock,
-  Tag,
   Timer,
 } from "lucide-react";
 import { useTimeManagementData, useTaskActions } from "@/hooks/useTimeManagement";
@@ -41,7 +40,6 @@ export const TimeManagementPanel: React.FC = () => {
   const [quadrantFilter, setQuadrantFilter] = useState<string>("ALL");
 
   const { data: tmData } = useTimeManagementData();
-  const roles = tmData?.roles ?? [];
   const tasks = tmData?.tasks ?? [];
 
   const { addTask, updateTask, deleteTask } = useTaskActions();
@@ -51,8 +49,6 @@ export const TimeManagementPanel: React.FC = () => {
     tasksRef.current = tasks;
   }, [tasks]);
 
-  // The editor window is created only when a user opens it. Prewarming it on
-  // startup creates a second independent webview and duplicates data loading.
   useEffect(() => {
     const cleanup = startTaskReminderScheduler(() => tasksRef.current);
     return cleanup;
@@ -75,8 +71,7 @@ export const TimeManagementPanel: React.FC = () => {
       onCreate: (targetQ, draft) => {
         const newTask = addTask(
           draft.title,
-          targetQ,
-          draft.roleId
+          targetQ
         );
         const fallbackEndAt = initialDate
           ? new Date(`${initialDate}T23:59:59.999`).getTime()
@@ -357,7 +352,6 @@ export const TimeManagementPanel: React.FC = () => {
         {activeView === "quadrant" ? (
           <DailyQuadrants
             tasks={filteredTasks}
-            roles={roles}
             onToggleComplete={handleToggleComplete}
             onCreateTask={(quadrant, anchorEl) =>
               handleOpenTaskEditor(undefined, quadrant, anchorEl)
@@ -408,7 +402,6 @@ export const TimeManagementPanel: React.FC = () => {
                   <DayView
                     currentDate={currentDate}
                     tasks={filteredTasks}
-                    roles={roles}
                     onToggleComplete={handleToggleComplete}
                     onSelectTask={(t, anchorEl) =>
                       handleOpenTaskEditor(t, t.quadrant, anchorEl)
@@ -422,7 +415,6 @@ export const TimeManagementPanel: React.FC = () => {
                   <WeekView
                     currentDate={currentDate}
                     tasks={filteredTasks}
-                    roles={roles}
                     onSelectDate={(d) => setCurrentDate(d)}
                     onSelectTask={(t, anchorEl) =>
                       handleOpenTaskEditor(t, t.quadrant, anchorEl)
@@ -436,7 +428,6 @@ export const TimeManagementPanel: React.FC = () => {
                   <MonthView
                     currentDate={currentDate}
                     tasks={filteredTasks}
-                    roles={roles}
                     onSelectDay={(d) => {
                       setCurrentDate(d);
                       setActiveView("day");
@@ -485,7 +476,6 @@ export const TimeManagementPanel: React.FC = () => {
                   </div>
                 ) : (
                   periodTasks.map((t) => {
-                    const role = roles.find((r) => r.id === t.roleId);
                     return (
                       <div
                         key={t.id}
@@ -557,15 +547,6 @@ export const TimeManagementPanel: React.FC = () => {
                             </span>
                           )}
 
-                          {role && (
-                            <span
-                              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium text-white shadow-2xs ml-auto"
-                              style={{ backgroundColor: role.color || "#3b82f6" }}
-                            >
-                              <Tag size={10} />
-                              {role.name}
-                            </span>
-                          )}
                         </div>
                       </div>
                     );

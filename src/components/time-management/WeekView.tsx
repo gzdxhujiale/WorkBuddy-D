@@ -1,11 +1,10 @@
 import React, { useMemo } from "react";
-import { Task, Role, QuadrantType } from "@/types/timeManagement";
+import { Task, QuadrantType } from "@/types/timeManagement";
 import { getTaskEndAt, getTaskStartAt, taskIntersectsDay, taskTimeLabel } from "@/lib/taskSchedule";
 
 interface WeekViewProps {
   currentDate: Date;
   tasks: Task[];
-  roles?: Role[];
   onSelectDate: (date: Date) => void;
   onSelectTask: (task: Task, anchorEl?: HTMLElement) => void;
   onCreateTask: (quadrant?: QuadrantType, initialDate?: string) => void;
@@ -17,7 +16,6 @@ const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 export const WeekView: React.FC<WeekViewProps> = ({
   currentDate,
   tasks,
-  roles = [],
   onSelectDate,
   onSelectTask,
   onCreateTask,
@@ -40,11 +38,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
-  };
-
-  const getRoleColor = (roleId?: string) => {
-    if (!roleId) return null;
-    return roles.find((r) => r.id === roleId)?.color;
   };
 
   const taskDisplayHour = (task: Task, date: Date): number | undefined => {
@@ -126,7 +119,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
                     )}
 
                     {cellTasks.map((t) => {
-                      const roleColor = getRoleColor(t.roleId);
                       return (
                         <div
                           key={t.id}
@@ -146,12 +138,6 @@ export const WeekView: React.FC<WeekViewProps> = ({
                               : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                           }`}
                         >
-                          {roleColor && (
-                            <span
-                              className="size-1.5 rounded-full shrink-0"
-                              style={{ backgroundColor: roleColor }}
-                            />
-                          )}
                           <span className="truncate">{t.title}</span>
                           {t.scheduleMode === "range" && (
                             <span className="ml-auto text-[9px] tabular-nums opacity-80 shrink-0">

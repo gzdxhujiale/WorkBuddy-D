@@ -36,12 +36,8 @@ registerOfflineExecutor("habit:save", async (payload) => {
 });
 registerOfflineExecutor("habit:delete", async (payload) => {
   const id = payload as string;
-  const nowStr = new Date().toISOString();
-  const [habitResult, checkInResult] = await Promise.all([
-    supabase.from("habits").update({ deleted_at: nowStr }).eq("id", id),
-    supabase.from("habit_checkins").update({ deleted_at: nowStr }).eq("habit_id", id),
-  ]);
-  throwOnPostgrestError(habitResult.error || checkInResult.error, "删除习惯");
+  const { error } = await supabase.rpc("soft_delete_habit", { p_id: id });
+  throwOnPostgrestError(error, "删除习惯");
 });
 
 export const habitApi = {
@@ -120,12 +116,8 @@ export const habitApi = {
 
   deleteHabit: async (id: string): Promise<void> => {
     await runOrQueue({ kind: "habit:delete", key: `habit:${id}`, payload: id }, async () => {
-      const nowStr = new Date().toISOString();
-      const [habitResult, checkInResult] = await Promise.all([
-        supabase.from("habits").update({ deleted_at: nowStr }).eq("id", id),
-        supabase.from("habit_checkins").update({ deleted_at: nowStr }).eq("habit_id", id),
-      ]);
-      throwOnPostgrestError(habitResult.error || checkInResult.error, "删除习惯");
+      const { error } = await supabase.rpc("soft_delete_habit", { p_id: id });
+      throwOnPostgrestError(error, "删除习惯");
     });
   },
 

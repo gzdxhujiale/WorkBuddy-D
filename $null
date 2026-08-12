@@ -1,0 +1,3 @@
+rg: .env*: 文件名、目录名或卷标语法不正确。 (os error 123)
+rg: app: 系统找不到指定的文件。 (os error 2)
+rg: pages: 系统找不到指定的文件。 (os error 2)

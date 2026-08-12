@@ -3,7 +3,6 @@ import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase";
 import { AuthProvider } from "@/lib/auth";
 import { setStorageUserId } from "@/lib/userStorage";
-import { RealtimeProvider } from "@/components/RealtimeProvider";
 
 export function WindowSessionGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -17,7 +16,9 @@ export function WindowSessionGate({ children }: { children: ReactNode }) {
 
   if (session === undefined) return <WindowMessage message="正在验证登录状态…" />;
   if (!session?.user) return <WindowMessage message="登录已失效，请回到主窗口重新登录。" />;
-  return <AuthProvider value={{ session, userId: session.user.id }}><RealtimeProvider>{children}</RealtimeProvider></AuthProvider>;
+  // Secondary windows can query and mutate through Supabase, but the main
+  // window is the single owner of the shared Realtime subscription.
+  return <AuthProvider value={{ session, userId: session.user.id }}>{children}</AuthProvider>;
 }
 
 function WindowMessage({ message }: { message: string }) {

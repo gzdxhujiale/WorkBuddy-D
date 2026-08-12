@@ -1,11 +1,10 @@
 import React from "react";
-import { Task, Role, QuadrantType } from "@/types/timeManagement";
+import { Task, QuadrantType } from "@/types/timeManagement";
 import { taskIntersectsDay, taskTimeLabel } from "@/lib/taskSchedule";
 
 interface MonthViewProps {
   currentDate: Date;
   tasks: Task[];
-  roles?: Role[];
   onSelectDay: (date: Date) => void;
   onSelectTask: (task: Task, anchorEl?: HTMLElement) => void;
   onCreateTask?: (quadrant?: QuadrantType, initialDate?: string) => void;
@@ -16,7 +15,6 @@ const WEEKDAY_LABELS = ["一", "二", "三", "四", "五", "六", "日"];
 export const MonthView: React.FC<MonthViewProps> = ({
   currentDate,
   tasks,
-  roles = [],
   onSelectDay,
   onSelectTask,
 }) => {
@@ -33,11 +31,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
     ...Array.from({ length: firstDayOfWeek }, () => null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
   ];
-
-  const getRoleColor = (roleId?: string) => {
-    if (!roleId) return null;
-    return roles.find((r) => r.id === roleId)?.color;
-  };
 
   return (
     <div className="h-full min-h-[460px] flex flex-col bg-white/50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs backdrop-blur-xs select-none">
@@ -96,7 +89,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
 
               <div className="flex-1 min-h-0 overflow-y-auto space-y-1">
                 {dayTasks.slice(0, 3).map((t) => {
-                  const roleColor = getRoleColor(t.roleId);
                   return (
                     <div
                       key={t.id}
@@ -116,12 +108,6 @@ export const MonthView: React.FC<MonthViewProps> = ({
                           : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
                       }`}
                     >
-                      {roleColor && (
-                        <span
-                          className="size-1.5 rounded-full shrink-0"
-                          style={{ backgroundColor: roleColor }}
-                        />
-                      )}
                       <span className="truncate">{t.title}</span>
                       {t.scheduleMode === "range" && (
                         <span className="ml-auto text-[9px] tabular-nums opacity-75 shrink-0" title={taskTimeLabel(t)}>

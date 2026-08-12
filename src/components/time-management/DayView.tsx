@@ -1,12 +1,11 @@
 import React from "react";
-import { Task, Role, QuadrantType } from "@/types/timeManagement";
-import { CheckCircle2, Circle, Clock, Plus, Tag } from "lucide-react";
+import { Task, QuadrantType } from "@/types/timeManagement";
+import { CheckCircle2, Circle, Clock, Plus } from "lucide-react";
 import { getTaskEndAt, getTaskStartAt, taskIntersectsDay, taskTimeLabel } from "@/lib/taskSchedule";
 
 interface DayViewProps {
   currentDate: Date;
   tasks: Task[];
-  roles?: Role[];
   onToggleComplete: (taskId: string) => void;
   onSelectTask: (task: Task, anchorEl?: HTMLElement) => void;
   onCreateTask: (quadrant?: QuadrantType, initialDate?: string) => void;
@@ -24,7 +23,6 @@ const QUADRANT_LABELS: Record<QuadrantType, { label: string; badge: string }> = 
 export const DayView: React.FC<DayViewProps> = ({
   currentDate,
   tasks,
-  roles = [],
   onToggleComplete,
   onSelectTask,
   onCreateTask,
@@ -52,11 +50,6 @@ export const DayView: React.FC<DayViewProps> = ({
     ).getTime();
     const start = getTaskStartAt(task) ?? dayStart;
     return new Date(Math.max(start, dayStart + 8 * 60 * 60 * 1000)).getHours();
-  };
-
-  const getRole = (roleId?: string) => {
-    if (!roleId) return null;
-    return roles.find((r) => r.id === roleId);
   };
 
   return (
@@ -106,7 +99,6 @@ export const DayView: React.FC<DayViewProps> = ({
                   </span>
                 ) : (
                   hourSlotTasks.map((t) => {
-                    const role = getRole(t.roleId);
                     const quadInfo = QUADRANT_LABELS[t.quadrant];
 
                     return (
@@ -164,15 +156,6 @@ export const DayView: React.FC<DayViewProps> = ({
                         </div>
 
                         <div className="flex items-center gap-2 shrink-0">
-                          {role && (
-                            <span
-                              className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium text-white shadow-2xs"
-                              style={{ backgroundColor: role.color || "#3b82f6" }}
-                            >
-                              <Tag size={10} />
-                              {role.name}
-                            </span>
-                          )}
 
                           <span
                             className={`text-[10px] px-2 py-0.5 rounded-md font-medium border ${quadInfo.badge}`}

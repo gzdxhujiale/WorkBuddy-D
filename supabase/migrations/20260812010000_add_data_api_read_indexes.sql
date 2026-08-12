@@ -14,9 +14,6 @@ create index if not exists habit_checkins_habit_id_idx
 create index if not exists knowledge_base_folders_knowledge_base_id_idx
   on public.knowledge_base_folders (knowledge_base_id);
 
-create index if not exists mission_roles_user_id_deleted_at_sort_order_idx
-  on public.mission_roles (user_id, deleted_at, sort_order);
-
 create index if not exists notes_group_id_idx
   on public.notes (group_id);
 

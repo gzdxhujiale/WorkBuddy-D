@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { timeManagementApi } from "@/services/timeManagementService";
 import { Task, QuadrantType, TimeManagementData } from "@/types/timeManagement";
@@ -16,22 +16,13 @@ export function useTimeManagementData() {
     queryFn: async () => {
       return await timeManagementApi.loadAll();
     },
-    staleTime: 1000 * 30,
+    staleTime: 1000 * 60 * 5,
   });
 }
 
 export function useFocusTaskOptions() {
-  const queryClient = useQueryClient();
   const { userId } = useAuth();
   const QUERY_KEY = queryKeys.focusAssistantTasks(userId);
-
-  useEffect(() => {
-    const handleFocus = () => {
-      void queryClient.invalidateQueries({ queryKey: QUERY_KEY });
-    };
-    window.addEventListener("focus", handleFocus);
-    return () => window.removeEventListener("focus", handleFocus);
-  }, [queryClient]);
 
   return useQuery<Array<Pick<Task, "id" | "title">>>({
     queryKey: QUERY_KEY,
@@ -59,7 +50,7 @@ export function useTaskActions() {
     queryKey: QUERY_KEY,
     debounceMs: 300,
     updateCache: (old, task) => {
-      const current = old ?? { roles: [], tasks: [] };
+      const current = old ?? { tasks: [] };
       const idx = current.tasks.findIndex((t) => t.id === task.id);
       let nextTasks: Task[];
       if (idx >= 0) {
@@ -87,7 +78,7 @@ export function useTaskActions() {
     queryKey: QUERY_KEY,
     debounceMs: 0, // Delete immediately
     updateCache: (old, taskId) => {
-      const current = old ?? { roles: [], tasks: [] };
+      const current = old ?? { tasks: [] };
       return {
         ...current,
         tasks: current.tasks.filter((t) => t.id !== taskId),
@@ -102,14 +93,12 @@ export function useTaskActions() {
   const addTask = useCallback(
     (
       title: string,
-      quadrant: QuadrantType = "Q2",
-      roleId?: string
+      quadrant: QuadrantType = "Q2"
     ): Task => {
       const newTask: Task = {
         id: crypto.randomUUID(),
         title,
         quadrant,
-        roleId,
         completed: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
@@ -129,7 +118,7 @@ export function useTaskActions() {
     queryKey: QUERY_KEY,
     debounceMs: 300,
     updateCache: (old, { taskId, updates }) => {
-      const current = old ?? { roles: [], tasks: [] };
+      const current = old ?? { tasks: [] };
       const tasks = current.tasks.map((t) => {
         if (t.id !== taskId) return t;
         return { ...t, ...updates, updatedAt: Date.now(), baseUpdatedAt: t.baseUpdatedAt };
