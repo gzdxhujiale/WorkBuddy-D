@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import {
   ArrowDownUp, MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen, CheckCircle, AlertCircle,
   ChevronRight, Check, Sidebar, ExternalLink, Folder as FolderIcon, BookOpen, Briefcase, Home,
-  Package, Activity, Star, ChevronDown, FileText, Search, Cloud, X, LayoutList, Columns, Trash2, Library
+  Package, Activity, Star, ChevronDown, FileText, Search, Cloud, X, LayoutList, Columns, Trash2, Library, LoaderCircle
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverEvent, useDroppable } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -204,6 +204,7 @@ interface ListsSidebarProps {
   lists: List[];
   folders: Folder[];
   activeListId: string | null;
+  loadingListId?: string | null;
   dragOverListId?: string | null;
   dragOverFolderId?: string | null;
   onSelectList: (id: string) => void;
@@ -231,6 +232,7 @@ function ListsSidebar({
   lists,
   folders,
   activeListId,
+  loadingListId,
   dragOverListId,
   dragOverFolderId,
   onSelectList,
@@ -288,6 +290,9 @@ function ListsSidebar({
         {list.isPinned && <span className="text-[10px] text-amber-500">📌</span>}
 
         <div className="ml-auto flex items-center gap-1">
+          {loadingListId === list.id && (
+            <LoaderCircle size={14} className="animate-spin text-sidebar-primary" aria-label="正在加载清单" />
+          )}
           {list.itemCount !== undefined && list.itemCount > 0 && (
             <span className="text-xs font-normal text-sidebar-foreground/60 group-hover:hidden">
               {list.itemCount}
@@ -1011,7 +1016,7 @@ function NoteDrawerContent({
   );
 }
 
-function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSaveAsTemplate, onDelete, showToast }: NoteDrawerProps) {
+function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSaveAsTemplate, onDelete, showToast, isLoading = false }: NoteDrawerProps & { isLoading?: boolean }) {
   const [drawerWidth, setDrawerWidth] = useState(600);
   const isResizing = useRef(false);
   const startX = useRef(0);
@@ -1040,7 +1045,7 @@ function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSav
     document.body.style.userSelect = '';
   };
 
-  if (!note) return null;
+  if (!note && !isLoading) return null;
 
   return createPortal(
     <>
@@ -1061,18 +1066,25 @@ function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSav
           className="absolute left-0 top-0 bottom-0 w-1.5 cursor-ew-resize hover:bg-primary/40 transition-colors z-40"
           onMouseDown={handleMouseDown}
         />
-        <NoteDrawerContent
-          key={note.id}
-          note={note}
-          isOpen={isOpen}
-          onClose={onClose}
-          onUpdate={onUpdate}
-          onPin={onPin}
-          onDuplicate={onDuplicate}
-          onSaveAsTemplate={onSaveAsTemplate}
-          onDelete={onDelete}
-          showToast={showToast}
-        />
+        {note ? (
+          <NoteDrawerContent
+            key={note.id}
+            note={note}
+            isOpen={isOpen}
+            onClose={onClose}
+            onUpdate={onUpdate}
+            onPin={onPin}
+            onDuplicate={onDuplicate}
+            onSaveAsTemplate={onSaveAsTemplate}
+            onDelete={onDelete}
+            showToast={showToast}
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+            <LoaderCircle size={18} className="animate-spin" />
+            正在加载笔记正文…
+          </div>
+        )}
       </div>
     </>,
     document.body
@@ -1562,7 +1574,7 @@ export function ListsPanel() {
     return localStorage.getItem(userStorageKey('lists-active-list-id'));
   });
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
-  useListContents(activeListId);
+  const { isFetching: isListContentsFetching } = useListContents(activeListId);
   const noteMap = useMemo(() => new Map(rawNotes.map(n => [n.id, n])), [rawNotes]);
   const templates = useTemplateData(isTemplateModalOpen).data ?? [];
 
@@ -2116,6 +2128,7 @@ export function ListsPanel() {
           lists={lists}
           folders={folders}
           activeListId={activeListId}
+          loadingListId={isListContentsFetching ? activeListId : null}
           dragOverListId={dragOverSidebarListId}
           dragOverFolderId={dragOverFolderId}
           onSelectList={setActiveListId}
@@ -2331,6 +2344,7 @@ export function ListsPanel() {
 
               <NoteDrawer
                 note={drawerNote}
+                isLoading={isDrawerOpen && Boolean(activeNoteId) && !drawerNote}
                 isOpen={isDrawerOpen}
                 onClose={() => setIsDrawerOpen(false)}
                 onUpdate={handleNoteUpdate}
