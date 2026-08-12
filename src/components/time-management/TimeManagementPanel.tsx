@@ -22,7 +22,6 @@ import { WeekView } from "./WeekView";
 import { MonthView } from "./MonthView";
 import {
   openQuickEditWindow,
-  prewarmQuickEditWindow,
 } from "@/services/quickEditWindow";
 import { startTaskReminderScheduler } from "@/services/taskReminderScheduler";
 import { getTaskEndAt, taskIntersectsDay, taskIntersectsInterval, taskTimeLabel } from "@/lib/taskSchedule";
@@ -52,9 +51,9 @@ export const TimeManagementPanel: React.FC = () => {
     tasksRef.current = tasks;
   }, [tasks]);
 
-  // Prewarm Tauri sub-window pool and start task reminder scheduler on mount
+  // The editor window is created only when a user opens it. Prewarming it on
+  // startup creates a second independent webview and duplicates data loading.
   useEffect(() => {
-    prewarmQuickEditWindow();
     const cleanup = startTaskReminderScheduler(() => tasksRef.current);
     return cleanup;
   }, []);

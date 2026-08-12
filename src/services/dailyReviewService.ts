@@ -2,26 +2,24 @@ import { supabase } from "@/lib/supabase";
 import { DailyReviewItem } from "@/types/dailyReview";
 import { DailyReviewRow } from "@/types/database";
 import { throwOnPostgrestError } from "@/lib/sync";
-import { userStorageKey } from "@/lib/userStorage";
+import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 
-const LOCAL_STORAGE_KEY = "fishbuddy_daily_reviews_v1";
-
-function getLocalReviews(): DailyReviewItem[] {
-  try {
-    const raw = localStorage.getItem(userStorageKey(LOCAL_STORAGE_KEY));
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+async function saveRemote(review: DailyReviewItem): Promise<number> {
+  const { data, error } = await supabase.rpc("save_daily_review", {
+    p_id: review.id, p_date: review.date, p_content: { text: review.content },
+    p_created_at: new Date(review.createdAt).toISOString(),
+    p_expected_updated_at: review.baseUpdatedAt ? new Date(review.baseUpdatedAt).toISOString() : null,
+    p_next_updated_at: new Date(review.updatedAt).toISOString(),
+  });
+  throwOnPostgrestError(error, "保存每日复盘");
+  return new Date(data as string).getTime();
 }
 
-function saveLocalReviews(reviews: DailyReviewItem[]): void {
-  try {
-    localStorage.setItem(userStorageKey(LOCAL_STORAGE_KEY), JSON.stringify(reviews));
-  } catch (e) {
-    console.error("Failed to save local daily reviews:", e);
-  }
-}
+registerOfflineExecutor("daily-review:save", async (payload) => { await saveRemote(payload as DailyReviewItem); });
+registerOfflineExecutor("daily-review:delete", async (payload) => {
+  const { error } = await supabase.from("daily_reviews").delete().eq("id", payload as string);
+  throwOnPostgrestError(error, "删除每日复盘");
+});
 
 export const dailyReviewApi = {
   loadAll: async (): Promise<DailyReviewItem[]> => {
@@ -29,11 +27,11 @@ export const dailyReviewApi = {
       const { data: dbReviews, error } = await supabase
         .from("daily_reviews")
         .select("*")
+        .gte("date", "2026-01-01")
         .order("date", { ascending: false });
 
       if (error) {
-        console.warn("Supabase daily reviews load warning, using local cache:", error.message);
-        return getLocalReviews();
+        throwOnPostgrestError(error, "加载每日复盘");
       }
 
       if (dbReviews && dbReviews.length >= 0) {
@@ -55,20 +53,16 @@ export const dailyReviewApi = {
           };
         });
 
-        saveLocalReviews(reviews);
         return reviews;
       }
     } catch (err) {
-      console.warn("Using local storage fallback for daily reviews load exception:", err);
+      throw err;
     }
 
-    return getLocalReviews();
+    return [];
   },
 
   getByDate: async (date: string): Promise<DailyReviewItem | null> => {
-    const localList = getLocalReviews();
-    const localMatch = localList.find((r) => r.date === date);
-
     try {
       const { data, error } = await supabase
         .from("daily_reviews")
@@ -94,49 +88,18 @@ export const dailyReviewApi = {
         };
         return review;
       }
-    } catch (err) {
-      console.warn("Supabase getByDate exception:", err);
-    }
-
-    return localMatch || null;
+    } catch (err) { throw err; }
+    return null;
   },
 
-  upsertReview: async (review: DailyReviewItem): Promise<number> => {
-    // 1. Immediate local storage optimistic update
-    const current = getLocalReviews();
-    const idx = current.findIndex((r) => r.id === review.id || r.date === review.date);
-    if (idx >= 0) {
-      current[idx] = review;
-    } else {
-      current.push(review);
-    }
-    saveLocalReviews(current);
-
-    const { data, error } = await supabase.rpc("save_daily_review", {
-      p_id: review.id,
-      p_date: review.date,
-      p_content: { text: review.content },
-      p_created_at: new Date(review.createdAt).toISOString(),
-      p_expected_updated_at: review.baseUpdatedAt ? new Date(review.baseUpdatedAt).toISOString() : null,
-      p_next_updated_at: new Date(review.updatedAt).toISOString(),
-    });
-    throwOnPostgrestError(error, "保存每日复盘");
-    return new Date(data as string).getTime();
+  upsertReview: async (review: DailyReviewItem): Promise<number | undefined> => {
+    return runOrQueue({ kind: "daily-review:save", key: `daily-review:${review.date}`, payload: review }, () => saveRemote(review));
   },
 
   deleteReview: async (id: string): Promise<void> => {
-    // 1. Remove from local storage
-    const current = getLocalReviews().filter((r) => r.id !== id);
-    saveLocalReviews(current);
-
-    // 2. Delete from Supabase
-    // Keep this compatible with databases that have not yet applied the optional
-    // RPC migration. This is still a hard delete and is protected by the table's
-    // existing RLS policy.
-    const { error } = await supabase
-      .from("daily_reviews")
-      .delete()
-      .eq("id", id);
-    throwOnPostgrestError(error, "删除每日复盘");
+    await runOrQueue({ kind: "daily-review:delete", key: `daily-review:${id}`, payload: id }, async () => {
+      const { error } = await supabase.from("daily_reviews").delete().eq("id", id);
+      throwOnPostgrestError(error, "删除每日复盘");
+    });
   },
 };

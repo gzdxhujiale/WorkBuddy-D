@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { throwOnPostgrestError } from "@/lib/sync";
-import { userStorageKey } from "@/lib/userStorage";
+import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 import {
   Task,
   Role,
@@ -11,7 +11,6 @@ import {
   ScheduleMode,
 } from "@/types/timeManagement";
 
-const LOCAL_STORAGE_KEY = "fishbuddy_tm_tasks_v1";
 
 const DEFAULT_ROLES: Role[] = [
   { id: "role-1", name: "个人成长", color: "#1f6fd1", sort_order: 1 },
@@ -48,22 +47,28 @@ function resolveSchedule(task: Task): {
   return { scheduleMode, scheduledStartAt, scheduledEndAt };
 }
 
-function getLocalTasks(): Task[] {
-  try {
-    const raw = localStorage.getItem(userStorageKey(LOCAL_STORAGE_KEY));
-    return raw ? JSON.parse(raw) : [];
-  } catch {
-    return [];
-  }
+async function saveRemoteTask(task: Task): Promise<number> {
+  const schedule = resolveSchedule(task);
+  const nextUpdatedAt = task.updatedAt ?? Date.now();
+  const { data, error } = await supabase.rpc("save_time_management_task", {
+    p_id: task.id, p_title: task.title, p_quadrant: QUADRANT_DB_MAP[task.quadrant] || task.quadrant,
+    p_role_id: task.roleId || null, p_schedule_mode: schedule.scheduleMode || null,
+    p_scheduled_start_at: schedule.scheduledStartAt ? new Date(schedule.scheduledStartAt).toISOString() : null,
+    p_scheduled_end_at: schedule.scheduledEndAt ? new Date(schedule.scheduledEndAt).toISOString() : null,
+    p_completed: task.completed, p_completed_at: task.completedAt ? new Date(task.completedAt).toISOString() : null,
+    p_description: task.description || null, p_reminder: task.reminder ? JSON.parse(task.reminder) : null,
+    p_created_at: new Date(task.createdAt).toISOString(),
+    p_expected_updated_at: task.baseUpdatedAt ? new Date(task.baseUpdatedAt).toISOString() : null,
+    p_next_updated_at: new Date(nextUpdatedAt).toISOString(),
+  });
+  throwOnPostgrestError(error, "保存任务");
+  return new Date(data as string).getTime();
 }
-
-function saveLocalTasks(tasks: Task[]): void {
-  try {
-    localStorage.setItem(userStorageKey(LOCAL_STORAGE_KEY), JSON.stringify(tasks));
-  } catch (e) {
-    console.error("Failed to save local tasks:", e);
-  }
-}
+registerOfflineExecutor("task:save", async (payload) => { await saveRemoteTask(payload as Task); });
+registerOfflineExecutor("task:delete", async (payload) => {
+  const { error } = await supabase.from("time_management_tasks").update({ deleted_at: new Date().toISOString() }).eq("id", payload as string);
+  throwOnPostgrestError(error, "删除任务");
+});
 
 export const timeManagementApi = {
   loadAll: async (): Promise<TimeManagementData> => {
@@ -93,8 +98,8 @@ export const timeManagementApi = {
         .order("created_at", { ascending: false });
 
       if (tasksErr) {
-        console.warn("Supabase tasks query warning, fallback to local:", tasksErr.message);
-        return { roles, tasks: getLocalTasks() };
+        console.warn("Supabase tasks query failed:", tasksErr.message);
+        throwOnPostgrestError(tasksErr, "加载任务");
       }
 
       if (dbTasks && dbTasks.length >= 0) {
@@ -115,56 +120,23 @@ export const timeManagementApi = {
           baseUpdatedAt: t.updated_at ? new Date(t.updated_at).getTime() : undefined,
         }));
 
-        saveLocalTasks(tasks);
         return { roles, tasks };
       }
     } catch (err) {
-      console.warn("Using local storage fallback for tasks:", err);
+      throw err;
     }
 
-    return { roles: DEFAULT_ROLES, tasks: getLocalTasks() };
+    return { roles: DEFAULT_ROLES, tasks: [] };
   },
 
-  upsertTask: async (task: Task): Promise<number> => {
-    const schedule = resolveSchedule(task);
-
-    // 1. Always update local storage for immediate responsiveness
-    const current = getLocalTasks();
-    const idx = current.findIndex((t) => t.id === task.id);
-    if (idx >= 0) {
-      current[idx] = task;
-    } else {
-      current.push(task);
-    }
-    saveLocalTasks(current);
-
-    // 2. Sync to Supabase
-    const nextUpdatedAt = task.updatedAt ?? Date.now();
-    const { data, error } = await supabase.rpc("save_time_management_task", {
-      p_id: task.id, p_title: task.title, p_quadrant: QUADRANT_DB_MAP[task.quadrant] || task.quadrant,
-      p_role_id: task.roleId || null, p_schedule_mode: schedule.scheduleMode || null,
-      p_scheduled_start_at: schedule.scheduledStartAt ? new Date(schedule.scheduledStartAt).toISOString() : null,
-      p_scheduled_end_at: schedule.scheduledEndAt ? new Date(schedule.scheduledEndAt).toISOString() : null,
-      p_completed: task.completed, p_completed_at: task.completedAt ? new Date(task.completedAt).toISOString() : null,
-      p_description: task.description || null, p_reminder: task.reminder ? JSON.parse(task.reminder) : null,
-      p_created_at: new Date(task.createdAt).toISOString(),
-      p_expected_updated_at: task.baseUpdatedAt ? new Date(task.baseUpdatedAt).toISOString() : null,
-      p_next_updated_at: new Date(nextUpdatedAt).toISOString(),
-    });
-    throwOnPostgrestError(error, "保存任务");
-    return new Date(data as string).getTime();
+  upsertTask: async (task: Task): Promise<number | undefined> => {
+    return runOrQueue({ kind: "task:save", key: `task:${task.id}`, payload: task }, () => saveRemoteTask(task));
   },
 
   deleteTask: async (id: string): Promise<void> => {
-    // 1. Remove from local storage
-    const current = getLocalTasks().filter((t) => t.id !== id);
-    saveLocalTasks(current);
-
-    // 2. Soft delete in Supabase
-    const { error } = await supabase
-        .from("time_management_tasks")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", id);
-    throwOnPostgrestError(error, "删除任务");
+    await runOrQueue({ kind: "task:delete", key: `task:${id}`, payload: id }, async () => {
+      const { error } = await supabase.from("time_management_tasks").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+      throwOnPostgrestError(error, "删除任务");
+    });
   },
 };

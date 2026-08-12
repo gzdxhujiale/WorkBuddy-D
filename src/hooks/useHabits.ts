@@ -32,6 +32,7 @@ export function useHabitActions() {
     },
     syncFn: async (newHabit) => {
       const savedUpdatedAt = await habitApi.createHabit(newHabit);
+      if (savedUpdatedAt === undefined) return;
       queryClient.setQueryData<HabitData>(HABITS_QUERY_KEY, (old) => old ? {
         ...old, habits: old.habits.map((item) => item.id === newHabit.id && item.updatedAt === newHabit.updatedAt
           ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt } : item),
@@ -57,6 +58,7 @@ export function useHabitActions() {
       const habit = queryClient.getQueryData<HabitData>(HABITS_QUERY_KEY)?.habits.find((item) => item.id === id);
       if (!habit) return;
       const savedUpdatedAt = await habitApi.updateHabit(habit);
+      if (savedUpdatedAt === undefined) return;
       queryClient.setQueryData<HabitData>(HABITS_QUERY_KEY, (old) => old ? {
         ...old, habits: old.habits.map((item) => item.id === habit.id && item.updatedAt === habit.updatedAt
           ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt } : item),

@@ -10,7 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
-import { useTimeManagementData } from "@/hooks/useTimeManagement";
+import { useFocusTaskOptions } from "@/hooks/useTimeManagement";
 import { focusAssistantApi } from "@/services/focusAssistantService";
 import { sendDesktopNotification } from "@/services/notificationService";
 import type { FocusSession, FocusSessionType } from "@/types/focusAssistant";
@@ -80,8 +80,7 @@ function ClockRing({
 }
 
 export function FocusAssistant() {
-  const { data } = useTimeManagementData();
-  const tasks = useMemo(() => (data?.tasks ?? []).filter((task) => !task.completed), [data]);
+  const { data: tasks = [] } = useFocusTaskOptions();
 
   const [focusMinutes, setFocusMinutes] = useState(25);
   const [restMinutes, setRestMinutes] = useState(5);

@@ -56,6 +56,7 @@ export function useReviewActions() {
     },
     syncFn: async (review) => {
       const savedUpdatedAt = await dailyReviewApi.upsertReview(review);
+      if (savedUpdatedAt === undefined) return;
       queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
         old?.map((item) =>
           item.id === review.id && item.updatedAt === review.updatedAt

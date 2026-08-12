@@ -2,10 +2,15 @@ import { supabase } from "@/lib/supabase";
 import { Habit, HabitCheckIn, HabitData } from "@/types/habit";
 import { HabitRow, HabitCheckinRow } from "@/types/database";
 import { throwOnPostgrestError } from "@/lib/sync";
-import { userStorageKey } from "@/lib/userStorage";
+import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 
-const LOCAL_STORAGE_HABITS_KEY = "fishbuddy_habits_v1";
-const LOCAL_STORAGE_CHECKINS_KEY = "fishbuddy_habit_checkins_v1";
+const CHECKIN_HISTORY_MONTHS = 12;
+
+function checkInHistoryStartDate(): string {
+  const date = new Date();
+  date.setMonth(date.getMonth() - CHECKIN_HISTORY_MONTHS);
+  return date.toISOString().slice(0, 10);
+}
 
 function saveHabit(habit: Habit) {
   return supabase.rpc("save_habit", {
@@ -25,28 +30,19 @@ function saveHabit(habit: Habit) {
     p_next_updated_at: new Date(habit.updatedAt).toISOString(),
   });
 }
-
-function getLocalData(): HabitData {
-  try {
-    const rawHabits = localStorage.getItem(userStorageKey(LOCAL_STORAGE_HABITS_KEY));
-    const rawCheckins = localStorage.getItem(userStorageKey(LOCAL_STORAGE_CHECKINS_KEY));
-    return {
-      habits: rawHabits ? JSON.parse(rawHabits) : [],
-      checkIns: rawCheckins ? JSON.parse(rawCheckins) : [],
-    };
-  } catch {
-    return { habits: [], checkIns: [] };
-  }
-}
-
-function saveLocalData(data: HabitData): void {
-  try {
-    localStorage.setItem(userStorageKey(LOCAL_STORAGE_HABITS_KEY), JSON.stringify(data.habits));
-    localStorage.setItem(userStorageKey(LOCAL_STORAGE_CHECKINS_KEY), JSON.stringify(data.checkIns));
-  } catch (e) {
-    console.error("Failed to save local habit data:", e);
-  }
-}
+registerOfflineExecutor("habit:save", async (payload) => {
+  const { error } = await saveHabit(payload as Habit);
+  throwOnPostgrestError(error, "保存习惯");
+});
+registerOfflineExecutor("habit:delete", async (payload) => {
+  const id = payload as string;
+  const nowStr = new Date().toISOString();
+  const [habitResult, checkInResult] = await Promise.all([
+    supabase.from("habits").update({ deleted_at: nowStr }).eq("id", id),
+    supabase.from("habit_checkins").update({ deleted_at: nowStr }).eq("habit_id", id),
+  ]);
+  throwOnPostgrestError(habitResult.error || checkInResult.error, "删除习惯");
+});
 
 export const habitApi = {
   loadAll: async (): Promise<HabitData> => {
@@ -62,12 +58,12 @@ export const habitApi = {
           .from("habit_checkins")
           .select("*")
           .is("deleted_at", null)
+          .gte("date", checkInHistoryStartDate())
           .order("date", { ascending: false }),
       ]);
 
       if (habitsRes.error || checkInsRes.error) {
-        console.warn("Supabase habits load warning, using local cache:", habitsRes.error?.message || checkInsRes.error?.message);
-        return getLocalData();
+        throwOnPostgrestError(habitsRes.error || checkInsRes.error, "加载习惯");
       }
 
       const habits: Habit[] = (habitsRes.data || []).map((r: HabitRow) => ({
@@ -98,75 +94,42 @@ export const habitApi = {
       }));
 
       const result: HabitData = { habits, checkIns };
-      saveLocalData(result);
       return result;
     } catch (err) {
-      console.warn("Using local storage fallback for habits load exception:", err);
+      throw err;
     }
 
-    return getLocalData();
+    return { habits: [], checkIns: [] };
   },
 
-  createHabit: async (habit: Habit): Promise<number> => {
-    // 1. Local update
-    const current = getLocalData();
-    current.habits.push(habit);
-    saveLocalData(current);
-
-    const { data, error } = await saveHabit(habit);
-    throwOnPostgrestError(error, "创建习惯");
-    return new Date(data as string).getTime();
+  createHabit: async (habit: Habit): Promise<number | undefined> => {
+    return runOrQueue({ kind: "habit:save", key: `habit:${habit.id}`, payload: habit }, async () => {
+      const { data, error } = await saveHabit(habit);
+      throwOnPostgrestError(error, "创建习惯");
+      return new Date(data as string).getTime();
+    });
   },
 
-  updateHabit: async (habit: Habit): Promise<number> => {
-    // 1. Local update
-    const current = getLocalData();
-    const idx = current.habits.findIndex((h) => h.id === habit.id);
-    if (idx >= 0) {
-      current.habits[idx] = habit;
-      saveLocalData(current);
-    }
-
-    const { data, error } = await saveHabit(habit);
-    throwOnPostgrestError(error, "更新习惯");
-    return new Date(data as string).getTime();
+  updateHabit: async (habit: Habit): Promise<number | undefined> => {
+    return runOrQueue({ kind: "habit:save", key: `habit:${habit.id}`, payload: habit }, async () => {
+      const { data, error } = await saveHabit(habit);
+      throwOnPostgrestError(error, "更新习惯");
+      return new Date(data as string).getTime();
+    });
   },
 
   deleteHabit: async (id: string): Promise<void> => {
-    // 1. Local update
-    const current = getLocalData();
-    current.habits = current.habits.filter((h) => h.id !== id);
-    current.checkIns = current.checkIns.filter((c) => c.habitId !== id);
-    saveLocalData(current);
-
-    // 2. Supabase Soft Delete
-    const nowStr = new Date().toISOString();
-    const [habitResult, checkInResult] = await Promise.all([
+    await runOrQueue({ kind: "habit:delete", key: `habit:${id}`, payload: id }, async () => {
+      const nowStr = new Date().toISOString();
+      const [habitResult, checkInResult] = await Promise.all([
         supabase.from("habits").update({ deleted_at: nowStr }).eq("id", id),
         supabase.from("habit_checkins").update({ deleted_at: nowStr }).eq("habit_id", id),
-    ]);
-    throwOnPostgrestError(habitResult.error || checkInResult.error, "删除习惯");
+      ]);
+      throwOnPostgrestError(habitResult.error || checkInResult.error, "删除习惯");
+    });
   },
 
   toggleCheckIn: async (habitId: string, date: string, completed: boolean): Promise<void> => {
-    // 1. Local update
-    const current = getLocalData();
-    const idx = current.checkIns.findIndex((c) => c.habitId === habitId && c.date === date);
-    if (idx >= 0) {
-      current.checkIns[idx] = { ...current.checkIns[idx], completed, updatedAt: Date.now() };
-    } else {
-      current.checkIns.push({
-        id: crypto.randomUUID(),
-        habitId,
-        date,
-        completed,
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      });
-    }
-    saveLocalData(current);
-
-    // 2. Supabase Upsert
     const payload: Partial<HabitCheckinRow> = {
         habit_id: habitId,
         date,
@@ -174,9 +137,18 @@ export const habitApi = {
         updated_at: new Date().toISOString(),
       };
 
-    const { error } = await supabase.from("habit_checkins").upsert(payload, {
-      onConflict: "user_id,habit_id,date",
+    await runOrQueue({ kind: "habit-checkin:save", key: `habit-checkin:${habitId}:${date}`, payload }, async () => {
+      const { error } = await supabase.from("habit_checkins").upsert(payload, {
+        onConflict: "user_id,habit_id,date",
+      });
+      throwOnPostgrestError(error, "保存习惯打卡");
     });
-    throwOnPostgrestError(error, "保存习惯打卡");
   },
 };
+
+registerOfflineExecutor("habit-checkin:save", async (payload) => {
+  const { error } = await supabase.from("habit_checkins").upsert(payload as Partial<HabitCheckinRow>, {
+    onConflict: "user_id,habit_id,date",
+  });
+  throwOnPostgrestError(error, "保存习惯打卡");
+});

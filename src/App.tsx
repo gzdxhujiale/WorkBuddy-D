@@ -11,6 +11,7 @@ import { focusAssistantApi } from "@/services/focusAssistantService";
 import { shouldOpenFocusAssistantOnStart } from "@/lib/preferences";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { setStorageUserId } from "@/lib/userStorage";
+import { flushOfflineQueue } from "@/lib/offlineSyncQueue";
 
 function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
@@ -50,6 +51,14 @@ function App() {
     const onUnload = () => { void focusAssistantApi.markOpenSessionsInterrupted(); };
     window.addEventListener("beforeunload", onUnload);
     return () => window.removeEventListener("beforeunload", onUnload);
+  }, [session]);
+
+  useEffect(() => {
+    if (!session) return;
+    const flush = () => { void flushOfflineQueue(); };
+    flush();
+    window.addEventListener("online", flush);
+    return () => window.removeEventListener("online", flush);
   }, [session]);
 
   // 正在检测会话中，显示加载态避免闪烁

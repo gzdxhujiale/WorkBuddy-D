@@ -345,6 +345,7 @@ export function useListsActions(): ListsActions {
       setData(queryClient, userId, () => ({ ...data, notes: [...data.notes, newNote], lists: newLists }));
       sharedSyncEngine.schedule(`note:${newNote.id}`, async () => {
         const savedUpdatedAt = await listsService.upsertNote(newNote);
+        if (savedUpdatedAt === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
           notes: current.notes.map((item) =>
@@ -373,6 +374,7 @@ export function useListsActions(): ListsActions {
       broadcastNoteUpdate(id, updates);
       sharedSyncEngine.schedule(`note:${id}`, async () => {
         const savedUpdatedAt = await listsService.upsertNote(note);
+        if (savedUpdatedAt === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
           notes: current.notes.map((item) =>

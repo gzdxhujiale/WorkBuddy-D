@@ -145,7 +145,7 @@ export function reorderFolders(items: Array<[string, number]>): Promise<void> {
 
 // ── Notes ────────────────────────────────────────────────────────────────────
 
-export function upsertNote(note: Note): Promise<number> {
+export function upsertNote(note: Note): Promise<number | undefined> {
   return listNotesApi.upsertNote({
     id: note.id,
     listId: note.listId,

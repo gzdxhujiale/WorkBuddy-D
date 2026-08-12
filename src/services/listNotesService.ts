@@ -16,12 +16,32 @@ import {
 } from "@/types/database";
 import { throwOnPostgrestError } from "@/lib/sync";
 import { userStorageKey } from "@/lib/userStorage";
+import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 
 const LOCAL_STORAGE_FOLDERS_KEY = "fishbuddy_list_folders_v1";
 const LOCAL_STORAGE_LISTS_KEY = "fishbuddy_list_lists_v1";
 const LOCAL_STORAGE_GROUPS_KEY = "fishbuddy_list_groups_v1";
 const LOCAL_STORAGE_NOTES_KEY = "fishbuddy_list_notes_v1";
 const LOCAL_STORAGE_TEMPLATES_KEY = "fishbuddy_list_templates_v1";
+
+async function saveRemoteNote(note: ListNote): Promise<number> {
+  const { data, error } = await supabase.rpc("save_note", {
+    p_id: note.id, p_folder_id: note.listId, p_group_id: note.groupId || null,
+    p_title: note.title, p_content: note.content, p_is_pinned: note.isPinned,
+    p_sort_order: note.sortOrder,
+    p_created_at: note.createdAt ? new Date(note.createdAt).toISOString() : new Date().toISOString(),
+    p_expected_updated_at: note.baseUpdatedAt ? new Date(note.baseUpdatedAt).toISOString() : null,
+    p_next_updated_at: new Date(note.updatedAt ?? Date.now()).toISOString(),
+  });
+  throwOnPostgrestError(error, "保存笔记");
+  return new Date(data as string).getTime();
+}
+
+registerOfflineExecutor("note:save", async (payload) => { await saveRemoteNote(payload as ListNote); });
+registerOfflineExecutor("note:delete", async (payload) => {
+  const { error } = await supabase.from("notes").update({ deleted_at: new Date().toISOString() }).eq("id", payload as string);
+  throwOnPostgrestError(error, "删除笔记");
+});
 
 function getLocalData(): ListNotesData {
   try {
@@ -108,8 +128,7 @@ export const listNotesApi = {
       ]);
 
       if (foldersRes.error || listsRes.error || groupsRes.error || notesRes.error || templatesRes.error) {
-        console.warn("Supabase list_notes query warning, fallback to local storage");
-        return getLocalData();
+        throwOnPostgrestError(foldersRes.error || listsRes.error || groupsRes.error || notesRes.error || templatesRes.error, "加载清单数据");
       }
 
       const folders: ListFolder[] = (foldersRes.data || []).map((f: ListFolderRow) => ({
@@ -172,10 +191,7 @@ export const listNotesApi = {
       const data: ListNotesData = { folders, lists, groups, notes, templates };
       saveLocalData(data);
       return data;
-    } catch (err) {
-      console.warn("Using local storage fallback for list notes:", err);
-      return getLocalData();
-    }
+    } catch (err) { throw err; }
   },
 
   // 2. 文件夹 CRUD
@@ -300,42 +316,15 @@ export const listNotesApi = {
   },
 
   // 5. 笔记/条目 CRUD
-  upsertNote: async (note: ListNote): Promise<number> => {
-    const local = getLocalData();
-    const idx = local.notes.findIndex((n) => n.id === note.id);
-    if (idx >= 0) {
-      local.notes[idx] = note;
-    } else {
-      local.notes.push(note);
-    }
-    saveLocalData({ notes: local.notes });
-
-    const { data, error } = await supabase.rpc("save_note", {
-      p_id: note.id,
-      p_folder_id: note.listId,
-      p_group_id: note.groupId || null,
-      p_title: note.title,
-      p_content: note.content,
-      p_is_pinned: note.isPinned,
-      p_sort_order: note.sortOrder,
-      p_created_at: note.createdAt ? new Date(note.createdAt).toISOString() : new Date().toISOString(),
-      p_expected_updated_at: note.baseUpdatedAt ? new Date(note.baseUpdatedAt).toISOString() : null,
-      p_next_updated_at: new Date(note.updatedAt ?? Date.now()).toISOString(),
-    });
-    throwOnPostgrestError(error, "保存笔记");
-    return new Date(data as string).getTime();
+  upsertNote: async (note: ListNote): Promise<number | undefined> => {
+    return runOrQueue({ kind: "note:save", key: `note:${note.id}`, payload: note }, () => saveRemoteNote(note));
   },
 
   deleteNote: async (id: string): Promise<void> => {
-    const local = getLocalData();
-    local.notes = local.notes.filter((n) => n.id !== id);
-    saveLocalData({ notes: local.notes });
-
-    const { error } = await supabase
-        .from("notes")
-        .update({ deleted_at: new Date().toISOString() })
-        .eq("id", id);
-    throwOnPostgrestError(error, "删除笔记");
+    await runOrQueue({ kind: "note:delete", key: `note:${id}`, payload: id }, async () => {
+      const { error } = await supabase.from("notes").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+      throwOnPostgrestError(error, "删除笔记");
+    });
   },
 
   // 6. 模板 CRUD
