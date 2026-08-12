@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { useListsData, useListsActions } from '@/hooks/useListsQuery';
+import { useQuery } from '@tanstack/react-query';
+import { useListsActions } from '@/hooks/useListsQuery';
 import { Note } from '@/types/lists';
 import { MoreHorizontal, Pin, Cloud, CloudOff, AlertCircle, Minus, Square, Copy, X } from 'lucide-react';
 import * as listsService from '@/services/listsService';
@@ -14,11 +15,7 @@ import { useConfirmDialog } from '@/components/ui/ConfirmDeleteDialog';
 import { cn } from '@/lib/utils';
 
 const logWarn = console.warn;
-const EMPTY_NOTES: Note[] = [];
-
 export function StandaloneNoteWindow() {
-  const { data } = useListsData();
-  const notes = data?.notes ?? EMPTY_NOTES;
   const [noteId, setNoteId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -29,19 +26,24 @@ export function StandaloneNoteWindow() {
     }
   }, []);
 
-  const note = notes.find(n => n.id === noteId) || null;
+  const { data: noteDetail, isLoading: isLoadingDetail } = useQuery({
+    queryKey: ['lists', 'note-window', noteId],
+    queryFn: () => listsService.loadNote(noteId!),
+    enabled: Boolean(noteId),
+  });
+  const editableNote = noteDetail;
 
   // 笔记被其他窗口删除（删除事件同步过来）：自动关闭本窗口，不停在"不存在"占位页
   const hadNoteRef = useRef(false);
   useEffect(() => {
-    if (note) {
+    if (editableNote) {
       hadNoteRef.current = true;
       return;
     }
     if (hadNoteRef.current) {
       getCurrentWindow().close().catch(() => window.close());
     }
-  }, [note]);
+  }, [editableNote]);
 
   if (!noteId) {
     return (
@@ -51,15 +53,15 @@ export function StandaloneNoteWindow() {
     );
   }
 
-  if (!note) {
+  if (!editableNote) {
     return (
       <div className="flex items-center justify-center h-screen text-muted-foreground">
-        正在加载笔记或笔记不存在...
+        {isLoadingDetail ? '正在加载笔记...' : '笔记不存在或已删除'}
       </div>
     );
   }
 
-  return <StandaloneNoteEditorContent key={note.id} note={note} />;
+  return <StandaloneNoteEditorContent key={editableNote.id} note={editableNote} />;
 }
 
 function StandaloneNoteEditorContent({ note }: { note: Note }) {

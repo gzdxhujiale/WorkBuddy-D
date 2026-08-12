@@ -90,6 +90,11 @@ function getData(queryClient: QueryClient, userId: string): ListsQueryData {
   return queryClient.getQueryData<ListsQueryData>(queryKeys.lists.all(userId)) ?? EMPTY_DATA;
 }
 
+async function fetchListContents(listId: string): Promise<Pick<ListsQueryData, 'noteGroups' | 'notes'>> {
+  const contents = await listsService.loadListContents(listId);
+  return { noteGroups: contents.noteGroups, notes: contents.notes };
+}
+
 function setData(queryClient: QueryClient, userId: string, updater: (prev: ListsQueryData) => ListsQueryData) {
   queryClient.setQueryData<ListsQueryData>(queryKeys.lists.all(userId), prev => updater(prev ?? EMPTY_DATA));
 }
@@ -144,8 +149,8 @@ function registerCrossWindowSync(queryClient: QueryClient, userId: string) {
 }
 
 /**
- * Fetches all Lists/Folders/Notes/Groups and wires up cross-window note sync.
- * Templates are owned by the templates feature (`useTemplateData`).
+ * Fetches only the module shell. Use `useListContents` after the user selects
+ * a list; templates and note bodies have their own on-demand queries.
  */
 export function useListsData() {
   const queryClient = useQueryClient();
@@ -160,6 +165,7 @@ export function useListsData() {
     for (const table of ['knowledge_bases', 'knowledge_base_folders', 'folder_note_groups', 'notes']) {
       channel.on('postgres_changes', { event: '*', schema: 'public', table, filter: `user_id=eq.${userId}` }, () => {
         void queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId) });
+        void queryClient.invalidateQueries({ queryKey: ['lists', userId, 'contents'] });
       });
     }
     channel.subscribe();
@@ -198,6 +204,25 @@ export interface ListsActions {
   updateGroup: (id: string, updates: Partial<NoteGroup>) => void;
   deleteGroup: (id: string) => void;
   flushNote: (id: string) => Promise<void>;
+}
+
+export function useListContents(listId: string | null) {
+  const queryClient = useQueryClient();
+  const { userId } = useAuth();
+  const query = useQuery({
+    queryKey: queryKeys.lists.contents(userId, listId ?? 'none'),
+    queryFn: () => fetchListContents(listId!),
+    enabled: Boolean(listId),
+  });
+  useEffect(() => {
+    if (!listId || !query.data) return;
+    setData(queryClient, userId, (current) => ({
+      ...current,
+      noteGroups: [...current.noteGroups.filter(group => group.listId !== listId), ...query.data.noteGroups],
+      notes: [...current.notes.filter(note => note.listId !== listId), ...query.data.notes],
+    }));
+  }, [listId, query.data, queryClient, userId]);
+  return query;
 }
 
 export function useListsActions(): ListsActions {
@@ -361,25 +386,52 @@ export function useListsActions(): ListsActions {
     const updateNote: ListsActions['updateNote'] = (id, updates) => {
       const data = getData(queryClient, userId);
       const index = data.notes.findIndex(n => n.id === id);
-      if (index === -1) return;
+      if (index === -1) {
+        // A standalone editor intentionally loads only one note, not its list.
+        // Resolve that note at save time rather than requiring the list query.
+        const updatedAt = Date.now();
+        broadcastNoteUpdate(id, updates);
+        sharedSyncEngine.schedule(`note:${id}`, async () => {
+          const fullNote = await listsService.loadNote(id);
+          if (!fullNote) return;
+          const savedUpdatedAt = await listsService.upsertNote({
+            ...fullNote,
+            ...updates,
+            contentLoaded: true,
+            updatedAt,
+          });
+          if (savedUpdatedAt === undefined) return;
+        }, HIGH_FREQ_DELAY);
+        return;
+      }
       const newNotes = [...data.notes];
       newNotes[index] = {
         ...newNotes[index],
         ...updates,
         updatedAt: Date.now(),
+        contentLoaded: newNotes[index].contentLoaded || updates.content !== undefined,
         baseUpdatedAt: newNotes[index].baseUpdatedAt,
       };
-      const note = newNotes[index];
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       broadcastNoteUpdate(id, updates);
       sharedSyncEngine.schedule(`note:${id}`, async () => {
-        const savedUpdatedAt = await listsService.upsertNote(note);
+        // List queries intentionally omit `content`. Fetch it only when a
+        // metadata-only action needs to persist the complete row.
+        const latest = getData(queryClient, userId).notes.find(item => item.id === id);
+        if (!latest) return;
+        let noteToSave = latest;
+        if (!latest.contentLoaded) {
+          const fullNote = await listsService.loadNote(id);
+          if (!fullNote) return;
+          noteToSave = { ...fullNote, ...latest, content: fullNote.content, contentLoaded: true };
+        }
+        const savedUpdatedAt = await listsService.upsertNote(noteToSave);
         if (savedUpdatedAt === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
           notes: current.notes.map((item) =>
-            item.id === note.id && item.updatedAt === note.updatedAt
-              ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+            item.id === noteToSave.id && item.updatedAt === noteToSave.updatedAt
+              ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt, contentLoaded: item.contentLoaded || noteToSave.contentLoaded }
               : item,
           ),
         }));
@@ -389,7 +441,12 @@ export function useListsActions(): ListsActions {
     const deleteNote: ListsActions['deleteNote'] = (id) => {
       const data = getData(queryClient, userId);
       const note = data.notes.find(n => n.id === id);
-      if (!note) return;
+      if (!note) {
+        sharedSyncEngine.cancel(`note:${id}`);
+        listsService.deleteNote(id).catch(() => {});
+        broadcastNoteDelete(id);
+        return;
+      }
       const newLists = [...data.lists];
       const listIndex = newLists.findIndex(l => l.id === note.listId);
       if (listIndex !== -1 && (newLists[listIndex].itemCount || 0) > 0) {

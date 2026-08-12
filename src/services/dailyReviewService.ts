@@ -1,6 +1,5 @@
 import { supabase } from "@/lib/supabase";
 import { DailyReviewItem } from "@/types/dailyReview";
-import { DailyReviewRow } from "@/types/database";
 import { throwOnPostgrestError } from "@/lib/sync";
 import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 
@@ -26,7 +25,7 @@ export const dailyReviewApi = {
     try {
       const { data: dbReviews, error } = await supabase
         .from("daily_reviews")
-        .select("*")
+        .select("id,date,content,created_at,updated_at")
         .gte("date", "2026-01-01")
         .order("date", { ascending: false });
 
@@ -35,7 +34,7 @@ export const dailyReviewApi = {
       }
 
       if (dbReviews && dbReviews.length >= 0) {
-        const reviews: DailyReviewItem[] = dbReviews.map((r: DailyReviewRow) => {
+        const reviews: DailyReviewItem[] = dbReviews.map((r) => {
           let contentStr = "";
           if (typeof r.content === "string") {
             contentStr = r.content;
@@ -66,7 +65,7 @@ export const dailyReviewApi = {
     try {
       const { data, error } = await supabase
         .from("daily_reviews")
-        .select("*")
+        .select("id,date,content,created_at,updated_at")
         .eq("date", date)
         .maybeSingle();
 

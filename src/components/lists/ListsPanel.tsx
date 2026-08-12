@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, cloneElement, ReactElement, ReactNode, useCallback, memo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import {
   ArrowDownUp, MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen, CheckCircle, AlertCircle,
@@ -9,7 +10,7 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-import { useListsData, useListsActions } from '@/hooks/useListsQuery';
+import { useListContents, useListsData, useListsActions } from '@/hooks/useListsQuery';
 import { sortLists, sortFolders } from '@/utils/listsSelectors';
 import { List, Folder, ViewType, Note, NoteGroup, Template } from '@/types/lists';
 import { getNoteOpenMode, setNoteOpenMode, openNoteInNewWindow, NoteOpenMode } from '@/services/noteOpenService';
@@ -27,6 +28,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth';
+import { userStorageKey } from '@/lib/userStorage';
 
 // ============================================================================
 // 0. Shared Helpers & Custom Hooks
@@ -1516,6 +1519,9 @@ const EMPTY_NOTES: Note[] = [];
 const EMPTY_NOTE_GROUPS: NoteGroup[] = [];
 
 export function ListsPanel() {
+  const { userId } = useAuth();
+  const activeListStorageKey = useMemo(() => userStorageKey('lists-active-list-id'), [userId]);
+  const sidebarStorageKey = useMemo(() => userStorageKey('lists-sidebar-collapsed'), [userId]);
   // Query-backed data + write actions (connected to listNotesService Supabase backend)
   const { data } = useListsData();
   const rawLists = data?.lists ?? EMPTY_LISTS;
@@ -1550,14 +1556,15 @@ export function ListsPanel() {
   const folders = useMemo(() => sortFolders(rawFolders), [rawFolders]);
 
   const folderIdSet = useMemo(() => new Set(folders.map(f => f.id)), [folders]);
-  const noteMap = useMemo(() => new Map(rawNotes.map(n => [n.id, n])), [rawNotes]);
   const listMap = useMemo(() => new Map(lists.map(l => [l.id, l])), [lists]);
 
-  const templates = useTemplateData().data ?? [];
-
   const [activeListId, setActiveListId] = useState<string | null>(() => {
-    return localStorage.getItem('lists-active-list-id');
+    return localStorage.getItem(userStorageKey('lists-active-list-id'));
   });
+  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
+  useListContents(activeListId);
+  const noteMap = useMemo(() => new Map(rawNotes.map(n => [n.id, n])), [rawNotes]);
+  const templates = useTemplateData(isTemplateModalOpen).data ?? [];
 
   const notes = useMemo(() => {
     if (!activeListId) return [];
@@ -1581,13 +1588,13 @@ export function ListsPanel() {
   }, [rawNoteGroups, activeListId]);
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    return localStorage.getItem('lists-sidebar-collapsed') === 'true';
+    return localStorage.getItem(userStorageKey('lists-sidebar-collapsed')) === 'true';
   });
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed(prev => {
       const next = !prev;
-      localStorage.setItem('lists-sidebar-collapsed', String(next));
+      localStorage.setItem(sidebarStorageKey, String(next));
       return next;
     });
   };
@@ -1617,8 +1624,13 @@ export function ListsPanel() {
     if (!activeNoteId) return null;
     return noteMap.get(activeNoteId) || null;
   }, [noteMap, activeNoteId]);
-
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const { data: activeNoteDetail } = useQuery({
+    queryKey: ['lists', userId, 'note', activeNoteId],
+    queryFn: () => listsService.loadNote(activeNoteId!),
+    enabled: isDrawerOpen && Boolean(activeNoteId) && !activeNote?.contentLoaded,
+  });
+  const drawerNote = activeNote?.contentLoaded ? activeNote : activeNoteDetail ?? null;
   const [newNoteTitle, setNewNoteTitle] = useState('');
   const [listMenuOpen, setListMenuOpen] = useState(false);
   const [isAddingGroup, setIsAddingGroup] = useState(false);
@@ -1634,7 +1646,6 @@ export function ListsPanel() {
   const dragOverGroupId = dragOverTarget?.type === 'group' ? dragOverTarget.id : null;
 
   // Template & Export state
-  const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false);
   const [batchExportModalOpen, setBatchExportModalOpen] = useState(false);
 
   // Toast state
@@ -1665,7 +1676,7 @@ export function ListsPanel() {
     if (lists.length === 0) return;
     didInitActiveList.current = true;
 
-    const savedId = localStorage.getItem('lists-active-list-id');
+    const savedId = localStorage.getItem(activeListStorageKey);
     const exists = savedId && lists.some(l => l.id === savedId);
     if (exists) return;
 
@@ -1679,18 +1690,18 @@ export function ListsPanel() {
     }
 
     setActiveListId(defaultListId);
-    localStorage.setItem('lists-active-list-id', defaultListId);
-  }, [lists, folders]);
+    localStorage.setItem(activeListStorageKey, defaultListId);
+  }, [lists, folders, activeListStorageKey]);
 
   useEffect(() => {
     if (activeListId) {
       setActiveNoteId(null);
       setIsDrawerOpen(false);
-      localStorage.setItem('lists-active-list-id', activeListId);
+      localStorage.setItem(activeListStorageKey, activeListId);
     } else {
-      localStorage.removeItem('lists-active-list-id');
+      localStorage.removeItem(activeListStorageKey);
     }
-  }, [activeListId]);
+  }, [activeListId, activeListStorageKey]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -1984,10 +1995,13 @@ export function ListsPanel() {
   };
 
   const handleBatchExport = async (selectedNoteIds: string[]) => {
-    const notesToExport = notes.filter(n => selectedNoteIds.includes(n.id));
-    if (notesToExport.length === 0) return;
+    const notesToExport = await Promise.all(notes
+      .filter(n => selectedNoteIds.includes(n.id))
+      .map(async note => note.contentLoaded ? note : listsService.loadNote(note.id)));
+    const completeNotes = notesToExport.filter((note): note is Note => Boolean(note));
+    if (completeNotes.length === 0) return;
 
-    const files = notesToExport.map(n => ({
+    const files = completeNotes.map(n => ({
       title: n.title,
       content: convertTipTapJsonToMarkdown(n.content || ''),
     }));
@@ -2009,17 +2023,21 @@ export function ListsPanel() {
     updateNote(note.id, { isPinned: !note.isPinned });
   };
 
-  const handleDuplicateNote = (note: Note) => {
+  const handleDuplicateNote = async (note: Note) => {
+    const source = note.contentLoaded ? note : await listsService.loadNote(note.id);
+    if (!source) return;
     const newNote = addNote({
-      listId: note.listId,
-      title: note.title + ' (副本)',
-      content: note.content,
+      listId: source.listId,
+      title: source.title + ' (副本)',
+      content: source.content,
     });
     handleOpenNote(newNote.id, newNote.title);
   };
 
-  const handleSaveAsTemplate = (note: Note) => {
-    addTemplate(note.title || '自定义模板', note.content);
+  const handleSaveAsTemplate = async (note: Note) => {
+    const source = note.contentLoaded ? note : await listsService.loadNote(note.id);
+    if (!source) return;
+    await addTemplate(source.title || '自定义模板', source.content);
     showToast('已保存为模板！');
   };
 
@@ -2312,7 +2330,7 @@ export function ListsPanel() {
               </div>
 
               <NoteDrawer
-                note={activeNote}
+                note={drawerNote}
                 isOpen={isDrawerOpen}
                 onClose={() => setIsDrawerOpen(false)}
                 onUpdate={handleNoteUpdate}

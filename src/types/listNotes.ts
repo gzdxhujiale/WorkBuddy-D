@@ -43,6 +43,7 @@ export interface ListNote {
   groupId?: string;
   title: string;
   content: string;
+  contentLoaded?: boolean;
   isPinned: boolean;
   sortOrder: number;
   createdAt?: number;

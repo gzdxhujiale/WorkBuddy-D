@@ -77,7 +77,7 @@ export const timeManagementApi = {
       let roles: Role[] = DEFAULT_ROLES;
       const { data: rolesData, error: rolesErr } = await supabase
         .from("mission_roles")
-        .select("*")
+        .select("id,name,color,sort_order")
         .is("deleted_at", null)
         .order("sort_order", { ascending: true });
 
@@ -93,7 +93,7 @@ export const timeManagementApi = {
       // 2. Load tasks
       const { data: dbTasks, error: tasksErr } = await supabase
         .from("time_management_tasks")
-        .select("*")
+        .select("id,title,quadrant,role_id,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,created_at,updated_at")
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 

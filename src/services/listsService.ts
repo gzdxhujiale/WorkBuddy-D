@@ -3,7 +3,7 @@ import type { List, Folder, Note, NoteGroup } from "@/types/lists";
 
 /**
  * listsService — the data-access seam for the Lists feature.
- * Connects directly to listNotesService (Supabase PostgreSQL + LocalStorage fallback).
+ * Connects directly to the Supabase-backed listNotesService.
  */
 
 export type ListLoadAllPayload = {
@@ -26,6 +26,7 @@ export type ListLoadAllPayload = {
     groupId: string | null;
     title: string;
     content: string;
+    contentLoaded: boolean;
     isPinned: boolean;
     sortOrder: number;
     createdAt: number;
@@ -36,10 +37,6 @@ export type ListLoadAllPayload = {
 
 export async function loadAll(): Promise<ListLoadAllPayload> {
   const data = await listNotesApi.loadAll();
-  const noteCounts = new Map<string, number>();
-  data.notes.forEach((n) => {
-    noteCounts.set(n.listId, (noteCounts.get(n.listId) || 0) + 1);
-  });
 
   return {
     folders: data.folders.map((f) => ({
@@ -57,7 +54,7 @@ export async function loadAll(): Promise<ListLoadAllPayload> {
       folderId: l.folderId || null,
       isPinned: l.isPinned,
       sortOrder: l.sortOrder,
-      itemCount: noteCounts.get(l.id) || 0,
+      itemCount: 0,
     })),
     noteGroups: data.groups.map((g) => ({
       id: g.id,
@@ -71,6 +68,7 @@ export async function loadAll(): Promise<ListLoadAllPayload> {
       groupId: n.groupId || null,
       title: n.title || "",
       content: n.content || "",
+      contentLoaded: Boolean(n.contentLoaded),
       isPinned: n.isPinned,
       sortOrder: n.sortOrder,
       createdAt: n.createdAt || Date.now(),
@@ -266,4 +264,28 @@ export async function saveMultipleMarkdownFiles(
   for (const file of files) {
     await saveMarkdownFile(`${file.title || "未命名笔记"}.md`, file.content);
   }
+}
+
+export async function loadListContents(listId: string): Promise<Pick<ListLoadAllPayload, 'noteGroups' | 'notes'>> {
+  const data = await listNotesApi.loadListContents(listId);
+  return {
+    noteGroups: data.groups.map(g => ({ id: g.id, listId: g.listId, name: g.name, sortOrder: g.sortOrder })),
+    notes: data.notes.map(n => ({
+      id: n.id, listId: n.listId, groupId: n.groupId || null, title: n.title,
+      content: '', contentLoaded: false, isPinned: n.isPinned, sortOrder: n.sortOrder,
+      createdAt: n.createdAt || Date.now(), updatedAt: n.updatedAt || Date.now(),
+    })),
+  };
+}
+
+export async function loadNote(id: string): Promise<Note | null> {
+  const note = await listNotesApi.loadNote(id);
+  if (!note) return null;
+  return {
+    id: note.id, listId: note.listId, groupId: note.groupId || null,
+    title: note.title, content: note.content, contentLoaded: true,
+    isPinned: note.isPinned, sortOrder: note.sortOrder,
+    createdAt: note.createdAt || Date.now(), updatedAt: note.updatedAt || Date.now(),
+    baseUpdatedAt: note.baseUpdatedAt,
+  };
 }

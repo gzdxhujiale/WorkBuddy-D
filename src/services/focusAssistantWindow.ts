@@ -12,7 +12,7 @@ export async function showFocusAssistant(): Promise<void> {
     return;
   }
   new WebviewWindow(LABEL, {
-    url: `${window.location.origin}/focus-assistant.html`, title: "专注助手", width: 280, height: 340,
+    url: `${window.location.origin}/focus-assistant.html`, title: "专注助手", width: 340, height: 400,
     resizable: false, decorations: false, transparent: true, shadow: true, alwaysOnTop: true,
     skipTaskbar: true, visible: true,
   });

@@ -1,6 +1,8 @@
 export const queryKeys = {
   lists: {
     all: (userId: string) => ['lists', userId, 'all'] as const,
+    contents: (userId: string, listId: string) => ['lists', userId, 'contents', listId] as const,
+    note: (userId: string, noteId: string) => ['lists', userId, 'note', noteId] as const,
   },
 };
 

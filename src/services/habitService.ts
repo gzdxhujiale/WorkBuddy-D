@@ -1,6 +1,6 @@
 import { supabase } from "@/lib/supabase";
 import { Habit, HabitCheckIn, HabitData } from "@/types/habit";
-import { HabitRow, HabitCheckinRow } from "@/types/database";
+import { HabitCheckinRow } from "@/types/database";
 import { throwOnPostgrestError } from "@/lib/sync";
 import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 
@@ -50,13 +50,13 @@ export const habitApi = {
       const [habitsRes, checkInsRes] = await Promise.all([
         supabase
           .from("habits")
-          .select("*")
+          .select("id,name,frequency_type,frequency_days,goal,start_date,duration,category,reminder,auto_popup_log,sort_order,created_at,updated_at")
           .is("deleted_at", null)
           .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true }),
         supabase
           .from("habit_checkins")
-          .select("*")
+          .select("id,habit_id,date,completed,created_at,updated_at")
           .is("deleted_at", null)
           .gte("date", checkInHistoryStartDate())
           .order("date", { ascending: false }),
@@ -66,7 +66,7 @@ export const habitApi = {
         throwOnPostgrestError(habitsRes.error || checkInsRes.error, "加载习惯");
       }
 
-      const habits: Habit[] = (habitsRes.data || []).map((r: HabitRow) => ({
+      const habits: Habit[] = (habitsRes.data || []).map((r) => ({
         id: r.id,
         name: r.name,
         frequencyType: (r.frequency_type as "daily" | "weekly_days" | "custom") || "daily",
@@ -84,7 +84,7 @@ export const habitApi = {
         baseUpdatedAt: r.updated_at ? new Date(r.updated_at).getTime() : undefined,
       }));
 
-      const checkIns: HabitCheckIn[] = (checkInsRes.data || []).map((c: HabitCheckinRow) => ({
+      const checkIns: HabitCheckIn[] = (checkInsRes.data || []).map((c) => ({
         id: c.id,
         habitId: c.habit_id,
         date: c.date,

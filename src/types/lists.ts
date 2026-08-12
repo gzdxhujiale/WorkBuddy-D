@@ -32,6 +32,8 @@ export interface Note {
   groupId?: string | null;
   title: string;
   content: string;
+  /** `false` means this is a list summary; load the body before editing/exporting. */
+  contentLoaded?: boolean;
   isPinned?: boolean;
   sortOrder?: number;
   createdAt: number;
