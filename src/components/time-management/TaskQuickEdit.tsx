@@ -90,7 +90,8 @@ interface TaskQuickEditPopoverProps {
   task?: Task;
   quadrant?: QuadrantType;
   anchorRect?: AnchorRect;
-  onSave?: (taskId: string, updates: Partial<Task>, isHighFreq?: boolean) => void;
+  /** Called once when the editor closes with the complete draft delta. */
+  onCommit?: (taskId: string, updates: Partial<Task>) => void;
   onCreate?: (draft: TaskDraft) => void;
   onDelete?: (taskId: string) => void;
   onClose: () => void;
@@ -103,7 +104,7 @@ export interface TaskQuickEditHandle {
 
 export const TaskQuickEditPopover = memo(
   forwardRef<TaskQuickEditHandle, TaskQuickEditPopoverProps>(
-    ({ task, quadrant, anchorRect, onSave, onCreate, onClose }, handleRef) => {
+    ({ task, quadrant, anchorRect, onCommit, onCreate, onClose }, handleRef) => {
       const isCreate = !task;
       const meta = QUADRANT_META[task?.quadrant ?? quadrant ?? "Q2"];
 
@@ -112,7 +113,6 @@ export const TaskQuickEditPopover = memo(
       const [description, setDescription] = useState(task?.description ?? "");
       const latestTitle = useRef(task?.title ?? "");
       const latestDescription = useRef(task?.description ?? "");
-      const timers = useRef<Record<string, number>>({});
 
       useEffect(() => {
         latestTitle.current = title;
@@ -121,36 +121,6 @@ export const TaskQuickEditPopover = memo(
       useEffect(() => {
         latestDescription.current = description;
       }, [description]);
-
-      const triggerAutoSave = (updates: Partial<Task>, isHighFreq = true) => {
-        if (!task || !onSave) return;
-        const key = Object.keys(updates)[0];
-        if (timers.current[key]) {
-          window.clearTimeout(timers.current[key]);
-        }
-        timers.current[key] = window.setTimeout(() => {
-          onSave(task.id, updates, isHighFreq);
-          delete timers.current[key];
-        }, 500);
-      };
-
-      const flushSaves = () => {
-        Object.keys(timers.current).forEach((key) => window.clearTimeout(timers.current[key]));
-        timers.current = {};
-        if (!task || !onSave) return;
-
-        const updates: Partial<Task> = {};
-        if (latestTitle.current.trim() && latestTitle.current.trim() !== task.title) {
-          updates.title = latestTitle.current.trim();
-        }
-        const finalDesc = latestDescription.current.trim();
-        if (finalDesc !== (task.description || "")) {
-          updates.description = finalDesc || undefined;
-        }
-        if (Object.keys(updates).length > 0) {
-          onSave(task.id, updates, false);
-        }
-      };
 
       // ---------- 日期 / 时间 / 提醒状态 ----------
       const initialEnd = task?.scheduledEndAt;
@@ -187,18 +157,6 @@ export const TaskQuickEditPopover = memo(
       const commitDeadline = (nextDate: string | null, nextTime: string) => {
         setDateSel(nextDate);
         setTimeSel(nextTime);
-        if (task && onSave) {
-          const scheduledEndAt = nextDate ? composeDeadline(nextDate, nextTime) : undefined;
-          onSave(
-            task.id,
-            {
-              scheduleMode: nextDate ? "point" : undefined,
-              scheduledStartAt: undefined,
-              scheduledEndAt,
-            },
-            false
-          );
-        }
       };
 
       const commitRange = (
@@ -216,13 +174,6 @@ export const TaskQuickEditPopover = memo(
         setRangeStartTime(nextStartTime);
         setRangeEndDate(nextEndDate);
         setRangeEndTime(nextEndTime);
-        if (task && onSave) {
-          onSave(task.id, {
-            scheduleMode: "range",
-            scheduledStartAt,
-            scheduledEndAt,
-          }, false);
-        }
       };
 
       const switchScheduleMode = (nextMode: "point" | "range") => {
@@ -247,14 +198,6 @@ export const TaskQuickEditPopover = memo(
         const nextTime = timeSel || rangeEndTime;
         setDateSel(nextDate);
         setTimeSel(nextTime);
-        const scheduledEndAt = composeDeadline(nextDate, nextTime);
-        if (task && onSave) {
-          onSave(task.id, {
-            scheduleMode: "point",
-            scheduledStartAt: undefined,
-            scheduledEndAt,
-          }, false);
-        }
       };
 
       // ---------- 提醒草稿（第三层 B） ----------
@@ -281,9 +224,6 @@ export const TaskQuickEditPopover = memo(
             ? null
             : { offsetDays: draftOffset, time: draftTime || "09:00", repeat: draftRepeat };
         setAppliedReminder(next);
-        if (task && onSave) {
-          onSave(task.id, { reminder: next ? serializeReminder(next) : undefined }, false);
-        }
         setThird(null);
       };
 
@@ -338,9 +278,37 @@ export const TaskQuickEditPopover = memo(
         });
       };
 
+      const submitTaskDraft = () => {
+        if (!task || !onCommit) return;
+        const draft = draftRef.current;
+        const isRange = draft.scheduleMode === "range";
+        const scheduledStartAt = isRange
+          ? composeStart(draft.rangeStartDate, draft.rangeAllDay ? "" : draft.rangeStartTime)
+          : undefined;
+        const scheduledEndAt = isRange
+          ? composeDeadline(draft.rangeEndDate, draft.rangeAllDay ? "" : draft.rangeEndTime)
+          : draft.dateSel
+            ? composeDeadline(draft.dateSel, draft.timeSel)
+            : undefined;
+        if (isRange && (!scheduledStartAt || !scheduledEndAt || scheduledEndAt <= scheduledStartAt)) return;
+
+        const next: Partial<Task> = {
+          title: latestTitle.current.trim() || task.title,
+          description: latestDescription.current.trim() || undefined,
+          scheduleMode: scheduledEndAt ? draft.scheduleMode : undefined,
+          scheduledStartAt,
+          scheduledEndAt,
+          reminder: draft.appliedReminder ? serializeReminder(draft.appliedReminder) : undefined,
+        };
+        const updates = Object.fromEntries(
+          Object.entries(next).filter(([key, value]) => !Object.is(task[key as keyof Task], value)),
+        ) as Partial<Task>;
+        if (Object.keys(updates).length > 0) onCommit(task.id, updates);
+      };
+
       const handleClose = () => {
         if (isCreate) submitCreate();
-        else flushSaves();
+        else submitTaskDraft();
         onClose();
       };
 
@@ -596,10 +564,8 @@ export const TaskQuickEditPopover = memo(
                   autoFocus
                   className="flex-1 bg-transparent border-0 outline-none text-base font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 min-w-0"
                   onChange={(e) => {
+                    latestTitle.current = e.target.value;
                     setTitle(e.target.value);
-                    if (e.target.value.trim()) {
-                      triggerAutoSave({ title: e.target.value.trim() }, true);
-                    }
                   }}
                   onKeyDown={(e) => {
                     if (e.key !== "Enter") return;
@@ -627,8 +593,8 @@ export const TaskQuickEditPopover = memo(
                   value={description}
                   className="tqe-desc-input w-full h-full min-h-[148px] bg-transparent border-0 outline-none resize-none text-xs leading-relaxed text-slate-600 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   onChange={(e) => {
+                    latestDescription.current = e.target.value;
                     setDescription(e.target.value);
-                    triggerAutoSave({ description: e.target.value }, true);
                   }}
                 />
               </div>
@@ -1067,7 +1033,7 @@ export const TaskQuickEditPopover = memo(
 );
 
 interface TqeInitPayload {
-  session: number;
+  session: string;
   task: Task | null;
   quadrant: QuadrantType | null;
   anchor: AnchorRect;
@@ -1087,6 +1053,13 @@ export function TaskQuickEditWindow() {
     document.documentElement.classList.add("tqe-window");
     const pending: Promise<UnlistenFn>[] = [
       listen<TqeInitPayload>("tqe:init", (e) => setInit(e.payload)),
+      listen<{ session: string }>("tqe:discard", (e) => {
+        setInit((active) => {
+          if (e.payload?.session !== active?.session) return active;
+          void getCurrentWindow().hide().catch(() => {});
+          return null;
+        });
+      }),
       listen("tqe:close-layer", () => popRef.current?.closeTopLayer()),
       listen("tqe:close-all", () => popRef.current?.closeAll()),
       listen("tqe:ping", () => void emit("tqe:ready")),
@@ -1117,12 +1090,11 @@ export function TaskQuickEditWindow() {
       task={init.task ?? undefined}
       quadrant={init.quadrant ?? undefined}
       anchorRect={init.anchor}
-      onSave={(taskId, updates, isHighFreq) => {
-        void emit("tqe:save", {
+      onCommit={(taskId, updates) => {
+        void emit("tqe:commit", {
           session,
           taskId,
           updates: toWire(updates),
-          isHighFreq: isHighFreq ?? true,
         });
       }}
       onCreate={(draft: TaskDraft) => {

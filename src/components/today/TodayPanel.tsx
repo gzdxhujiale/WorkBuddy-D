@@ -210,7 +210,7 @@ export const TodayPanel: React.FC = () => {
     void openQuickEditWindow({
       task,
       anchorEl: anchor,
-      onSave: (taskId, updates) => updateTask(taskId, updates),
+      onCommit: (taskId, updates) => updateTask(taskId, updates),
       onClosed: () => {},
     });
   };

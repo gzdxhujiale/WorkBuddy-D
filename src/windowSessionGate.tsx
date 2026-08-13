@@ -8,10 +8,22 @@ export function WindowSessionGate({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
-    void supabase.auth.getSession().then(({ data }) => {
-      setStorageUserId(data.session?.user.id ?? null);
-      setSession(data.session);
-    });
+    let mounted = true;
+    const applySession = (nextSession: Session | null) => {
+      if (!mounted) return;
+      setStorageUserId(nextSession?.user.id ?? null);
+      setSession(nextSession);
+    };
+
+    void supabase.auth.getSession().then(({ data }) => applySession(data.session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, nextSession) => applySession(nextSession),
+    );
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   if (session === undefined) return <WindowMessage message="正在验证登录状态…" />;

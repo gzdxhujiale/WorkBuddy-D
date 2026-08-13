@@ -27,35 +27,52 @@ export function useOptimisticSync<TData, TVariables>({
   const previousDataRef = useRef(new Map<string, TData | undefined>());
   const timerRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const versionRef = useRef(new Map<string, number>());
+  const inFlightKeysRef = useRef(new Set<string>());
+  const flushRef = useRef<(onlyKey?: string) => Promise<void>>(async () => {});
 
   const syncFnRef = useRef(syncFn);
   syncFnRef.current = syncFn;
 
-  // Flush pending changes to remote persistence layer immediately
+  // Flush pending changes to remote persistence layer immediately.
+  // A given entity is serialized: version-checked RPCs must never race.
   const flush = useCallback(async (onlyKey?: string) => {
     const keys = onlyKey ? [onlyKey] : [...pendingVarsRef.current.keys()];
     await Promise.all(keys.map(async (key) => {
+      if (inFlightKeysRef.current.has(key)) {
+        const pendingTimer = timerRef.current.get(key);
+        if (pendingTimer) clearTimeout(pendingTimer);
+        timerRef.current.delete(key);
+        return;
+      }
+
       const timer = timerRef.current.get(key);
       if (timer) clearTimeout(timer);
       timerRef.current.delete(key);
       const payload = pendingVarsRef.current.get(key);
-      if (payload !== undefined) {
-        pendingVarsRef.current.delete(key);
-        const version = versionRef.current.get(key) ?? 0;
-        try {
-          await syncFnRef.current(payload);
-          clearQueryPending(queryKey);
-        } catch (err) {
+      if (payload === undefined) return;
+
+      pendingVarsRef.current.delete(key);
+      const version = versionRef.current.get(key) ?? 0;
+      inFlightKeysRef.current.add(key);
+      try {
+        await syncFnRef.current(payload);
+        clearQueryPending(queryKey);
+      } catch (err) {
         console.error("[useOptimisticSync] Sync persistence error:", err);
         // Do not overwrite a newer local edit made while this request was in flight.
         if ((versionRef.current.get(key) ?? 0) === version) {
           queryClient.setQueryData(queryKey, previousDataRef.current.get(key));
           clearQueryPending(queryKey);
         }
-      }
+      } finally {
+        inFlightKeysRef.current.delete(key);
+        if (pendingVarsRef.current.has(key)) {
+          queueMicrotask(() => { void flushRef.current(key); });
+        }
       }
     }));
   }, [queryClient, queryKey]);
+  flushRef.current = flush;
 
   // Trigger optimistic cache update and schedule debounced sync
   const trigger = useCallback(
@@ -86,12 +103,26 @@ export function useOptimisticSync<TData, TVariables>({
   useEffect(() => {
     return () => {
       for (const timer of timerRef.current.values()) clearTimeout(timer);
-      for (const payload of pendingVarsRef.current.values()) {
+      timerRef.current.clear();
+
+      // Remove a payload before dispatching it. React StrictMode and HMR can
+      // invoke cleanup more than once; this makes that cleanup idempotent.
+      // If a prior write is in flight, its finally block sends the newer value.
+      for (const [key, payload] of [...pendingVarsRef.current.entries()]) {
+        if (inFlightKeysRef.current.has(key)) continue;
+        pendingVarsRef.current.delete(key);
+        inFlightKeysRef.current.add(key);
         syncFnRef.current(payload)
           .then(() => clearQueryPending(queryKey))
           .catch((err) => {
             clearQueryPending(queryKey);
             console.error("[useOptimisticSync] Unmount flush failed:", err);
+          })
+          .finally(() => {
+            inFlightKeysRef.current.delete(key);
+            if (pendingVarsRef.current.has(key)) {
+              void flushRef.current(key);
+            }
           });
       }
     };

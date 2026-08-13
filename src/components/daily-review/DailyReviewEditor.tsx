@@ -118,11 +118,37 @@ function parseContent(raw: string): EditorContentValue {
 }
 
 function EditorToolbar() {
+  // reactjs-tiptap-editor implements several toolbar controls with Radix
+  // modal Popovers. Radix then hides the editor subtree from assistive tech;
+  // Chromium rejects that change if the trigger button is still focused.
+  // Release focus immediately before the modal opens. Popover content receives
+  // focus itself, while ordinary toolbar buttons keep their normal behavior.
+  const releaseModalTriggerFocus = (target: EventTarget | null) => {
+    const trigger = (target as HTMLElement | null)?.closest<HTMLButtonElement>(
+      'button[aria-haspopup="dialog"]',
+    );
+    if (trigger && document.activeElement === trigger) trigger.blur();
+  };
+
   return (
     <div
       className="flex min-h-11 shrink-0 flex-wrap items-center gap-0.5 overflow-x-auto border-b border-border bg-muted/45 px-2 py-1"
       role="toolbar"
       aria-label="复盘编辑工具栏"
+      onPointerDownCapture={(event) => {
+        const trigger = (event.target as HTMLElement).closest<HTMLButtonElement>(
+          'button[aria-haspopup="dialog"]',
+        );
+        if (!trigger) return;
+        // Prevent the pointer's default focus transfer; click still opens the
+        // control and Radix will focus its dialog content.
+        event.preventDefault();
+      }}
+      onKeyDownCapture={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          releaseModalTriggerFocus(event.target);
+        }
+      }}
     >
       <RichTextUndo />
       <RichTextRedo />

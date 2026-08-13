@@ -14,6 +14,8 @@ export const queryKeys = {
 
 export const HIGH_FREQ_DELAY = 300;
 export const LOW_FREQ_DELAY = 1000;
+/** Long-form text stays local while the user is actively typing. */
+export const NOTE_EDIT_DELAY = 3000;
 
 export function logSilent(scope: string, msg: string, err?: unknown): void {
   if (process.env.NODE_ENV !== 'production') {

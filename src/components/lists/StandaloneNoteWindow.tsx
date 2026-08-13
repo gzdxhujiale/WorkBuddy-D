@@ -144,22 +144,18 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
     };
   }, [updateNote]);
 
-  // Debounced auto-save effect
+  // Keep long-form edits local until the user pauses typing. Closing the
+  // window below explicitly flushes the one pending save.
   useEffect(() => {
     if (title !== note.title || content !== note.content) {
       setSaveStatus('saving');
-      const timer = setTimeout(async () => {
+      const timer = setTimeout(() => {
         updateNote(note.id, { title, content });
-        try {
-          await flushNote(note.id);
-          setSaveStatus('saved');
-        } catch {
-          setSaveStatus(navigator.onLine ? 'failed' : 'offline');
-        }
-      }, 500);
+        setSaveStatus('saved');
+      }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [title, content, note.id, note.title, note.content, updateNote, flushNote]);
+  }, [title, content, note.id, note.title, note.content, updateNote]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {

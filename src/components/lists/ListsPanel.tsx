@@ -891,7 +891,7 @@ function NoteDrawerContent({
         onUpdate(note.id, title, content);
         isDirtyRef.current = false;
         setSaveStatus('saved');
-      }, 500);
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [title, content, note.id, note.title, note.content, isOpen, onUpdate]);

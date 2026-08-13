@@ -65,33 +65,20 @@ export const TimeManagementPanel: React.FC = () => {
       task,
       quadrant,
       anchorEl: targetEl,
-      onSave: (taskId, updates) => {
+      onCommit: (taskId, updates) => {
         updateTask(taskId, updates);
       },
       onCreate: (targetQ, draft) => {
-        const newTask = addTask(
-          draft.title,
-          targetQ
-        );
         const fallbackEndAt = initialDate
           ? new Date(`${initialDate}T23:59:59.999`).getTime()
           : undefined;
-        if (
-          draft.description ||
-          draft.scheduleMode ||
-          draft.scheduledStartAt ||
-          draft.scheduledEndAt ||
-          fallbackEndAt ||
-          draft.reminder
-        ) {
-          updateTask(newTask.id, {
-            description: draft.description,
-            scheduleMode: draft.scheduleMode ?? (fallbackEndAt ? "point" : undefined),
-            scheduledStartAt: draft.scheduledStartAt,
-            scheduledEndAt: draft.scheduledEndAt ?? fallbackEndAt,
-            reminder: draft.reminder,
-          });
-        }
+        addTask(draft.title, targetQ, {
+          description: draft.description,
+          scheduleMode: draft.scheduleMode ?? (fallbackEndAt ? "point" : undefined),
+          scheduledStartAt: draft.scheduledStartAt,
+          scheduledEndAt: draft.scheduledEndAt ?? fallbackEndAt,
+          reminder: draft.reminder,
+        });
       },
       onClosed: () => {},
     });

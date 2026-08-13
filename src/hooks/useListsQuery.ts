@@ -6,6 +6,7 @@ import {
   sharedSyncEngine,
   HIGH_FREQ_DELAY,
   LOW_FREQ_DELAY,
+  NOTE_EDIT_DELAY,
   logSilent,
 } from '@/lib/syncEngine';
 import * as listsService from '@/services/listsService';
@@ -372,6 +373,9 @@ export function useListsActions(): ListsActions {
     };
 
     const updateNote: ListsActions['updateNote'] = (id, updates) => {
+      const delay = updates.title !== undefined || updates.content !== undefined
+        ? NOTE_EDIT_DELAY
+        : HIGH_FREQ_DELAY;
       const data = getData(queryClient, userId);
       const index = data.notes.findIndex(n => n.id === id);
       if (index === -1) {
@@ -389,7 +393,7 @@ export function useListsActions(): ListsActions {
             updatedAt,
           });
           if (savedUpdatedAt === undefined) return;
-        }, HIGH_FREQ_DELAY);
+        }, delay);
         return;
       }
       const newNotes = [...data.notes];
@@ -423,7 +427,7 @@ export function useListsActions(): ListsActions {
               : item,
           ),
         }));
-      }, HIGH_FREQ_DELAY);
+      }, delay);
     };
 
     const deleteNote: ListsActions['deleteNote'] = (id) => {

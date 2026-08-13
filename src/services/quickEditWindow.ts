@@ -17,7 +17,7 @@ export interface QuickEditWindowOptions {
   task?: Task;
   quadrant?: QuadrantType;
   anchorEl: HTMLElement;
-  onSave?: (taskId: string, updates: Partial<Task>, isHighFreq?: boolean) => void;
+  onCommit?: (taskId: string, updates: Partial<Task>) => void;
   onCreate?: (quadrant: QuadrantType, draft: TaskDraft) => void;
   onClosed: () => void;
 }
@@ -34,8 +34,9 @@ let readyResolve: (() => void) | null = null;
 let readyReject: ((e: unknown) => void) | null = null;
 let unlistenPoolFocus: UnlistenFn | null = null;
 let listenersInstalled = false;
-let sessionSeq = 0;
-let current: { session: number; opts: QuickEditWindowOptions } | null = null;
+let listenerCleanups: UnlistenFn[] = [];
+let current: { session: string; opts: QuickEditWindowOptions } | null = null;
+let latestRequestedSession: string | null = null;
 let lastPos: { x: number; y: number } | null = null;
 
 let mainFocused = true;
@@ -52,7 +53,7 @@ function scheduleFocusCheck(): void {
   }, 120);
 }
 
-function endSession(session: number): void {
+function endSession(session: string): void {
   if (current?.session !== session) return;
   const cur = current;
   current = null;
@@ -63,25 +64,25 @@ async function installListeners(): Promise<void> {
   if (listenersInstalled) return;
   listenersInstalled = true;
 
-  await Promise.all([
+  const cleanups = await Promise.all([
     listen('tqe:ready', () => {
       readyResolve?.();
       readyResolve = null;
       readyReject = null;
     }),
-    listen<{ session: number; taskId: string; updates: Record<string, unknown>; isHighFreq?: boolean }>('tqe:save', (e) => {
+    listen<{ session: string; taskId: string; updates: Record<string, unknown> }>('tqe:commit', (e) => {
       if (e.payload?.session !== current?.session) return;
-      current?.opts.onSave?.(e.payload.taskId, fromWire(e.payload.updates), e.payload.isHighFreq);
+      current?.opts.onCommit?.(e.payload.taskId, fromWire(e.payload.updates));
     }),
-    listen<{ session: number; draft: TaskDraft }>('tqe:create', (e) => {
+    listen<{ session: string; draft: TaskDraft }>('tqe:create', (e) => {
       if (e.payload?.session !== current?.session) return;
       const q = current?.opts.quadrant;
       if (q) current?.opts.onCreate?.(q, e.payload.draft);
     }),
-    listen<{ session: number }>('tqe:closed', (e) => {
-      endSession(e.payload?.session ?? -1);
+    listen<{ session: string }>('tqe:closed', (e) => {
+      endSession(e.payload?.session ?? '');
     }),
-    listen<{ session: number }>('tqe:shown', (e) => {
+    listen<{ session: string }>('tqe:shown', (e) => {
       if (e.payload?.session !== current?.session || !pool || !lastPos) return;
       void pool.setPosition(new PhysicalPosition(lastPos.x, lastPos.y)).catch(() => {});
     }),
@@ -90,6 +91,12 @@ async function installListeners(): Promise<void> {
       if (!payload) scheduleFocusCheck();
     }),
   ]);
+  listenerCleanups.push(...cleanups);
+}
+
+function disposeListeners(): void {
+  for (const cleanup of listenerCleanups.splice(0)) cleanup();
+  listenersInstalled = false;
 }
 
 function attachPoolHandlers(webview: WebviewWindow, isNew: boolean): void {
@@ -186,7 +193,10 @@ export function requestQuickEditCloseLayer(): void {
 
 export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise<void> {
   if (current) current = null;
-  const session = ++sessionSeq;
+  // A UUID keeps events from an old Vite-HMR module instance from matching a
+  // new editing session after its module counter has been reset.
+  const session = crypto.randomUUID();
+  latestRequestedSession = session;
 
   const readyP = ensurePool();
   const main = getCurrentWindow();
@@ -224,7 +234,7 @@ export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise
   };
 
   await readyP;
-  if (session !== sessionSeq || !pool) {
+  if (latestRequestedSession !== session || !pool) {
     if (!pool) opts.onClosed();
     return;
   }
@@ -238,5 +248,22 @@ export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise
     task: opts.task ?? null,
     quadrant: opts.quadrant ?? null,
     anchor: localAnchor,
+  });
+}
+
+/** Discard the active draft, e.g. during logout or a parent-window teardown. */
+export function discardQuickEditDraft(): void {
+  const session = current?.session;
+  current = null;
+  if (session) void emitTo(POOL_LABEL, 'tqe:discard', { session });
+}
+
+// Tauri listeners live outside React. Explicitly remove them when Vite swaps
+// this module so an old callback cannot persist a later editor event again.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    disposeListeners();
+    unlistenPoolFocus?.();
+    unlistenPoolFocus = null;
   });
 }

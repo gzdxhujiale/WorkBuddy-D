@@ -7,6 +7,7 @@ import { LoginPage } from "@/components/LoginPage";
 import { AuthProvider } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
 import { showFocusAssistant } from "@/services/focusAssistantWindow";
+import { discardQuickEditDraft } from "@/services/quickEditWindow";
 import { focusAssistantApi } from "@/services/focusAssistantService";
 import { shouldOpenFocusAssistantOnStart } from "@/lib/preferences";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -28,6 +29,9 @@ function App() {
     // 2. 监听登录 / 登出状态变化
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
       // A cache from the previous account must never render for the next one.
+      // The quick editor belongs to the previous account's in-memory state;
+      // discard rather than committing its draft during an auth transition.
+      discardQuickEditDraft();
       queryClient.clear();
       useUiStore.getState().setUserId(null);
       setStorageUserId(newSession?.user.id ?? null);

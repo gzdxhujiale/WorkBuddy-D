@@ -5,6 +5,7 @@ import { Task, QuadrantType, TimeManagementData } from "@/types/timeManagement";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
 import { supabase } from "@/lib/supabase";
 import { throwOnPostgrestError } from "@/lib/sync";
+import { hasVersionConflict } from "@/lib/offlineSyncQueue";
 import { queryKeys } from "@/lib/syncEngine";
 import { useAuth } from "@/lib/auth";
 
@@ -14,7 +15,7 @@ export function useTimeManagementData() {
   return useQuery<TimeManagementData>({
     queryKey: QUERY_KEY,
     queryFn: async () => {
-      return await timeManagementApi.loadAll();
+      return await timeManagementApi.loadAll(userId);
     },
     staleTime: 1000 * 60 * 5,
   });
@@ -30,6 +31,7 @@ export function useFocusTaskOptions() {
       const { data, error } = await supabase
         .from("time_management_tasks")
         .select("id, title")
+        .eq("user_id", userId)
         .is("deleted_at", null)
         .eq("completed", false)
         .order("created_at", { ascending: false });
@@ -45,7 +47,7 @@ export function useTaskActions() {
   const { userId } = useAuth();
   const QUERY_KEY = queryKeys.timeManagement(userId);
 
-  // Upsert Sync (0ms optimistic cache update + debounced DB persistence for text edits)
+  // Upsert Sync (optimistic cache update + debounced persistence)
   const { trigger: triggerUpsert } = useOptimisticSync<TimeManagementData, Task>({
     queryKey: QUERY_KEY,
     debounceMs: 300,
@@ -93,7 +95,8 @@ export function useTaskActions() {
   const addTask = useCallback(
     (
       title: string,
-      quadrant: QuadrantType = "Q2"
+      quadrant: QuadrantType = "Q2",
+      draft: Partial<Pick<Task, "description" | "scheduleMode" | "scheduledStartAt" | "scheduledEndAt" | "reminder">> = {},
     ): Task => {
       const newTask: Task = {
         id: crypto.randomUUID(),
@@ -102,6 +105,7 @@ export function useTaskActions() {
         completed: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        ...draft,
       };
 
       triggerUpsert(newTask);
@@ -128,8 +132,29 @@ export function useTaskActions() {
     syncFn: async ({ taskId }) => {
       const data = queryClient.getQueryData<TimeManagementData>(QUERY_KEY);
       const target = data?.tasks.find((t: Task) => t.id === taskId);
-      if (target) {
-        await timeManagementApi.upsertTask(target);
+      if (!target) return;
+
+      try {
+        const savedUpdatedAt = await timeManagementApi.upsertTask(target);
+        if (savedUpdatedAt === undefined) return;
+
+        // The database is the source of truth for the version. Keeping the
+        // old baseUpdatedAt here makes the next edit fail with VERSION_CONFLICT.
+        queryClient.setQueryData<TimeManagementData>(QUERY_KEY, (old) => old ? {
+          ...old,
+          tasks: old.tasks.map((item) => item.id === taskId ? {
+            ...item,
+            updatedAt: savedUpdatedAt,
+            baseUpdatedAt: savedUpdatedAt,
+          } : item),
+        } : old);
+      } catch (error) {
+        if (hasVersionConflict(error)) {
+          // Do not retry an old optimistic version. Fetch the server version
+          // once so the next user edit starts from a current baseUpdatedAt.
+          void queryClient.invalidateQueries({ queryKey: QUERY_KEY, refetchType: "active" });
+        }
+        throw error;
       }
     },
     getSyncKey: ({ taskId }) => taskId,
@@ -137,9 +162,19 @@ export function useTaskActions() {
 
   const updateTask = useCallback(
     (taskId: string, updates: Partial<Task>) => {
+      const current = queryClient
+        .getQueryData<TimeManagementData>(QUERY_KEY)
+        ?.tasks.find((task) => task.id === taskId);
+
+      // A commit containing no effective change should never create a write.
+      if (current && (Object.keys(updates) as Array<keyof Task>).every(
+        (key) => Object.is(current[key], updates[key])
+      )) {
+        return;
+      }
       triggerUpdate({ taskId, updates });
     },
-    [triggerUpdate]
+    [QUERY_KEY, queryClient, triggerUpdate]
   );
 
   const deleteTask = useCallback(

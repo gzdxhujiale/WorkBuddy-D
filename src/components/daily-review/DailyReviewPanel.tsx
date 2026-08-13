@@ -108,7 +108,7 @@ interface UseReviewAutoSaveOptions {
 function useReviewAutoSave({
   initialContent,
   date,
-  debounceMs = 500,
+  debounceMs = 3000,
   onSave,
 }: UseReviewAutoSaveOptions) {
   const [content, setContent] = useState(initialContent);

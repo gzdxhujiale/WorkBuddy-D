@@ -63,11 +63,12 @@ registerOfflineExecutor("task:delete", async (payload) => {
 });
 
 export const timeManagementApi = {
-  loadAll: async (): Promise<TimeManagementData> => {
+  loadAll: async (userId: string): Promise<TimeManagementData> => {
     try {
       const { data: dbTasks, error: tasksErr } = await supabase
         .from("time_management_tasks")
         .select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,created_at,updated_at")
+        .eq("user_id", userId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
 
