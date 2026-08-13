@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { logSilent } from "@/lib/syncEngine";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
+import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { isQueryPending } from "@/lib/queryPending";
 
 type Subscription = ReturnType<typeof supabase.channel>;
@@ -18,12 +19,17 @@ const TABLES = [
   "focus_sessions",
 ] as const;
 
+type InvalidationTarget = {
+  queryKey: QueryKey;
+  exact: boolean;
+};
+
 class RealtimeManager {
   private channel: Subscription | null = null;
   private userId: string | null = null;
   private queryClient: QueryClient | null = null;
   private invalidateTimer: ReturnType<typeof setTimeout> | undefined;
-  private dirtyTables = new Set<string>();
+  private dirtyTargets = new Map<string, InvalidationTarget>();
   private lastInvalidatedAt = new Map<string, number>();
   private static readonly INVALIDATION_DELAY_MS = 500;
   private static readonly INVALIDATION_COOLDOWN_MS = 2_000;
@@ -33,7 +39,7 @@ class RealtimeManager {
     this.stop();
     this.userId = userId;
     this.queryClient = queryClient;
-    this.dirtyTables.clear();
+    this.dirtyTargets.clear();
     this.lastInvalidatedAt.clear();
     const channel = supabase.channel(`user:${userId}`);
     this.channel = channel;
@@ -42,7 +48,7 @@ class RealtimeManager {
       channel.on(
         "postgres_changes",
         { event: "*", schema: "public", table, filter: `user_id=eq.${userId}` },
-        () => this.notify(table),
+        (payload: RealtimePostgresChangesPayload<Record<string, any>>) => this.notify(table, payload),
       );
     }
 
@@ -60,12 +66,62 @@ class RealtimeManager {
     this.queryClient = null;
     if (this.invalidateTimer) clearTimeout(this.invalidateTimer);
     this.invalidateTimer = undefined;
-    this.dirtyTables.clear();
+    this.dirtyTargets.clear();
   }
 
-  private notify(table: string) {
+  private notify(table: string, payload: RealtimePostgresChangesPayload<Record<string, any>>) {
     if (!this.userId || !this.queryClient) return;
-    this.dirtyTables.add(table);
+
+    const record: Record<string, any> = (payload.new && Object.keys(payload.new).length > 0 ? payload.new : payload.old) || {};
+
+    switch (table) {
+      case "knowledge_bases":
+        this.addPendingTarget(["lists", this.userId, "all"], true);
+        break;
+      case "knowledge_base_folders":
+        this.addPendingTarget(["lists", this.userId, "all"], true);
+        if (record.id) {
+          this.addPendingTarget(["lists", this.userId, "contents", record.id], true);
+        }
+        break;
+      case "folder_note_groups":
+        if (record.folder_id) {
+          this.addPendingTarget(["lists", this.userId, "contents", record.folder_id], true);
+        } else {
+          this.addPendingTarget(["lists", this.userId, "all"], true);
+        }
+        break;
+      case "notes":
+        if (record.folder_id) {
+          this.addPendingTarget(["lists", this.userId, "contents", record.folder_id], true);
+        }
+        if (record.id) {
+          this.addPendingTarget(["lists", this.userId, "note", record.id], true);
+        }
+        if (!record.folder_id && !record.id) {
+          this.addPendingTarget(["lists", this.userId, "all"], true);
+        }
+        break;
+      case "knowledge_base_templates":
+        this.addPendingTarget(["knowledge_base_templates", this.userId], true);
+        break;
+      case "habits":
+      case "habit_checkins":
+        this.addPendingTarget(["habits", this.userId], false);
+        break;
+      case "daily_reviews":
+        this.addPendingTarget(["dailyReviews", this.userId], false);
+        break;
+      case "time_management_tasks":
+        this.addPendingTarget(["time-management-tasks", this.userId], false);
+        this.addPendingTarget(["focus-assistant-tasks", this.userId], false);
+        break;
+      case "focus_sessions":
+        this.addPendingTarget(["focus-sessions", this.userId], false);
+        this.addPendingTarget(["focus-assistant-tasks", this.userId], false);
+        break;
+    }
+
     if (this.invalidateTimer) return;
     this.invalidateTimer = setTimeout(() => {
       this.invalidateTimer = undefined;
@@ -73,36 +129,22 @@ class RealtimeManager {
     }, RealtimeManager.INVALIDATION_DELAY_MS);
   }
 
+  private addPendingTarget(queryKey: QueryKey, exact: boolean) {
+    const keyId = JSON.stringify({ queryKey, exact });
+    this.dirtyTargets.set(keyId, { queryKey, exact });
+  }
+
   private flushInvalidations() {
     if (!this.userId || !this.queryClient) return;
-    const tables = [...this.dirtyTables];
-    this.dirtyTables.clear();
+    const targets = Array.from(this.dirtyTargets.values());
+    this.dirtyTargets.clear();
     const now = Date.now();
-    const queryKeys: QueryKey[] = [];
-    for (const table of tables) {
-      if (["knowledge_bases", "knowledge_base_folders", "folder_note_groups", "notes"].includes(table)) {
-        queryKeys.push(["lists", this.userId]);
-      }
-      if (table === "knowledge_base_templates") queryKeys.push(["knowledge_base_templates", this.userId]);
-      if (["habits", "habit_checkins"].includes(table)) queryKeys.push(["habits", this.userId]);
-      if (table === "daily_reviews") queryKeys.push(["dailyReviews", this.userId]);
-      if (table === "time_management_tasks") {
-        queryKeys.push(["time-management-tasks", this.userId]);
-        queryKeys.push(["focus-assistant-tasks", this.userId]);
-      }
-      if (table === "focus_sessions") {
-        queryKeys.push(["focus-sessions", this.userId]);
-        queryKeys.push(["focus-assistant-tasks", this.userId]);
-      }
-    }
-    const uniqueKeys = queryKeys.filter((key, index, all) =>
-      index === all.findIndex((candidate) => JSON.stringify(candidate) === JSON.stringify(key))
-    );
-    for (const queryKey of uniqueKeys) {
-      const keyId = JSON.stringify(queryKey);
+
+    for (const target of targets) {
+      const keyId = JSON.stringify(target);
       if (now - (this.lastInvalidatedAt.get(keyId) ?? 0) < RealtimeManager.INVALIDATION_COOLDOWN_MS) continue;
-      if (isQueryPending(queryKey)) {
-        for (const dirtyTable of tables) this.dirtyTables.add(dirtyTable);
+      if (isQueryPending(target.queryKey)) {
+        this.dirtyTargets.set(keyId, target);
         if (!this.invalidateTimer) {
           this.invalidateTimer = setTimeout(() => {
             this.invalidateTimer = undefined;
@@ -112,9 +154,14 @@ class RealtimeManager {
         return;
       }
       this.lastInvalidatedAt.set(keyId, now);
-      void this.queryClient.invalidateQueries({ queryKey, refetchType: "active" });
+      void this.queryClient.invalidateQueries({
+        queryKey: target.queryKey,
+        exact: target.exact,
+        refetchType: "active",
+      });
     }
   }
 }
 
 export const realtimeManager = new RealtimeManager();
+

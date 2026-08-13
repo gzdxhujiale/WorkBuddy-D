@@ -61,10 +61,21 @@ function App() {
 
   useEffect(() => {
     if (!session) return;
-    const flush = () => { void flushOfflineQueue(); };
-    flush();
-    window.addEventListener("online", flush);
-    return () => window.removeEventListener("online", flush);
+    let cleanup: (() => void) | undefined;
+    void (async () => {
+      let isPrimary = true;
+      try {
+        isPrimary = getCurrentWindow().label === "main";
+      } catch {
+        isPrimary = true;
+      }
+      if (!isPrimary) return;
+      const flush = () => { void flushOfflineQueue(); };
+      flush();
+      window.addEventListener("online", flush);
+      cleanup = () => window.removeEventListener("online", flush);
+    })();
+    return () => { cleanup?.(); };
   }, [session]);
 
   // 正在检测会话中，显示加载态避免闪烁

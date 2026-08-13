@@ -3,12 +3,12 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { emit, listen } from '@tauri-apps/api/event';
 import {
   queryKeys,
-  sharedSyncEngine,
   HIGH_FREQ_DELAY,
   LOW_FREQ_DELAY,
   NOTE_EDIT_DELAY,
   logSilent,
 } from '@/lib/syncEngine';
+import { useDebouncedMutation } from '@/hooks/useDebouncedMutation';
 import * as listsService from '@/services/listsService';
 import type { List, Folder, Note, NoteGroup } from '@/types/lists';
 import { getNoteGroups as selectNoteGroups, getNotesByListId as selectNotesByListId } from '@/utils/listsSelectors';
@@ -122,9 +122,6 @@ function registerCrossWindowSync(queryClient: QueryClient, userId: string) {
   void listen<NoteSyncPayload>(NOTE_DELETED_EVENT, (event) => {
     const { source, noteId } = event.payload;
     if (source === SYNC_SOURCE_ID) return;
-    // Cancel this window's pending debounced save first, so a deleted note is
-    // not written back to the database ("resurrected").
-    sharedSyncEngine.cancel(`note:${noteId}`);
     setData(queryClient, userId, (data) => {
       const note = data.notes.find(n => n.id === noteId);
       if (!note) return data;
@@ -217,6 +214,7 @@ export function useListContents(listId: string | null) {
 export function useListsActions(): ListsActions {
   const queryClient = useQueryClient();
   const { userId } = useAuth();
+  const debouncedSync = useDebouncedMutation();
 
   return useMemo<ListsActions>(() => {
     // ── Lists ──
@@ -229,7 +227,7 @@ export function useListsActions(): ListsActions {
         sortOrder: data.lists.length,
       };
       setData(queryClient, userId, () => ({ ...data, lists: [...data.lists, newList] }));
-      sharedSyncEngine.schedule(`list:${newList.id}`, () => listsService.upsertList(newList), LOW_FREQ_DELAY);
+      debouncedSync.schedule(`list:${newList.id}`, () => listsService.upsertList(newList), LOW_FREQ_DELAY);
       return newList;
     };
 
@@ -241,7 +239,7 @@ export function useListsActions(): ListsActions {
       newLists[index] = { ...newLists[index], ...updates };
       const list = newLists[index];
       setData(queryClient, userId, () => ({ ...data, lists: newLists }));
-      sharedSyncEngine.schedule(`list:${id}`, () => listsService.upsertList(list), HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`list:${id}`, () => listsService.upsertList(list), HIGH_FREQ_DELAY);
     };
 
     const deleteList: ListsActions['deleteList'] = (id) => {
@@ -252,7 +250,7 @@ export function useListsActions(): ListsActions {
         notes: data.notes.filter(n => n.listId !== id),
         noteGroups: data.noteGroups.filter(g => g.listId !== id),
       }));
-      sharedSyncEngine.cancel(`list:${id}`);
+      debouncedSync.cancel(`list:${id}`);
       listsService.deleteList(id).catch(() => {});
     };
 
@@ -269,7 +267,7 @@ export function useListsActions(): ListsActions {
         return l;
       });
       setData(queryClient, userId, () => ({ ...data, lists: newLists }));
-      sharedSyncEngine.schedule('reorder:lists', () => listsService.reorderLists(items), LOW_FREQ_DELAY);
+      debouncedSync.schedule('reorder:lists', () => listsService.reorderLists(items), LOW_FREQ_DELAY);
     };
 
     const moveList: ListsActions['moveList'] = (listId, folderId, targetIndex) => {
@@ -297,7 +295,7 @@ export function useListsActions(): ListsActions {
       newLists = newLists.map(l => (orderMap.has(l.id) ? { ...l, sortOrder: orderMap.get(l.id) } : l));
       setData(queryClient, userId, () => ({ ...data, lists: newLists }));
       const updatedList = newLists.find(l => l.id === listId);
-      sharedSyncEngine.schedule(
+      debouncedSync.schedule(
         `list:${listId}`,
         () => listsService.moveList(listId, folderId, updatedList?.sortOrder || 0),
         LOW_FREQ_DELAY
@@ -314,7 +312,7 @@ export function useListsActions(): ListsActions {
         sortOrder: data.noteGroups.filter(g => g.listId === listId).length,
       };
       setData(queryClient, userId, () => ({ ...data, noteGroups: [...data.noteGroups, newGroup] }));
-      sharedSyncEngine.schedule(`group:${newGroup.id}`, () => listsService.upsertGroup(newGroup), LOW_FREQ_DELAY);
+      debouncedSync.schedule(`group:${newGroup.id}`, () => listsService.upsertGroup(newGroup), LOW_FREQ_DELAY);
       return newGroup;
     };
 
@@ -326,7 +324,7 @@ export function useListsActions(): ListsActions {
       newGroups[index] = { ...newGroups[index], ...updates };
       const group = newGroups[index];
       setData(queryClient, userId, () => ({ ...data, noteGroups: newGroups }));
-      sharedSyncEngine.schedule(`group:${id}`, () => listsService.upsertGroup(group), HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`group:${id}`, () => listsService.upsertGroup(group), HIGH_FREQ_DELAY);
     };
 
     const deleteGroup: ListsActions['deleteGroup'] = (id) => {
@@ -336,7 +334,7 @@ export function useListsActions(): ListsActions {
         noteGroups: data.noteGroups.filter(g => g.id !== id),
         notes: data.notes.map(n => (n.groupId === id ? { ...n, groupId: null } : n)),
       }));
-      sharedSyncEngine.cancel(`group:${id}`);
+      debouncedSync.cancel(`group:${id}`);
       listsService.deleteGroup(id).catch(() => {});
     };
 
@@ -357,7 +355,7 @@ export function useListsActions(): ListsActions {
         newLists[listIndex] = { ...newLists[listIndex], itemCount: (newLists[listIndex].itemCount || 0) + 1 };
       }
       setData(queryClient, userId, () => ({ ...data, notes: [...data.notes, newNote], lists: newLists }));
-      sharedSyncEngine.schedule(`note:${newNote.id}`, async () => {
+      debouncedSync.schedule(`note:${newNote.id}`, async () => {
         const savedUpdatedAt = await listsService.upsertNote(newNote);
         if (savedUpdatedAt === undefined) return;
         setData(queryClient, userId, (current) => ({
@@ -380,16 +378,12 @@ export function useListsActions(): ListsActions {
       const index = data.notes.findIndex(n => n.id === id);
       if (index === -1) {
         // Defensive fallback if note is not yet loaded in query cache.
-        // Resolve that note at save time rather than requiring the list query.
         const updatedAt = Date.now();
         broadcastNoteUpdate(id, updates);
-        sharedSyncEngine.schedule(`note:${id}`, async () => {
-          const fullNote = await listsService.loadNote(id);
-          if (!fullNote) return;
-          const savedUpdatedAt = await listsService.upsertNote({
-            ...fullNote,
+        debouncedSync.schedule(`note:${id}`, async () => {
+          const savedUpdatedAt = await listsService.patchNote({
+            id,
             ...updates,
-            contentLoaded: true,
             updatedAt,
           });
           if (savedUpdatedAt === undefined) return;
@@ -406,24 +400,30 @@ export function useListsActions(): ListsActions {
       };
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       broadcastNoteUpdate(id, updates);
-      sharedSyncEngine.schedule(`note:${id}`, async () => {
-        // List queries intentionally omit `content`. Fetch it only when a
-        // metadata-only action needs to persist the complete row.
+      debouncedSync.schedule(`note:${id}`, async () => {
         const latest = getData(queryClient, userId).notes.find(item => item.id === id);
         if (!latest) return;
-        let noteToSave = latest;
-        if (!latest.contentLoaded) {
-          const fullNote = await listsService.loadNote(id);
-          if (!fullNote) return;
-          noteToSave = { ...fullNote, ...latest, content: fullNote.content, contentLoaded: true };
+        let savedUpdatedAt: number | undefined;
+        if (latest.contentLoaded || updates.content !== undefined) {
+          savedUpdatedAt = await listsService.upsertNote(latest);
+        } else {
+          savedUpdatedAt = await listsService.patchNote({
+            id,
+            listId: updates.listId,
+            groupId: updates.groupId,
+            title: updates.title,
+            isPinned: updates.isPinned,
+            sortOrder: updates.sortOrder,
+            updatedAt: latest.updatedAt,
+            baseUpdatedAt: latest.baseUpdatedAt,
+          });
         }
-        const savedUpdatedAt = await listsService.upsertNote(noteToSave);
         if (savedUpdatedAt === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
           notes: current.notes.map((item) =>
-            item.id === noteToSave.id && item.updatedAt === noteToSave.updatedAt
-              ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt, contentLoaded: item.contentLoaded || noteToSave.contentLoaded }
+            item.id === id && item.updatedAt === latest.updatedAt
+              ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
               : item,
           ),
         }));
@@ -434,7 +434,7 @@ export function useListsActions(): ListsActions {
       const data = getData(queryClient, userId);
       const note = data.notes.find(n => n.id === id);
       if (!note) {
-        sharedSyncEngine.cancel(`note:${id}`);
+        debouncedSync.cancel(`note:${id}`);
         listsService.deleteNote(id).catch(() => {});
         broadcastNoteDelete(id);
         return;
@@ -449,7 +449,7 @@ export function useListsActions(): ListsActions {
         notes: data.notes.filter(n => n.id !== id),
         lists: newLists,
       }));
-      sharedSyncEngine.cancel(`note:${id}`);
+      debouncedSync.cancel(`note:${id}`);
       listsService.deleteNote(id).catch(() => {});
       broadcastNoteDelete(id);
     };
@@ -488,7 +488,7 @@ export function useListsActions(): ListsActions {
       // a child window does not write back the whole note and undo the move.
       broadcastNoteUpdate(noteId, { groupId });
       broadcastNotesReorder(Array.from(orderMap.entries()));
-      sharedSyncEngine.schedule(
+      debouncedSync.schedule(
         `note:${noteId}`,
         () => listsService.moveNote(noteId, note.listId, groupId, updatedNote?.sortOrder || 0),
         LOW_FREQ_DELAY
@@ -525,7 +525,7 @@ export function useListsActions(): ListsActions {
 
       setData(queryClient, userId, () => ({ ...data, notes: newNotes, lists: newLists }));
       broadcastNoteUpdate(noteId, { listId: targetListId, groupId: targetGroupId, sortOrder: newSortOrder });
-      sharedSyncEngine.schedule(
+      debouncedSync.schedule(
         `note:${noteId}`,
         () => listsService.moveNote(noteId, targetListId, targetGroupId, newSortOrder),
         LOW_FREQ_DELAY
@@ -546,7 +546,7 @@ export function useListsActions(): ListsActions {
       });
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       broadcastNotesReorder(items);
-      sharedSyncEngine.schedule('reorder:notes', () => listsService.reorderNotes(items), LOW_FREQ_DELAY);
+      debouncedSync.schedule('reorder:notes', () => listsService.reorderNotes(items), LOW_FREQ_DELAY);
     };
 
     // ── Folders ──
@@ -558,7 +558,7 @@ export function useListsActions(): ListsActions {
         sortOrder: data.folders.length,
       };
       setData(queryClient, userId, () => ({ ...data, folders: [...data.folders, newFolder] }));
-      sharedSyncEngine.schedule(`folder:${newFolder.id}`, () => listsService.upsertFolder(newFolder), LOW_FREQ_DELAY);
+      debouncedSync.schedule(`folder:${newFolder.id}`, () => listsService.upsertFolder(newFolder), LOW_FREQ_DELAY);
       return newFolder;
     };
 
@@ -570,7 +570,7 @@ export function useListsActions(): ListsActions {
       newFolders[index] = { ...newFolders[index], ...updates };
       const folder = newFolders[index];
       setData(queryClient, userId, () => ({ ...data, folders: newFolders }));
-      sharedSyncEngine.schedule(`folder:${id}`, () => listsService.upsertFolder(folder), HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`folder:${id}`, () => listsService.upsertFolder(folder), HIGH_FREQ_DELAY);
     };
 
     const reorderFolders: ListsActions['reorderFolders'] = (orderedIds) => {
@@ -586,7 +586,7 @@ export function useListsActions(): ListsActions {
         return f;
       });
       setData(queryClient, userId, () => ({ ...data, folders: newFolders }));
-      sharedSyncEngine.schedule('reorder:folders', () => listsService.reorderFolders(items), LOW_FREQ_DELAY);
+      debouncedSync.schedule('reorder:folders', () => listsService.reorderFolders(items), LOW_FREQ_DELAY);
     };
 
     const deleteFolder: ListsActions['deleteFolder'] = (id) => {
@@ -596,7 +596,7 @@ export function useListsActions(): ListsActions {
         folders: data.folders.filter(f => f.id !== id),
         lists: data.lists.map(l => (l.folderId === id ? { ...l, folderId: null } : l)),
       }));
-      sharedSyncEngine.cancel(`folder:${id}`);
+      debouncedSync.cancel(`folder:${id}`);
       listsService.deleteFolder(id).catch(() => {});
     };
 
@@ -623,15 +623,13 @@ export function useListsActions(): ListsActions {
         });
       });
 
-      // Never cancel source entity writes: a copy must not discard an edit still
-      // queued by the source list or one of its notes.
       listsService.duplicateList(list.id, newList).catch(() => {});
 
       return newList;
     };
 
     const flushNote = async (id: string) => {
-      await sharedSyncEngine.flush(`note:${id}`);
+      await debouncedSync.flush(`note:${id}`);
     };
 
     return {
@@ -656,5 +654,5 @@ export function useListsActions(): ListsActions {
       deleteGroup,
       flushNote,
     };
-  }, [queryClient, userId]);
+  }, [queryClient, userId, debouncedSync]);
 }

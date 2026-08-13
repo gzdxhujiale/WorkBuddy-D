@@ -11,6 +11,18 @@ import { ListNoteRow } from "@/types/database";
 import { throwOnPostgrestError } from "@/lib/sync";
 import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 
+export type ListNotePatch = {
+  id: string;
+  listId?: string;
+  groupId?: string | null;
+  title?: string;
+  content?: string;
+  isPinned?: boolean;
+  sortOrder?: number;
+  updatedAt?: number;
+  baseUpdatedAt?: number;
+};
+
 async function saveRemoteNote(note: ListNote): Promise<number> {
   const { data, error } = await supabase.rpc("save_note", {
     p_id: note.id, p_folder_id: note.listId, p_group_id: note.groupId || null,
@@ -24,7 +36,29 @@ async function saveRemoteNote(note: ListNote): Promise<number> {
   return new Date(data as string).getTime();
 }
 
+async function patchRemoteNote(patch: ListNotePatch): Promise<number> {
+  const updatePayload: Record<string, any> = {
+    updated_at: new Date(patch.updatedAt ?? Date.now()).toISOString(),
+  };
+
+  if (patch.listId !== undefined) updatePayload.folder_id = patch.listId;
+  if (patch.groupId !== undefined) updatePayload.group_id = patch.groupId;
+  if (patch.title !== undefined) updatePayload.title = patch.title;
+  if (patch.content !== undefined) updatePayload.content = patch.content;
+  if (patch.isPinned !== undefined) updatePayload.is_pinned = patch.isPinned;
+  if (patch.sortOrder !== undefined) updatePayload.sort_order = patch.sortOrder;
+
+  let query = supabase.from("notes").update(updatePayload).eq("id", patch.id);
+  if (patch.baseUpdatedAt) {
+    query = query.eq("updated_at", new Date(patch.baseUpdatedAt).toISOString());
+  }
+  const { data, error } = await query.select("updated_at").maybeSingle();
+  throwOnPostgrestError(error, "更新笔记");
+  return data?.updated_at ? new Date(data.updated_at).getTime() : Date.now();
+}
+
 registerOfflineExecutor("note:save", async (payload) => { await saveRemoteNote(payload as ListNote); });
+registerOfflineExecutor("note:patch", async (payload) => { await patchRemoteNote(payload as ListNotePatch); });
 registerOfflineExecutor("note:delete", async (payload) => {
   const { error } = await supabase.from("notes").update({ deleted_at: new Date().toISOString() }).eq("id", payload as string);
   throwOnPostgrestError(error, "删除笔记");
@@ -210,6 +244,10 @@ export const listNotesApi = {
   // 5. 笔记/条目 CRUD
   upsertNote: async (note: ListNote): Promise<number | undefined> => {
     return runOrQueue({ kind: "note:save", key: `note:${note.id}`, payload: note }, () => saveRemoteNote(note));
+  },
+
+  patchNote: async (patch: ListNotePatch): Promise<number | undefined> => {
+    return runOrQueue({ kind: "note:patch", key: `note:${patch.id}`, payload: patch }, () => patchRemoteNote(patch));
   },
 
   deleteNote: async (id: string): Promise<void> => {

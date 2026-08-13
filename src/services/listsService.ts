@@ -158,6 +158,10 @@ export function upsertNote(note: Note): Promise<number | undefined> {
   });
 }
 
+export function patchNote(patch: import("./listNotesService").ListNotePatch): Promise<number | undefined> {
+  return listNotesApi.patchNote(patch);
+}
+
 export function deleteNote(id: string): Promise<void> {
   return listNotesApi.deleteNote(id);
 }
