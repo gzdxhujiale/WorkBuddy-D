@@ -1,6 +1,5 @@
 import { supabase } from "@/lib/supabase";
 import { Habit, HabitCheckIn, HabitData } from "@/types/habit";
-import { HabitCheckinRow } from "@/types/database";
 import { throwOnPostgrestError } from "@/lib/sync";
 import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 
@@ -122,16 +121,14 @@ export const habitApi = {
   },
 
   toggleCheckIn: async (habitId: string, date: string, completed: boolean): Promise<void> => {
-    const payload: Partial<HabitCheckinRow> = {
-        habit_id: habitId,
-        date,
-        completed,
-        updated_at: new Date().toISOString(),
-      };
+    const payload = { habitId, date, completed, updatedAt: new Date().toISOString() };
 
     await runOrQueue({ kind: "habit-checkin:save", key: `habit-checkin:${habitId}:${date}`, payload }, async () => {
-      const { error } = await supabase.from("habit_checkins").upsert(payload, {
-        onConflict: "user_id,habit_id,date",
+      const { error } = await supabase.rpc("save_habit_checkin", {
+        p_habit_id: habitId,
+        p_date: date,
+        p_completed: completed,
+        p_updated_at: payload.updatedAt,
       });
       throwOnPostgrestError(error, "保存习惯打卡");
     });
@@ -139,8 +136,12 @@ export const habitApi = {
 };
 
 registerOfflineExecutor("habit-checkin:save", async (payload) => {
-  const { error } = await supabase.from("habit_checkins").upsert(payload as Partial<HabitCheckinRow>, {
-    onConflict: "user_id,habit_id,date",
+  const checkIn = payload as { habitId: string; date: string; completed: boolean; updatedAt: string };
+  const { error } = await supabase.rpc("save_habit_checkin", {
+    p_habit_id: checkIn.habitId,
+    p_date: checkIn.date,
+    p_completed: checkIn.completed,
+    p_updated_at: checkIn.updatedAt,
   });
   throwOnPostgrestError(error, "保存习惯打卡");
 });

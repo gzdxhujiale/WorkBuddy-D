@@ -17,10 +17,11 @@ function fromDb(row: Record<string, unknown>): FocusSession {
 export const focusAssistantApi = {
   async create(input: CreateSession): Promise<FocusSession> {
     const session: FocusSession = { ...input, id: crypto.randomUUID(), endedAt: null };
-    const { error } = await supabase.from("focus_sessions").insert({
-      id: session.id, cycle_id: session.cycleId, task_id: session.taskId, type: session.type,
-      status: session.status, planned_minutes: session.plannedMinutes, active_seconds: session.activeSeconds,
-      rest_completed: session.restCompleted, started_at: session.startedAt,
+    const { error } = await supabase.rpc("create_focus_session", {
+      p_id: session.id, p_cycle_id: session.cycleId, p_task_id: session.taskId,
+      p_type: session.type, p_status: session.status,
+      p_planned_minutes: session.plannedMinutes, p_active_seconds: session.activeSeconds,
+      p_rest_completed: session.restCompleted, p_started_at: session.startedAt,
     });
     throwOnPostgrestError(error, "创建专注记录");
     return session;

@@ -162,14 +162,10 @@ export const listNotesApi = {
 
   // 2. 文件夹 CRUD
   upsertFolder: async (folder: ListFolder): Promise<void> => {
-    const payload = {
-        id: folder.id,
-        name: folder.name,
-        is_pinned: folder.isPinned,
-        sort_order: folder.sortOrder,
-        updated_at: new Date().toISOString(),
-      };
-    const { error } = await supabase.from("knowledge_bases").upsert(payload);
+    const { error } = await supabase.rpc("save_knowledge_base", {
+      p_id: folder.id, p_name: folder.name, p_is_pinned: folder.isPinned,
+      p_sort_order: folder.sortOrder, p_updated_at: new Date().toISOString(),
+    });
     throwOnPostgrestError(error, "保存知识库");
   },
 
@@ -180,18 +176,12 @@ export const listNotesApi = {
 
   // 3. 清单 CRUD
   upsertList: async (list: ListList): Promise<void> => {
-    const payload = {
-        id: list.id,
-        knowledge_base_id: list.folderId || null,
-        name: list.name,
-        icon: list.icon,
-        color: list.color,
-        view_type: list.viewType,
-        is_pinned: list.isPinned,
-        sort_order: list.sortOrder,
-        updated_at: new Date().toISOString(),
-      };
-    const { error } = await supabase.from("knowledge_base_folders").upsert(payload);
+    const { error } = await supabase.rpc("save_knowledge_base_folder", {
+      p_id: list.id, p_knowledge_base_id: list.folderId || null, p_name: list.name,
+      p_icon: list.icon, p_color: list.color, p_view_type: list.viewType,
+      p_is_pinned: list.isPinned, p_sort_order: list.sortOrder,
+      p_updated_at: new Date().toISOString(),
+    });
     throwOnPostgrestError(error, "保存清单");
   },
 
@@ -202,14 +192,10 @@ export const listNotesApi = {
 
   // 4. 分组 CRUD
   upsertGroup: async (group: ListNoteGroup): Promise<void> => {
-    const payload = {
-        id: group.id,
-        folder_id: group.listId,
-        name: group.name,
-        sort_order: group.sortOrder,
-        updated_at: new Date().toISOString(),
-      };
-    const { error } = await supabase.from("folder_note_groups").upsert(payload);
+    const { error } = await supabase.rpc("save_folder_note_group", {
+      p_id: group.id, p_folder_id: group.listId, p_name: group.name,
+      p_sort_order: group.sortOrder, p_updated_at: new Date().toISOString(),
+    });
     throwOnPostgrestError(error, "保存分组");
   },
 
@@ -235,13 +221,10 @@ export const listNotesApi = {
 
   // 6. 模板 CRUD
   upsertTemplate: async (template: ListTemplate): Promise<void> => {
-    const payload = {
-        id: template.id,
-        name: template.name,
-        content: template.content,
-        updated_at: new Date().toISOString(),
-      };
-    const { error } = await supabase.from("knowledge_base_templates").upsert(payload);
+    const { error } = await supabase.rpc("save_knowledge_base_template", {
+      p_id: template.id, p_name: template.name, p_content: template.content,
+      p_updated_at: new Date().toISOString(),
+    });
     throwOnPostgrestError(error, "保存模板");
   },
 

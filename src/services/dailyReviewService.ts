@@ -15,10 +15,6 @@ async function saveRemote(review: DailyReviewItem): Promise<number> {
 }
 
 registerOfflineExecutor("daily-review:save", async (payload) => { await saveRemote(payload as DailyReviewItem); });
-registerOfflineExecutor("daily-review:delete", async (payload) => {
-  const { error } = await supabase.from("daily_reviews").update({ deleted_at: new Date().toISOString() }).eq("id", payload as string);
-  throwOnPostgrestError(error, "删除每日复盘");
-});
 
 export const dailyReviewApi = {
   loadAll: async (): Promise<DailyReviewItem[]> => {
@@ -95,10 +91,4 @@ export const dailyReviewApi = {
     return runOrQueue({ kind: "daily-review:save", key: `daily-review:${review.date}`, payload: review }, () => saveRemote(review));
   },
 
-  deleteReview: async (id: string): Promise<void> => {
-    await runOrQueue({ kind: "daily-review:delete", key: `daily-review:${id}`, payload: id }, async () => {
-      const { error } = await supabase.from("daily_reviews").update({ deleted_at: new Date().toISOString() }).eq("id", id);
-      throwOnPostgrestError(error, "删除每日复盘");
-    });
-  },
 };

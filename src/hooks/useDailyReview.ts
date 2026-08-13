@@ -69,20 +69,6 @@ export function useReviewActions() {
     getSyncKey: (review) => review.date,
   });
 
-  // Delete Sync Hook (instant deletion)
-  const { trigger: triggerDelete } = useOptimisticSync<DailyReviewItem[], string>({
-    queryKey: DAILY_REVIEW_QUERY_KEY,
-    debounceMs: 0,
-    updateCache: (old, id) => {
-      const list = old ?? [];
-      return list.filter((r) => r.id !== id);
-    },
-    syncFn: async (id) => {
-      await dailyReviewApi.deleteReview(id);
-    },
-    getSyncKey: (id) => id,
-  });
-
   const saveReview = useCallback(
     (date: string, content: string): DailyReviewItem => {
       const prev = queryClient.getQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY) ?? [];
@@ -91,7 +77,14 @@ export function useReviewActions() {
 
       if (isEmpty) {
         if (existing) {
-          triggerDelete(existing.id);
+          const clearedReview: DailyReviewItem = {
+            ...existing,
+            content: "",
+            updatedAt: Date.now(),
+            baseUpdatedAt: existing.baseUpdatedAt,
+          };
+          triggerUpsert(clearedReview);
+          return clearedReview;
         }
         return { id: "", date, content: "", createdAt: Date.now(), updatedAt: Date.now() };
       }
@@ -114,14 +107,22 @@ export function useReviewActions() {
       triggerUpsert(review);
       return review;
     },
-    [queryClient, triggerUpsert, triggerDelete]
+    [queryClient, triggerUpsert]
   );
 
   const deleteReview = useCallback(
     (id: string) => {
-      triggerDelete(id);
+      const existing = (queryClient.getQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY) ?? [])
+        .find((review) => review.id === id);
+      if (!existing) return;
+      triggerUpsert({
+        ...existing,
+        content: "",
+        updatedAt: Date.now(),
+        baseUpdatedAt: existing.baseUpdatedAt,
+      });
     },
-    [triggerDelete]
+    [queryClient, triggerUpsert]
   );
 
   return { saveReview, deleteReview };
