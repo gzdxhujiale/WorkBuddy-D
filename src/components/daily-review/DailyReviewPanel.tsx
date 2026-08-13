@@ -193,7 +193,7 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
         key={date}
         content={content}
         onChange={setContent}
-        placeholder="写下今天的复盘感受、收获与反思，或输入 / 使用命令..."
+        placeholder="输入 / 使用命令..."
       />
 
       {/* Footer: Save Status */}
@@ -202,11 +202,10 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
           <span>{saveStatus === "saving" ? "保存中..." : "已自动保存"}</span>
           <Cloud
             size={16}
-            className={`transition-all duration-300 ${
-              saveStatus === "saved"
+            className={`transition-all duration-300 ${saveStatus === "saved"
                 ? "text-blue-500 fill-blue-500/20"
                 : "text-muted-foreground animate-pulse"
-            }`}
+              }`}
           />
         </div>
       </footer>
@@ -345,7 +344,7 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
               const dStr = day.format("YYYY-MM-DD");
               const isDisabled = dStr > todayStr;
               const review = reviews.find((r) => r.date === dStr);
-              
+
               let levelClass = "bg-transparent text-foreground hover:bg-accent";
               if (review && review.content.trim().length > 0) {
                 const len = review.content.trim().length;
@@ -367,13 +366,12 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
                   type="button"
                   disabled={isDisabled}
                   onClick={() => !isDisabled && onSelectDate(dStr)}
-                  className={`h-8 rounded-lg flex items-center justify-center text-xs font-medium transition-all border ${
-                    isDisabled
+                  className={`h-8 rounded-lg flex items-center justify-center text-xs font-medium transition-all border ${isDisabled
                       ? "opacity-30 cursor-not-allowed border-transparent bg-muted/30"
                       : isSelected
-                      ? "ring-2 ring-blue-500 ring-offset-1 border-blue-400 font-bold z-10 cursor-pointer"
-                      : "border-transparent cursor-pointer"
-                  } ${levelClass}`}
+                        ? "ring-2 ring-blue-500 ring-offset-1 border-blue-400 font-bold z-10 cursor-pointer"
+                        : "border-transparent cursor-pointer"
+                    } ${levelClass}`}
                 >
                   {day.date()}
                 </button>
@@ -449,10 +447,10 @@ export const DailyReviewPanel: React.FC = () => {
       {/* Top Bar: Date Navigation */}
       <header className="flex items-center justify-center px-6 py-3 bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800 shrink-0">
         <nav className="flex items-center gap-3">
-          <button 
+          <button
             type="button"
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer" 
-            onClick={() => changeDate(-1)} 
+            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            onClick={() => changeDate(-1)}
             title="前一天"
             disabled={selectedDate <= MIN_DATE}
           >
@@ -491,19 +489,19 @@ export const DailyReviewPanel: React.FC = () => {
       <section className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left: Editor */}
         <section className="flex-1 flex flex-col p-4 md:p-5 min-w-0 overflow-hidden">
-          <ReviewEditor 
+          <ReviewEditor
             key={`${selectedDate}-${currentReview?.id || "new"}`}
-            date={selectedDate} 
-            review={currentReview} 
+            date={selectedDate}
+            review={currentReview}
             onSave={handleSave}
           />
         </section>
 
         {/* Right: Stats + Calendar */}
         <aside className="w-72 md:w-80 min-h-0 shrink-0 overflow-hidden border-l border-border bg-card/40">
-          <CompoundStats 
-            stats={stats} 
-            reviews={reviews} 
+          <CompoundStats
+            stats={stats}
+            reviews={reviews}
             onSelectDate={handleSelectDate}
             selectedDate={selectedDate}
           />

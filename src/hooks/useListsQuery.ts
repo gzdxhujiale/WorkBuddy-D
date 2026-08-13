@@ -379,7 +379,7 @@ export function useListsActions(): ListsActions {
       const data = getData(queryClient, userId);
       const index = data.notes.findIndex(n => n.id === id);
       if (index === -1) {
-        // A standalone editor intentionally loads only one note, not its list.
+        // Defensive fallback if note is not yet loaded in query cache.
         // Resolve that note at save time rather than requiring the list query.
         const updatedAt = Date.now();
         broadcastNoteUpdate(id, updates);

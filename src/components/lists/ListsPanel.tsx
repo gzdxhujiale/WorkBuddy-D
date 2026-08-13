@@ -2,9 +2,9 @@ import React, { useState, useEffect, useMemo, useRef, cloneElement, ReactElement
 import { useQuery } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import {
-  ArrowDownUp, MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen, CheckCircle, AlertCircle,
-  ChevronRight, Check, Sidebar, ExternalLink, Folder as FolderIcon, BookOpen, Briefcase, Home,
-  Package, Activity, Star, ChevronDown, FileText, Search, Cloud, X, LayoutList, Columns, Trash2, Library, LoaderCircle
+  MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen, CheckCircle, AlertCircle,
+  ChevronRight, Check, Folder as FolderIcon, BookOpen, Briefcase, Home,
+  Package, Activity, Star, ChevronDown, FileText, Search, Cloud, X, Trash2, Library, LoaderCircle
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverEvent, useDroppable } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -13,10 +13,10 @@ import { CSS } from '@dnd-kit/utilities';
 import { useListContents, useListsData, useListsActions } from '@/hooks/useListsQuery';
 import { sortLists, sortFolders } from '@/utils/listsSelectors';
 import { List, Folder, ViewType, Note, NoteGroup, Template } from '@/types/lists';
-import { getNoteOpenMode, setNoteOpenMode, openNoteInNewWindow, NoteOpenMode } from '@/services/noteOpenService';
+
 import { TemplateModal, useTemplateData, useTemplateActions } from '../templates';
 import * as listsService from '@/services/listsService';
-import { logError, logSilent } from '@/lib/syncEngine';
+import { logSilent } from '@/lib/syncEngine';
 import { computeNoteReorder, computeListReorder } from '@/utils/listsReorder';
 import {
   ReactjsTiptapEditor,
@@ -1159,7 +1159,6 @@ const COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#3b82f6'
 function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, onAddFolder }: AddListModalProps) {
   const [name, setName] = useState(initialData?.name || '');
   const [color, setColor] = useState(initialData?.color || COLORS[6]);
-  const [viewType, setViewType] = useState<ViewType>(initialData?.viewType || 'list');
   const [folderId, setFolderId] = useState<string | null>(initialData?.folderId !== undefined ? initialData.folderId : (initialFolderId || null));
   const [isFolderDropdownOpen, setIsFolderDropdownOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
@@ -1169,7 +1168,7 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
 
   const handleAdd = () => {
     if (!name.trim()) return;
-    onAdd({ name, color, viewType, folderId, icon: 'BookOpen' });
+    onAdd({ name, color, viewType: 'list', folderId, icon: 'BookOpen' });
   };
 
   const getFolderDisplay = () => {
@@ -1234,31 +1233,7 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-muted-foreground">视图模式</span>
-          <div className="flex items-center bg-muted p-1 rounded-lg gap-1">
-            <button
-              className={cn(
-                'flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer',
-                viewType === 'list' ? 'bg-card text-primary border border-primary' : 'text-muted-foreground border border-transparent'
-              )}
-              onClick={() => setViewType('list')}
-            >
-              <LayoutList size={14} />
-              <span>列表</span>
-            </button>
-            <button
-              className={cn(
-                'flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer',
-                viewType === 'board' ? 'bg-card text-primary border border-primary' : 'text-muted-foreground border border-transparent'
-              )}
-              onClick={() => setViewType('board')}
-            >
-              <Columns size={14} />
-              <span>看板</span>
-            </button>
-          </div>
-        </div>
+
 
         <div className="flex items-center justify-between relative">
               <span className="text-xs font-semibold text-muted-foreground">所属知识库</span>
@@ -1325,98 +1300,7 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
   );
 }
 
-interface ListSettingsModalProps {
-  onClose: () => void;
-  showToast?: (message: string, type?: 'success' | 'error') => void;
-}
 
-function ListSettingsModal({ onClose, showToast }: ListSettingsModalProps) {
-  const [openMode, setOpenMode] = useState<NoteOpenMode>('sidebar');
-  const [isSaving, setIsSaving] = useState(false);
-
-  useEffect(() => {
-    setOpenMode(getNoteOpenMode());
-  }, []);
-
-  const handleSelectMode = async (mode: NoteOpenMode) => {
-    setOpenMode(mode);
-    setIsSaving(true);
-    try {
-      await setNoteOpenMode(mode);
-      if (showToast) {
-        showToast(`已成功将笔记弹出方式切换为：${mode === 'sidebar' ? '侧边栏弹出' : '新窗口弹出'}`);
-      }
-    } catch (e) {
-      logError('listsPanel', 'failed to save note open mode preference', e);
-      if (showToast) {
-        showToast('保存配置失败', 'error');
-      }
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <ModalShell
-      title="文件夹设置"
-      onClose={onClose}
-      width="460px"
-      footer={
-        <Button variant="secondary" onClick={onClose} disabled={isSaving}>
-          完成
-        </Button>
-      }
-    >
-      <div className="space-y-4">
-        <div>
-          <span className="block text-sm font-semibold text-foreground mb-1">笔记弹出方式</span>
-          <p className="text-xs text-muted-foreground mb-3">
-            选择点击笔记列表条目时的打开方式。设置将自动保存并同步至数据库。
-          </p>
-          <div className="grid grid-cols-2 gap-3">
-            <div
-              onClick={() => handleSelectMode('sidebar')}
-              className={cn(
-                'p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-2',
-                openMode === 'sidebar'
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border bg-muted/50 hover:border-muted-foreground/30'
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <Sidebar size={20} className={openMode === 'sidebar' ? 'text-primary' : 'text-muted-foreground'} />
-                {openMode === 'sidebar' && <Check size={16} className="text-primary" />}
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-foreground">侧边栏弹出</div>
-                <div className="text-xs text-muted-foreground mt-0.5">在主界面右侧滑出抽屉编辑</div>
-              </div>
-            </div>
-
-            <div
-              onClick={() => handleSelectMode('window')}
-              className={cn(
-                'p-4 rounded-xl border-2 cursor-pointer transition-all flex flex-col gap-2',
-                openMode === 'window'
-                  ? 'border-primary bg-primary/5'
-                  : 'border-border bg-muted/50 hover:border-muted-foreground/30'
-              )}
-            >
-              <div className="flex items-center justify-between">
-                <ExternalLink size={20} className={openMode === 'window' ? 'text-primary' : 'text-muted-foreground'} />
-                {openMode === 'window' && <Check size={16} className="text-primary" />}
-              </div>
-              <div>
-                <div className="text-sm font-semibold text-foreground">新窗口弹出</div>
-                <div className="text-xs text-muted-foreground mt-0.5">在独立的窗口中多任务并发编辑</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </ModalShell>
-  );
-}
 
 interface BatchExportModalProps {
   notes: Note[];
@@ -1624,7 +1508,7 @@ export function ListsPanel() {
     [folders, editFolderId]
   );
 
-  const [isListSettingsOpen, setIsListSettingsOpen] = useState(false);
+
 
   // Note state
   const activeNoteId = useUiStore((state) => state.activeNoteId);
@@ -1962,14 +1846,9 @@ export function ListsPanel() {
   };
 
   // --- Note Actions ---
-  const handleOpenNote = (noteId: string, noteTitle?: string) => {
-    const mode = getNoteOpenMode();
-    if (mode === 'window') {
-      openNoteInNewWindow(noteId, noteTitle);
-    } else {
-      setActiveNoteId(noteId);
-      setIsDrawerOpen(true);
-    }
+  const handleOpenNote = (noteId: string, _noteTitle?: string) => {
+    setActiveNoteId(noteId);
+    setIsDrawerOpen(true);
   };
 
   const handleAddNote = () => {
@@ -2002,21 +1881,12 @@ export function ListsPanel() {
   };
 
   const handleBatchExport = async (selectedNoteIds: string[]) => {
-    const notesToExport = await Promise.all(notes
-      .filter(n => selectedNoteIds.includes(n.id))
-      .map(async note => note.contentLoaded ? note : listsService.loadNote(note.id)));
-    const completeNotes = notesToExport.filter((note): note is Note => Boolean(note));
-    if (completeNotes.length === 0) return;
-
-    const files = completeNotes.map(n => ({
-      title: n.title,
-      content: convertTipTapJsonToMarkdown(n.content || ''),
-    }));
-
     try {
-      await listsService.saveMultipleMarkdownFiles(files);
-      setBatchExportModalOpen(false);
-      showToast(`已成功导出 ${files.length} 条笔记！`);
+      const count = await listsService.exportNotesToMarkdown(notes, selectedNoteIds, convertTipTapJsonToMarkdown);
+      if (count > 0) {
+        setBatchExportModalOpen(false);
+        showToast(`已成功导出 ${count} 条笔记！`);
+      }
     } catch (err) {
       logSilent('listsPanel', 'batch export cancelled or failed', err);
     }
@@ -2158,9 +2028,6 @@ export function ListsPanel() {
                   <span>{activeList.name}</span>
                 </div>
                 <div className="flex items-center gap-4 text-muted-foreground">
-                  <Button variant="ghost" size="icon" className="rounded-lg">
-                    <ArrowDownUp size={18} />
-                  </Button>
                   <div className="relative">
                     <Button
                       variant="ghost"
@@ -2172,46 +2039,7 @@ export function ListsPanel() {
                     </Button>
                     {listMenuOpen && (
                       <div className="absolute right-0 top-full mt-2 z-[100] min-w-44 p-1 bg-popover text-popover-foreground border border-border rounded-xl shadow-2xl flex flex-col animate-in fade-in zoom-in-95">
-                        <div className="group/sub relative before:absolute before:-left-2.5 before:inset-y-0 before:w-3">
-                          <button className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors flex items-center justify-between cursor-pointer">
-                            <span>笔记打开方式</span>
-                            <ChevronRight size={14} className="text-muted-foreground" />
-                          </button>
 
-                          <div className="hidden group-hover/sub:flex absolute right-full top-0 mr-1 min-w-40 p-1 bg-popover text-popover-foreground border border-border rounded-xl shadow-2xl flex-col z-[110]">
-                            <button
-                              className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors flex items-center justify-between cursor-pointer"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                await setNoteOpenMode('sidebar');
-                                showToast('已成功切换为：侧边栏弹出笔记');
-                                setListMenuOpen(false);
-                              }}
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <Sidebar size={14} />
-                                侧边栏弹出
-                              </span>
-                              {getNoteOpenMode() === 'sidebar' && <Check size={14} className="text-primary" />}
-                            </button>
-
-                            <button
-                              className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors flex items-center justify-between cursor-pointer"
-                              onClick={async (e) => {
-                                e.stopPropagation();
-                                await setNoteOpenMode('window');
-                                showToast('已成功切换为：新窗口弹出笔记');
-                                setListMenuOpen(false);
-                              }}
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <ExternalLink size={14} />
-                                新窗口弹出
-                              </span>
-                              {getNoteOpenMode() === 'window' && <Check size={14} className="text-primary" />}
-                            </button>
-                          </div>
-                        </div>
 
                         <button
                           className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
@@ -2394,12 +2222,7 @@ export function ListsPanel() {
           />
         )}
 
-        {isListSettingsOpen && (
-          <ListSettingsModal
-            onClose={() => setIsListSettingsOpen(false)}
-            showToast={showToast}
-          />
-        )}
+
 
         {/* Toast notifications */}
         <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">

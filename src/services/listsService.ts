@@ -266,6 +266,28 @@ export async function saveMultipleMarkdownFiles(
   }
 }
 
+export async function exportNotesToMarkdown(
+  notes: Note[],
+  selectedNoteIds: string[],
+  convertJsonToMd: (content: string) => string
+): Promise<number> {
+  const notesToExport = await Promise.all(
+    notes
+      .filter((n) => selectedNoteIds.includes(n.id))
+      .map(async (note) => (note.contentLoaded ? note : loadNote(note.id)))
+  );
+  const completeNotes = notesToExport.filter((note): note is Note => Boolean(note));
+  if (completeNotes.length === 0) return 0;
+
+  const files = completeNotes.map((n) => ({
+    title: n.title,
+    content: convertJsonToMd(n.content || ""),
+  }));
+
+  await saveMultipleMarkdownFiles(files);
+  return files.length;
+}
+
 export async function loadListContents(listId: string): Promise<Pick<ListLoadAllPayload, 'noteGroups' | 'notes'>> {
   const data = await listNotesApi.loadListContents(listId);
   return {

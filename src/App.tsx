@@ -44,8 +44,7 @@ function App() {
   useEffect(() => {
     if (!session) return;
     // Only the primary webview owns app-start behavior.  Secondary webviews
-    // share the same auth storage, so without this guard a note window could
-    // also be treated as a new application start.
+    // (e.g. quick-edit or focus assistant) share the same auth storage.
     void (async () => {
       try {
         if (getCurrentWindow().label === "main" && shouldOpenFocusAssistantOnStart()) {
