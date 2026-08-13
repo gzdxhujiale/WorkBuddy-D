@@ -19,10 +19,10 @@ import * as listsService from '@/services/listsService';
 import { logError, logSilent } from '@/lib/syncEngine';
 import { computeNoteReorder, computeListReorder } from '@/utils/listsReorder';
 import {
-  DailyReviewEditor,
+  ReactjsTiptapEditor,
   convertMarkdownToTipTapJson,
   convertTipTapJsonToMarkdown,
-} from '@/components/daily-review/DailyReviewEditor';
+} from '@/components/ui/reactjs-tiptap-editor';
 import { useConfirmDialog } from '@/components/ui/ConfirmDeleteDialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -1008,9 +1008,10 @@ function NoteDrawerContent({
         className="flex-1 flex flex-col p-0 overflow-hidden relative"
         onKeyDown={(e) => e.stopPropagation()}
       >
-        <DailyReviewEditor
+        <ReactjsTiptapEditor
           content={content}
           onChange={setContent}
+          placeholder="开始撰写笔记，或输入 / 使用命令..."
         />
       </div>
     </>

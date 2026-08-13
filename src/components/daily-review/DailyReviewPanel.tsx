@@ -4,7 +4,7 @@ import dayjs from "dayjs";
 import { useDailyReviewData, useReviewActions, isReviewEmpty } from "@/hooks/useDailyReview";
 import { DailyReviewItem, CompoundStats as CompoundStatsType } from "@/types/dailyReview";
 import { formatDateYMD, todayYMD, daysBetween } from "@/lib/dateUtils";
-import { DailyReviewEditor } from "./DailyReviewEditor";
+import { ReactjsTiptapEditor } from "@/components/ui/reactjs-tiptap-editor";
 
 // Hoisted constants outside component rendering path (Vercel Best Practice: rendering-hoist-jsx)
 const WEEK_DAYS = ["日", "一", "二", "三", "四", "五", "六"] as const;
@@ -189,10 +189,11 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
 
   return (
     <article className="flex-1 flex flex-col bg-card border border-border rounded-xl shadow-2xs overflow-hidden transition-colors">
-      <DailyReviewEditor
+      <ReactjsTiptapEditor
         key={date}
         content={content}
         onChange={setContent}
+        placeholder="写下今天的复盘感受、收获与反思，或输入 / 使用命令..."
       />
 
       {/* Footer: Save Status */}

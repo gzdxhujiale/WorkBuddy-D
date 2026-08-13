@@ -8,10 +8,10 @@ import { MoreHorizontal, Pin, Cloud, CloudOff, AlertCircle, Minus, Square, Copy,
 import * as listsService from '@/services/listsService';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import {
-  DailyReviewEditor,
+  ReactjsTiptapEditor,
   convertMarkdownToTipTapJson,
   convertTipTapJsonToMarkdown,
-} from '@/components/daily-review/DailyReviewEditor';
+} from '@/components/ui/reactjs-tiptap-editor';
 import { Button } from '@/components/ui/button';
 import { useConfirmDialog } from '@/components/ui/ConfirmDeleteDialog';
 import { cn } from '@/lib/utils';
@@ -409,10 +409,11 @@ function StandaloneNoteEditorContent({ note }: { note: Note }) {
 
       {/* Main Editor Area */}
       <div className="flex flex-col flex-1 overflow-hidden relative">
-        <DailyReviewEditor
+        <ReactjsTiptapEditor
           key={note.id}
           content={content}
           onChange={setContent}
+          placeholder="开始撰写笔记，或输入 / 使用命令..."
         />
       </div>
     </div>

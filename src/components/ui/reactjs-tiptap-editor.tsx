@@ -37,10 +37,14 @@ import {
   RichTextBubbleText,
 } from "reactjs-tiptap-editor/bubble";
 import "reactjs-tiptap-editor/style.css";
+import { cn } from "@/lib/utils";
 
-interface DailyReviewEditorProps {
+export interface ReactjsTiptapEditorProps {
   content: string;
   onChange: (content: string) => void;
+  placeholder?: string;
+  className?: string;
+  editable?: boolean;
 }
 
 type EditorContentValue = string | Record<string, unknown>;
@@ -50,46 +54,7 @@ const EMPTY_DOCUMENT = {
   content: [{ type: "paragraph" }],
 };
 
-const EDITOR_EXTENSIONS = [
-  StarterKit.configure({
-    heading: false,
-    bold: false,
-    italic: false,
-    link: false,
-    bulletList: false,
-    orderedList: false,
-    strike: false,
-    blockquote: false,
-    code: false,
-    codeBlock: false,
-    horizontalRule: false,
-    underline: false,
-  }),
-  Selection,
-  Heading.configure({ levels: [1, 2, 3] }),
-  Bold,
-  Italic,
-  TextUnderline,
-  BulletList,
-  OrderedList,
-  Strike,
-  Blockquote,
-  Code,
-  CodeBlock,
-  Link.configure({ openOnClick: false }),
-  HorizontalRule,
-  Placeholder.configure({
-    placeholder: "写下今天的复盘感受、收获与反思，或输入 / 使用命令...",
-  }),
-  Clear,
-  TextAlign.configure({ types: ["heading", "paragraph", "list_item"] }),
-  TaskList,
-  Table,
-  SearchAndReplace,
-  SlashCommand,
-];
-
-function parseContent(raw: string): EditorContentValue {
+export function parseContent(raw: string): EditorContentValue {
   if (!raw.trim()) return EMPTY_DOCUMENT;
 
   try {
@@ -113,11 +78,6 @@ function parseContent(raw: string): EditorContentValue {
 }
 
 function EditorToolbar() {
-  // reactjs-tiptap-editor implements several toolbar controls with Radix
-  // modal Popovers. Radix then hides the editor subtree from assistive tech;
-  // Chromium rejects that change if the trigger button is still focused.
-  // Release focus immediately before the modal opens. Popover content receives
-  // focus itself, while ordinary toolbar buttons keep their normal behavior.
   const releaseModalTriggerFocus = (target: EventTarget | null) => {
     const trigger = (target as HTMLElement | null)?.closest<HTMLButtonElement>(
       'button[aria-haspopup="dialog"]',
@@ -129,14 +89,12 @@ function EditorToolbar() {
     <div
       className="flex min-h-11 shrink-0 flex-wrap items-center gap-0.5 overflow-x-auto border-b border-border bg-muted/45 px-2 py-1"
       role="toolbar"
-      aria-label="复盘编辑工具栏"
+      aria-label="编辑器工具栏"
       onPointerDownCapture={(event) => {
         const trigger = (event.target as HTMLElement).closest<HTMLButtonElement>(
           'button[aria-haspopup="dialog"]',
         );
         if (!trigger) return;
-        // Prevent the pointer's default focus transfer; click still opens the
-        // control and Radix will focus its dialog content.
         event.preventDefault();
       }}
       onKeyDownCapture={(event) => {
@@ -191,16 +149,65 @@ function EditorBubbles() {
   );
 }
 
-export function DailyReviewEditor({ content, onChange }: DailyReviewEditorProps) {
+export function ReactjsTiptapEditor({
+  content,
+  onChange,
+  placeholder = "写下内容，或输入 / 使用命令...",
+  className,
+  editable = true,
+}: ReactjsTiptapEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
 
   const isUpdatingFromEditorRef = useRef(false);
   const lastContentRef = useRef(content);
 
+  const extensions = useMemo(
+    () => [
+      StarterKit.configure({
+        heading: false,
+        bold: false,
+        italic: false,
+        link: false,
+        bulletList: false,
+        orderedList: false,
+        strike: false,
+        blockquote: false,
+        code: false,
+        codeBlock: false,
+        horizontalRule: false,
+        underline: false,
+      }),
+      Selection,
+      Heading.configure({ levels: [1, 2, 3] }),
+      Bold,
+      Italic,
+      TextUnderline,
+      BulletList,
+      OrderedList,
+      Strike,
+      Blockquote,
+      Code,
+      CodeBlock,
+      Link.configure({ openOnClick: false }),
+      HorizontalRule,
+      Placeholder.configure({
+        placeholder,
+      }),
+      Clear,
+      TextAlign.configure({ types: ["heading", "paragraph", "list_item"] }),
+      TaskList,
+      Table,
+      SearchAndReplace,
+      SlashCommand,
+    ],
+    [placeholder]
+  );
+
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: EDITOR_EXTENSIONS,
+    editable,
+    extensions,
     content: parseContent(content),
     onUpdate: ({ editor: currentEditor }) => {
       const jsonStr = JSON.stringify(currentEditor.getJSON());
@@ -224,6 +231,13 @@ export function DailyReviewEditor({ content, onChange }: DailyReviewEditorProps)
 
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
+    if (editor.isEditable !== editable) {
+      editor.setEditable(editable);
+    }
+  }, [editor, editable]);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
 
     if (isUpdatingFromEditorRef.current) return;
     if (content === lastContentRef.current) return;
@@ -240,11 +254,20 @@ export function DailyReviewEditor({ content, onChange }: DailyReviewEditorProps)
   }, [content, editor]);
 
   if (!editor) {
-    return <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">正在加载编辑器...</div>;
+    return (
+      <div className="flex min-h-0 flex-1 items-center justify-center text-sm text-muted-foreground">
+        正在加载编辑器...
+      </div>
+    );
   }
 
   return (
-    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-card selection:bg-[#bfdbfe] selection:text-slate-900 dark:selection:bg-blue-900/80 dark:selection:text-blue-100 [&>.reactjs-tiptap-editor]:flex [&>.reactjs-tiptap-editor]:min-h-0 [&>.reactjs-tiptap-editor]:flex-1 [&>.reactjs-tiptap-editor]:flex-col [&>.reactjs-tiptap-editor]:overflow-hidden">
+    <div
+      className={cn(
+        "flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-hidden bg-card selection:bg-[#bfdbfe] selection:text-slate-900 dark:selection:bg-blue-900/80 dark:selection:text-blue-100 [&>.reactjs-tiptap-editor]:flex [&>.reactjs-tiptap-editor]:min-h-0 [&>.reactjs-tiptap-editor]:flex-1 [&>.reactjs-tiptap-editor]:flex-col [&>.reactjs-tiptap-editor]:overflow-hidden",
+        className
+      )}
+    >
       <RichTextProvider editor={editor}>
         <EditorToolbar />
         <EditorContent
@@ -353,3 +376,5 @@ export function convertTipTapJsonToMarkdown(jsonOrText: string): string {
 
   return jsonOrText;
 }
+
+
