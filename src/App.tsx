@@ -48,7 +48,7 @@ function App() {
       try {
         const window = getCurrentWindow();
         if (window.label === "main") {
-          unlisten = await window.onScaleChange(async () => {
+          unlisten = await window.onScaleChanged(async () => {
             await window.setSize(new LogicalSize(1000, 700)).catch(() => undefined);
           });
         }

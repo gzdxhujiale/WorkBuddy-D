@@ -283,7 +283,7 @@ export function FocusAssistant() {
     const setupListener = async () => {
       try {
         const window = getCurrentWindow();
-        unlisten = await window.onScaleChange(async () => {
+        unlisten = await window.onScaleChanged(async () => {
           const currentMode = viewModeRef.current;
           if (currentMode === "minimized") {
             await window.setSize(new LogicalSize(140, 140)).catch(() => undefined);
