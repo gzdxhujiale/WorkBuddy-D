@@ -1,12 +1,10 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
 import { Selection } from "@tiptap/extensions";
 import StarterKit from "@tiptap/starter-kit";
 import { Placeholder } from "@tiptap/extension-placeholder";
 import { RichTextProvider } from "reactjs-tiptap-editor";
-import { localeActions } from "reactjs-tiptap-editor/locale-bundle";
-import { Color, RichTextColor } from "reactjs-tiptap-editor/color";
-import { Highlight, RichTextHighlight } from "reactjs-tiptap-editor/highlight";
+import { localeActions, useLocale } from "reactjs-tiptap-editor/locale-bundle";
 import { RichTextAlign, TextAlign } from "reactjs-tiptap-editor/textalign";
 import { Clear, RichTextClear } from "reactjs-tiptap-editor/clear";
 import { Heading } from "reactjs-tiptap-editor/heading";
@@ -18,8 +16,7 @@ import { BulletList, RichTextBulletList } from "reactjs-tiptap-editor/bulletlist
 import { OrderedList, RichTextOrderedList } from "reactjs-tiptap-editor/orderedlist";
 import { RichTextTaskList, TaskList } from "reactjs-tiptap-editor/tasklist";
 import { Blockquote, RichTextBlockquote } from "reactjs-tiptap-editor/blockquote";
-import { Drawer, RichTextDrawer } from "reactjs-tiptap-editor/drawer";
-import { RichTextTable, Table } from "reactjs-tiptap-editor/table";
+import { Table, RichTextTable } from "reactjs-tiptap-editor/table";
 import { Code } from "reactjs-tiptap-editor/code";
 import { CodeBlock, RichTextCodeBlock } from "reactjs-tiptap-editor/codeblock";
 import { Link, RichTextLink } from "reactjs-tiptap-editor/link";
@@ -29,11 +26,14 @@ import {
   RichTextSearchAndReplace,
   SearchAndReplace,
 } from "reactjs-tiptap-editor/searchandreplace";
-import { SlashCommand, SlashCommandList } from "reactjs-tiptap-editor/slashcommand";
+import {
+  SlashCommand,
+  SlashCommandList,
+  renderCommandListDefault,
+} from "reactjs-tiptap-editor/slashcommand";
 import {
   RichTextBubbleCodeBlock,
   RichTextBubbleLink,
-  RichTextBubbleMenuDragHandle,
   RichTextBubbleText,
 } from "reactjs-tiptap-editor/bubble";
 import "reactjs-tiptap-editor/style.css";
@@ -82,14 +82,9 @@ const EDITOR_EXTENSIONS = [
     placeholder: "写下今天的复盘感受、收获与反思，或输入 / 使用命令...",
   }),
   Clear,
-  Color.configure({
-    colors: ["#ef4444", "#f97316", "#eab308", "#22c55e", "#3b82f6", "#8b5cf6"],
-  }),
-  Highlight.configure({ multicolor: true }),
   TextAlign.configure({ types: ["heading", "paragraph", "list_item"] }),
   TaskList,
   Table,
-  Drawer,
   SearchAndReplace,
   SlashCommand,
 ];
@@ -152,13 +147,10 @@ function EditorToolbar() {
     >
       <RichTextUndo />
       <RichTextRedo />
-      <span className="mx-0.5 h-6 w-px shrink-0 bg-border" />
       <RichTextBold />
       <RichTextItalic />
       <RichTextUnderline />
       <RichTextStrike />
-      <RichTextColor />
-      <RichTextHighlight />
       <span className="mx-0.5 h-6 w-px shrink-0 bg-border" />
       <RichTextBulletList />
       <RichTextOrderedList />
@@ -166,7 +158,6 @@ function EditorToolbar() {
       <RichTextAlign />
       <RichTextBlockquote />
       <RichTextTable />
-      <RichTextDrawer />
       <RichTextCodeBlock />
       <RichTextLink />
       <RichTextHorizontalRule />
@@ -177,13 +168,25 @@ function EditorToolbar() {
 }
 
 function EditorBubbles() {
+  const { t } = useLocale();
+
+  const commandList = useMemo(() => {
+    const defaultList = renderCommandListDefault({ t });
+    return defaultList.map((section) => ({
+      ...section,
+      commands: section.commands.filter(
+        (cmd) => !["heading4", "heading5", "heading6"].includes(cmd.name)
+      ),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <>
-      <RichTextBubbleMenuDragHandle />
       <RichTextBubbleText />
       <RichTextBubbleLink />
       <RichTextBubbleCodeBlock />
-      <SlashCommandList />
+      <SlashCommandList commandList={commandList} />
     </>
   );
 }
@@ -250,8 +253,17 @@ export function DailyReviewEditor({ content, onChange }: DailyReviewEditorProps)
             "flex min-h-0 min-w-0 flex-1 overflow-y-auto !bg-card " +
             "[&_*::selection]:!bg-[#bfdbfe] [&_*::selection]:!text-slate-900 dark:[&_*::selection]:!bg-blue-900/90 dark:[&_*::selection]:!text-blue-100 " +
             "[&_.selection]:!bg-[#bfdbfe] [&_.selection]:!text-slate-900 dark:[&_.selection]:!bg-blue-900/90 dark:[&_.selection]:!text-blue-100 " +
-            "[&_.ProseMirror]:min-h-full [&_.ProseMirror]:w-full [&_.ProseMirror]:min-w-0 [&_.ProseMirror]:box-border [&_.ProseMirror]:!bg-card [&_.ProseMirror]:p-5 [&_.ProseMirror]:px-6 [&_.ProseMirror]:pb-12 [&_.ProseMirror]:outline-none " +
+            "[&_.ProseMirror]:min-h-full [&_.ProseMirror]:w-full [&_.ProseMirror]:min-w-0 [&_.ProseMirror]:box-border [&_.ProseMirror]:!bg-card [&_.ProseMirror]:!p-4 [&_.ProseMirror]:!px-5 [&_.ProseMirror]:!pb-12 [&_.ProseMirror]:outline-none " +
             "[&_.ProseMirror>*]:mx-0 [&_.ProseMirror>*]:max-w-none " +
+            "[&_.ProseMirror_p]:!text-[14px] [&_.ProseMirror_p]:!mt-0 [&_.ProseMirror_p]:!mb-1.5 " +
+            "[&_.ProseMirror_h1]:!text-[20px] [&_.ProseMirror_h1]:!font-bold [&_.ProseMirror_h1]:!mt-1.5 [&_.ProseMirror_h1]:!mb-1.5 " +
+            "[&_.ProseMirror_h2]:!text-[18px] [&_.ProseMirror_h2]:!font-bold [&_.ProseMirror_h2]:!mt-1.5 [&_.ProseMirror_h2]:!mb-1.5 " +
+            "[&_.ProseMirror_h3]:!text-[16px] [&_.ProseMirror_h3]:!font-bold [&_.ProseMirror_h3]:!mt-1.5 [&_.ProseMirror_h3]:!mb-1.5 " +
+            "[&_.ProseMirror_ul]:!mt-1.5 [&_.ProseMirror_ul]:!mb-1.5 [&_.ProseMirror_ol]:!mt-1.5 [&_.ProseMirror_ol]:!mb-1.5 " +
+            "[&_.ProseMirror_ul_ul]:!my-0.5 [&_.ProseMirror_ol_ol]:!my-0.5 [&_.ProseMirror_ul_ol]:!my-0.5 [&_.ProseMirror_ol_ul]:!my-0.5 " +
+            "[&_.ProseMirror_li_p]:!my-0 " +
+            "[&_.ProseMirror_h4]:!hidden [&_.ProseMirror_h5]:!hidden [&_.ProseMirror_h6]:!hidden " +
+            "[&_.heading-1]:!text-[20px] [&_.heading-2]:!text-[18px] [&_.heading-3]:!text-[16px] " +
             "[&_.ProseMirror_blockquote]:my-3 [&_.ProseMirror_blockquote]:rounded-md [&_.ProseMirror_blockquote]:rounded-l-none [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-primary/45 [&_.ProseMirror_blockquote]:bg-muted/50 [&_.ProseMirror_blockquote]:px-4 [&_.ProseMirror_blockquote]:py-2 [&_.ProseMirror_blockquote]:text-muted-foreground [&_.ProseMirror_blockquote]:italic " +
             "[&_.ProseMirror_pre]:my-3 [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:rounded-md [&_.ProseMirror_pre]:border [&_.ProseMirror_pre]:border-border [&_.ProseMirror_pre]:bg-muted [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:font-mono [&_.ProseMirror_pre]:text-sm " +
             "[&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0 [&_.ProseMirror_pre_code]:text-inherit " +
