@@ -861,6 +861,14 @@ function NoteDrawerContent({
 
   const isDirtyRef = useRef(false);
   const latestDataRef = useRef({ title: note.title, content: note.content || '', note });
+  const onUpdateRef = useRef(onUpdate);
+
+  // The parent recreates its action callbacks whenever its query cache changes.
+  // Keep the latest callback without treating a cache refresh as an unmount: the
+  // cleanup below must run only when this drawer content actually unmounts.
+  useEffect(() => {
+    onUpdateRef.current = onUpdate;
+  }, [onUpdate]);
 
   useEffect(() => {
     setTitle(note.title);
@@ -880,11 +888,11 @@ function NoteDrawerContent({
       if (isDirtyRef.current) {
         const { note: currentNote, title: currentTitle, content: currentContent } = latestDataRef.current;
         if (currentNote) {
-          onUpdate(currentNote.id, currentTitle, currentContent);
+          onUpdateRef.current(currentNote.id, currentTitle, currentContent);
         }
       }
     };
-  }, [onUpdate]);
+  }, []);
 
   // Debounced auto-save effect
   useEffect(() => {
@@ -893,13 +901,13 @@ function NoteDrawerContent({
       isDirtyRef.current = true;
       setSaveStatus('saving');
       const timer = setTimeout(() => {
-        onUpdate(note.id, title, content);
         isDirtyRef.current = false;
+        onUpdateRef.current(note.id, title, content);
         setSaveStatus('saved');
       }, 3000);
       return () => clearTimeout(timer);
     }
-  }, [title, content, note.id, note.title, note.content, isOpen, onUpdate]);
+  }, [title, content, note.id, note.title, note.content, isOpen]);
 
   const handleImport = async () => {
     const mdContent = await listsService.pickMarkdownFile();
@@ -1423,7 +1431,7 @@ const EMPTY_NOTE_GROUPS: NoteGroup[] = [];
 
 export function ListsPanel() {
   const { userId } = useAuth();
-  // Query-backed data + write actions (connected to listNotesService Supabase backend)
+  // Query-backed data + write actions (connected to listsService Supabase backend)
   const { data } = useListsData();
   const rawLists = data?.lists ?? EMPTY_LISTS;
   const rawFolders = data?.folders ?? EMPTY_FOLDERS;

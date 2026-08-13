@@ -211,6 +211,7 @@ export function ReactjsTiptapEditor({
     content: parseContent(content),
     onUpdate: ({ editor: currentEditor }) => {
       const jsonStr = JSON.stringify(currentEditor.getJSON());
+      if (jsonStr === lastContentRef.current) return;
       lastContentRef.current = jsonStr;
       isUpdatingFromEditorRef.current = true;
       onChangeRef.current(jsonStr);

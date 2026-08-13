@@ -1,0 +1,15 @@
+# WorkBuddy-D 知识库
+
+`docs/` 是项目的记录系统。这里记录产品、架构、运行可靠性和数据库真实状态。
+
+- [架构](/architecture)
+- [同步、版本与编辑器一致性](/design-docs/sync-and-editor-consistency)
+- [产品规范](/product-specs/)
+- [数据库快照](/generated/db-schema)
+- [安全](/SECURITY)
+- [可靠性](/RELIABILITY)
+
+```bash
+pnpm docs:dev
+pnpm docs:build
+```

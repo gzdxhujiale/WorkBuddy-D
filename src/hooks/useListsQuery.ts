@@ -220,7 +220,14 @@ export function useListsActions(): ListsActions {
         sortOrder: data.lists.length,
       };
       setData(queryClient, userId, () => ({ ...data, lists: [...data.lists, newList] }));
-      debouncedSync.schedule(`list:${newList.id}`, () => listsService.upsertList(newList), LOW_FREQ_DELAY);
+      debouncedSync.schedule(`list:${newList.id}`, async () => {
+        const savedSortOrder = await listsService.upsertList(newList);
+        if (savedSortOrder === undefined) return;
+        setData(queryClient, userId, (current) => ({
+          ...current,
+          lists: current.lists.map((item) => item.id === newList.id ? { ...item, sortOrder: savedSortOrder } : item),
+        }));
+      }, LOW_FREQ_DELAY);
       return newList;
     };
 
@@ -232,7 +239,7 @@ export function useListsActions(): ListsActions {
       newLists[index] = { ...newLists[index], ...updates };
       const list = newLists[index];
       setData(queryClient, userId, () => ({ ...data, lists: newLists }));
-      debouncedSync.schedule(`list:${id}`, () => listsService.upsertList(list), HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`list:${id}`, async () => { await listsService.upsertList(list); }, HIGH_FREQ_DELAY);
     };
 
     const deleteList: ListsActions['deleteList'] = (id) => {
@@ -305,7 +312,14 @@ export function useListsActions(): ListsActions {
         sortOrder: data.noteGroups.filter(g => g.listId === listId).length,
       };
       setData(queryClient, userId, () => ({ ...data, noteGroups: [...data.noteGroups, newGroup] }));
-      debouncedSync.schedule(`group:${newGroup.id}`, () => listsService.upsertGroup(newGroup), LOW_FREQ_DELAY);
+      debouncedSync.schedule(`group:${newGroup.id}`, async () => {
+        const savedSortOrder = await listsService.upsertGroup(newGroup);
+        if (savedSortOrder === undefined) return;
+        setData(queryClient, userId, (current) => ({
+          ...current,
+          noteGroups: current.noteGroups.map((item) => item.id === newGroup.id ? { ...item, sortOrder: savedSortOrder } : item),
+        }));
+      }, LOW_FREQ_DELAY);
       return newGroup;
     };
 
@@ -317,7 +331,7 @@ export function useListsActions(): ListsActions {
       newGroups[index] = { ...newGroups[index], ...updates };
       const group = newGroups[index];
       setData(queryClient, userId, () => ({ ...data, noteGroups: newGroups }));
-      debouncedSync.schedule(`group:${id}`, () => listsService.upsertGroup(group), HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`group:${id}`, async () => { await listsService.upsertGroup(group); }, HIGH_FREQ_DELAY);
     };
 
     const deleteGroup: ListsActions['deleteGroup'] = (id) => {
@@ -344,13 +358,13 @@ export function useListsActions(): ListsActions {
       };
       setData(queryClient, userId, () => ({ ...data, notes: [...data.notes, newNote] }));
       debouncedSync.schedule(`note:${newNote.id}`, async () => {
-        const savedUpdatedAt = await listsService.upsertNote(newNote);
-        if (savedUpdatedAt === undefined) return;
+        const saved = await listsService.upsertNote(newNote);
+        if (saved === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
           notes: current.notes.map((item) =>
             item.id === newNote.id && item.updatedAt === newNote.updatedAt
-              ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+              ? { ...item, updatedAt: saved.updatedAt, baseUpdatedAt: saved.updatedAt, sortOrder: saved.sortOrder }
               : item,
           ),
         }));
@@ -366,16 +380,20 @@ export function useListsActions(): ListsActions {
       const index = data.notes.findIndex(n => n.id === id);
       if (index === -1) {
         // Defensive fallback if note is not yet loaded in query cache.
-        const updatedAt = Date.now();
         broadcastNoteUpdate(id, updates);
         debouncedSync.schedule(`note:${id}`, async () => {
           const savedUpdatedAt = await listsService.patchNote({
             id,
             ...updates,
-            updatedAt,
           });
           if (savedUpdatedAt === undefined) return;
         }, delay);
+        return;
+      }
+      const currentNote = data.notes[index];
+      if (Object.entries(updates).every(([key, value]) => (
+        Object.is(currentNote[key as keyof Note], value)
+      ))) {
         return;
       }
       const newNotes = [...data.notes];
@@ -392,8 +410,11 @@ export function useListsActions(): ListsActions {
         const latest = getData(queryClient, userId).notes.find(item => item.id === id);
         if (!latest) return;
         let savedUpdatedAt: number | undefined;
+        let savedSortOrder: number | undefined;
         if (latest.contentLoaded || updates.content !== undefined) {
-          savedUpdatedAt = await listsService.upsertNote(latest);
+          const saved = await listsService.upsertNote(latest);
+          savedUpdatedAt = saved?.updatedAt;
+          savedSortOrder = saved?.sortOrder;
         } else {
           savedUpdatedAt = await listsService.patchNote({
             id,
@@ -402,7 +423,6 @@ export function useListsActions(): ListsActions {
             title: updates.title,
             isPinned: updates.isPinned,
             sortOrder: updates.sortOrder,
-            updatedAt: latest.updatedAt,
             baseUpdatedAt: latest.baseUpdatedAt,
           });
         }
@@ -411,7 +431,12 @@ export function useListsActions(): ListsActions {
           ...current,
           notes: current.notes.map((item) =>
             item.id === id && item.updatedAt === latest.updatedAt
-              ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+              ? {
+                  ...item,
+                  updatedAt: savedUpdatedAt,
+                  baseUpdatedAt: savedUpdatedAt,
+                  sortOrder: savedSortOrder ?? item.sortOrder,
+                }
               : item,
           ),
         }));
@@ -465,7 +490,27 @@ export function useListsActions(): ListsActions {
       broadcastNotesReorder(Array.from(orderMap.entries()));
       debouncedSync.schedule(
         `note:${noteId}`,
-        () => listsService.moveNote(noteId, note.listId, groupId, updatedNote?.sortOrder || 0),
+        async () => {
+          const savedUpdatedAt = await listsService.moveNote(
+            noteId,
+            note.listId,
+            groupId,
+            updatedNote?.sortOrder || 0,
+            note.baseUpdatedAt,
+          );
+          if (savedUpdatedAt === undefined) return;
+          setData(queryClient, userId, (current) => ({
+            ...current,
+            notes: current.notes.map((item) => item.id === noteId
+              ? {
+                  ...item,
+                  updatedAt: savedUpdatedAt,
+                  baseUpdatedAt: savedUpdatedAt,
+                  sortOrder: item.sortOrder,
+                }
+              : item),
+          }));
+        },
         LOW_FREQ_DELAY
       );
     };
@@ -495,7 +540,27 @@ export function useListsActions(): ListsActions {
       broadcastNoteUpdate(noteId, { listId: targetListId, groupId: targetGroupId, sortOrder: newSortOrder });
       debouncedSync.schedule(
         `note:${noteId}`,
-        () => listsService.moveNote(noteId, targetListId, targetGroupId, newSortOrder),
+        async () => {
+          const savedUpdatedAt = await listsService.moveNote(
+            noteId,
+            targetListId,
+            targetGroupId,
+            newSortOrder,
+            oldNote.baseUpdatedAt,
+          );
+          if (savedUpdatedAt === undefined) return;
+          setData(queryClient, userId, (current) => ({
+            ...current,
+            notes: current.notes.map((item) => item.id === noteId
+              ? {
+                  ...item,
+                  updatedAt: savedUpdatedAt,
+                  baseUpdatedAt: savedUpdatedAt,
+                  sortOrder: item.sortOrder,
+                }
+              : item),
+          }));
+        },
         LOW_FREQ_DELAY
       );
     };
@@ -514,7 +579,20 @@ export function useListsActions(): ListsActions {
       });
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       broadcastNotesReorder(items);
-      debouncedSync.schedule('reorder:notes', () => listsService.reorderNotes(items), LOW_FREQ_DELAY);
+      debouncedSync.schedule('reorder:notes', async () => {
+        const savedVersions = await listsService.reorderNotes(items);
+        if (savedVersions === undefined) return;
+        const versions = new Map(savedVersions);
+        setData(queryClient, userId, (current) => ({
+          ...current,
+          notes: current.notes.map((note) => {
+            const savedUpdatedAt = versions.get(note.id);
+            return savedUpdatedAt === undefined
+              ? note
+              : { ...note, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt };
+          }),
+        }));
+      }, LOW_FREQ_DELAY);
     };
 
     // ── Folders ──

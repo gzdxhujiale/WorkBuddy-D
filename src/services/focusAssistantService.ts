@@ -2,7 +2,7 @@ import { supabase } from "@/lib/supabase";
 import type { FocusSession, FocusSessionStatus, FocusSessionType } from "@/types/focusAssistant";
 import { throwOnPostgrestError } from "@/lib/sync";
 
-type CreateSession = Omit<FocusSession, "id" | "endedAt">;
+type CreateSession = Omit<FocusSession, "id" | "startedAt" | "endedAt">;
 
 function fromDb(row: Record<string, unknown>): FocusSession {
   return {
@@ -16,32 +16,27 @@ function fromDb(row: Record<string, unknown>): FocusSession {
 
 export const focusAssistantApi = {
   async create(input: CreateSession): Promise<FocusSession> {
-    const session: FocusSession = { ...input, id: crypto.randomUUID(), endedAt: null };
-    const { error } = await supabase.rpc("create_focus_session", {
-      p_id: session.id, p_cycle_id: session.cycleId, p_task_id: session.taskId,
-      p_type: session.type, p_status: session.status,
-      p_planned_minutes: session.plannedMinutes, p_active_seconds: session.activeSeconds,
-      p_rest_completed: session.restCompleted, p_started_at: session.startedAt,
+    const id = crypto.randomUUID();
+    const { data, error } = await supabase.rpc("create_focus_session", {
+      p_id: id, p_cycle_id: input.cycleId, p_task_id: input.taskId,
+      p_type: input.type, p_status: input.status,
+      p_planned_minutes: input.plannedMinutes, p_active_seconds: input.activeSeconds,
+      p_rest_completed: input.restCompleted,
     });
     throwOnPostgrestError(error, "创建专注记录");
-    return session;
+    return { ...input, id, startedAt: data as string, endedAt: null };
   },
-  async update(id: string, updates: Partial<Pick<FocusSession, "status" | "activeSeconds" | "restCompleted" | "endedAt">>): Promise<void> {
-    const payload: Record<string, unknown> = {};
-    if (updates.status !== undefined) payload.status = updates.status;
-    if (updates.activeSeconds !== undefined) payload.active_seconds = updates.activeSeconds;
-    if (updates.restCompleted !== undefined) payload.rest_completed = updates.restCompleted;
-    if (updates.endedAt !== undefined) payload.ended_at = updates.endedAt;
-    const { error } = await supabase.from("focus_sessions").update(payload).eq("id", id);
+  async update(id: string, updates: Partial<Pick<FocusSession, "status" | "activeSeconds" | "restCompleted">>): Promise<void> {
+    const { error } = await supabase.rpc("update_focus_session", {
+      p_id: id,
+      p_status: updates.status,
+      p_active_seconds: updates.activeSeconds,
+      p_rest_completed: updates.restCompleted,
+    });
     throwOnPostgrestError(error, "更新专注记录");
   },
   async markOpenSessionsInterrupted(): Promise<void> {
-    const endedAt = new Date().toISOString();
-    const { error } = await supabase
-      .from("focus_sessions")
-      .update({ status: "interrupted", ended_at: endedAt })
-      .in("status", ["running", "paused"])
-      .is("ended_at", null);
+    const { error } = await supabase.rpc("interrupt_open_focus_sessions");
     throwOnPostgrestError(error, "中断专注记录");
   },
   fromDb,

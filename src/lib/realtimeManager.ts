@@ -1,10 +1,17 @@
 import { supabase } from "@/lib/supabase";
 import { logSilent } from "@/lib/syncEngine";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
-import type { RealtimePostgresChangesPayload } from "@supabase/supabase-js";
 import { isQueryPending } from "@/lib/queryPending";
 
 type Subscription = ReturnType<typeof supabase.channel>;
+
+type SyncBroadcast = {
+  table?: string;
+  operation?: "INSERT" | "UPDATE" | "DELETE";
+  id?: string;
+  folder_id?: string | null;
+  previous_folder_id?: string | null;
+};
 
 const TABLES = [
   "knowledge_bases",
@@ -41,20 +48,21 @@ class RealtimeManager {
     this.queryClient = queryClient;
     this.dirtyTargets.clear();
     this.lastInvalidatedAt.clear();
-    const channel = supabase.channel(`user:${userId}`);
+    const channel = supabase.channel(`user:${userId}:sync`, {
+      config: { private: true },
+    });
     this.channel = channel;
 
-    for (const table of TABLES) {
-      channel.on(
-        "postgres_changes",
-        { event: "*", schema: "public", table, filter: `user_id=eq.${userId}` },
-        (payload: RealtimePostgresChangesPayload<Record<string, any>>) => this.notify(table, payload),
-      );
-    }
+    channel.on("broadcast", { event: "entity_changed" }, ({ payload }) => {
+      const event = payload as SyncBroadcast;
+      if (event.table && TABLES.includes(event.table as typeof TABLES[number])) {
+        this.notify(event.table, event);
+      }
+    });
 
     channel.subscribe((status) => {
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        logSilent("Realtime", `user subscription ${status}`);
+        logSilent("Realtime", `user Broadcast subscription ${status}`);
       }
     });
   }
@@ -69,10 +77,8 @@ class RealtimeManager {
     this.dirtyTargets.clear();
   }
 
-  private notify(table: string, payload: RealtimePostgresChangesPayload<Record<string, any>>) {
+  private notify(table: string, payload: SyncBroadcast) {
     if (!this.userId || !this.queryClient) return;
-
-    const record: Record<string, any> = (payload.new && Object.keys(payload.new).length > 0 ? payload.new : payload.old) || {};
 
     switch (table) {
       case "knowledge_bases":
@@ -80,25 +86,31 @@ class RealtimeManager {
         break;
       case "knowledge_base_folders":
         this.addPendingTarget(["lists", this.userId, "all"], true);
-        if (record.id) {
-          this.addPendingTarget(["lists", this.userId, "contents", record.id], true);
+        if (payload.id) {
+          this.addPendingTarget(["lists", this.userId, "contents", payload.id], true);
         }
         break;
       case "folder_note_groups":
-        if (record.folder_id) {
-          this.addPendingTarget(["lists", this.userId, "contents", record.folder_id], true);
+        if (payload.folder_id) {
+          this.addPendingTarget(["lists", this.userId, "contents", payload.folder_id], true);
+        }
+        if (payload.previous_folder_id && payload.previous_folder_id !== payload.folder_id) {
+          this.addPendingTarget(["lists", this.userId, "contents", payload.previous_folder_id], true);
         } else {
-          this.addPendingTarget(["lists", this.userId, "all"], true);
+          if (!payload.folder_id) this.addPendingTarget(["lists", this.userId, "all"], true);
         }
         break;
       case "notes":
-        if (record.folder_id) {
-          this.addPendingTarget(["lists", this.userId, "contents", record.folder_id], true);
+        if (payload.folder_id) {
+          this.addPendingTarget(["lists", this.userId, "contents", payload.folder_id], true);
         }
-        if (record.id) {
-          this.addPendingTarget(["lists", this.userId, "note", record.id], true);
+        if (payload.previous_folder_id && payload.previous_folder_id !== payload.folder_id) {
+          this.addPendingTarget(["lists", this.userId, "contents", payload.previous_folder_id], true);
         }
-        if (!record.folder_id && !record.id) {
+        if (payload.id) {
+          this.addPendingTarget(["lists", this.userId, "note", payload.id], true);
+        }
+        if (!payload.folder_id && !payload.previous_folder_id && !payload.id) {
           this.addPendingTarget(["lists", this.userId, "all"], true);
         }
         break;

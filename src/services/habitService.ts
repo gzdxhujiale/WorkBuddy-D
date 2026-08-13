@@ -24,9 +24,7 @@ function saveHabit(habit: Habit) {
     p_reminder: habit.checkInTime || habit.reminder || null,
     p_auto_popup_log: habit.autoPopupLog,
     p_sort_order: habit.sortOrder,
-    p_created_at: new Date(habit.createdAt).toISOString(),
     p_expected_updated_at: habit.baseUpdatedAt ? new Date(habit.baseUpdatedAt).toISOString() : null,
-    p_next_updated_at: new Date(habit.updatedAt).toISOString(),
   });
 }
 registerOfflineExecutor("habit:save", async (payload) => {
@@ -121,14 +119,13 @@ export const habitApi = {
   },
 
   toggleCheckIn: async (habitId: string, date: string, completed: boolean): Promise<void> => {
-    const payload = { habitId, date, completed, updatedAt: new Date().toISOString() };
+  const payload = { habitId, date, completed };
 
     await runOrQueue({ kind: "habit-checkin:save", key: `habit-checkin:${habitId}:${date}`, payload }, async () => {
       const { error } = await supabase.rpc("save_habit_checkin", {
         p_habit_id: habitId,
         p_date: date,
         p_completed: completed,
-        p_updated_at: payload.updatedAt,
       });
       throwOnPostgrestError(error, "保存习惯打卡");
     });
@@ -136,12 +133,11 @@ export const habitApi = {
 };
 
 registerOfflineExecutor("habit-checkin:save", async (payload) => {
-  const checkIn = payload as { habitId: string; date: string; completed: boolean; updatedAt: string };
+  const checkIn = payload as { habitId: string; date: string; completed: boolean };
   const { error } = await supabase.rpc("save_habit_checkin", {
     p_habit_id: checkIn.habitId,
     p_date: checkIn.date,
     p_completed: checkIn.completed,
-    p_updated_at: checkIn.updatedAt,
   });
   throwOnPostgrestError(error, "保存习惯打卡");
 });

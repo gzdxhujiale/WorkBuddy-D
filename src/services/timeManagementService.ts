@@ -41,24 +41,21 @@ function resolveSchedule(task: Task): {
 
 async function saveRemoteTask(task: Task): Promise<number> {
   const schedule = resolveSchedule(task);
-  const nextUpdatedAt = task.updatedAt ?? Date.now();
   const { data, error } = await supabase.rpc("save_time_management_task", {
     p_id: task.id, p_title: task.title, p_quadrant: QUADRANT_DB_MAP[task.quadrant] || task.quadrant,
     p_schedule_mode: schedule.scheduleMode || null,
     p_scheduled_start_at: schedule.scheduledStartAt ? new Date(schedule.scheduledStartAt).toISOString() : null,
     p_scheduled_end_at: schedule.scheduledEndAt ? new Date(schedule.scheduledEndAt).toISOString() : null,
-    p_completed: task.completed, p_completed_at: task.completedAt ? new Date(task.completedAt).toISOString() : null,
+    p_completed: task.completed,
     p_description: task.description || null, p_reminder: task.reminder ? JSON.parse(task.reminder) : null,
-    p_created_at: new Date(task.createdAt).toISOString(),
     p_expected_updated_at: task.baseUpdatedAt ? new Date(task.baseUpdatedAt).toISOString() : null,
-    p_next_updated_at: new Date(nextUpdatedAt).toISOString(),
   });
   throwOnPostgrestError(error, "保存任务");
   return new Date(data as string).getTime();
 }
 registerOfflineExecutor("task:save", async (payload) => { await saveRemoteTask(payload as Task); });
 registerOfflineExecutor("task:delete", async (payload) => {
-  const { error } = await supabase.from("time_management_tasks").update({ deleted_at: new Date().toISOString() }).eq("id", payload as string);
+  const { error } = await supabase.rpc("soft_delete_time_management_task", { p_id: payload as string });
   throwOnPostgrestError(error, "删除任务");
 });
 
@@ -109,7 +106,7 @@ export const timeManagementApi = {
 
   deleteTask: async (id: string): Promise<void> => {
     await runOrQueue({ kind: "task:delete", key: `task:${id}`, payload: id }, async () => {
-      const { error } = await supabase.from("time_management_tasks").update({ deleted_at: new Date().toISOString() }).eq("id", id);
+      const { error } = await supabase.rpc("soft_delete_time_management_task", { p_id: id });
       throwOnPostgrestError(error, "删除任务");
     });
   },

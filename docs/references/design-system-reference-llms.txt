@@ -1,0 +1,1 @@
+Use the existing primitives in src/components/ui before introducing a new UI primitive. Feature-specific UI belongs in src/components/<feature>.

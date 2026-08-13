@@ -1,8 +1,7 @@
 /**
  * listsService - unified data-access layer for the Lists module.
  *
- * Absorbs the former listNotesService (Supabase layer) and the
- * former listsService adapter (type-mapping layer) into a single seam.
+ * Centralizes the Lists module's Supabase access and type mapping in one seam.
  * All write operations pass through runOrQueue for durable offline replay.
  *
  * NOTE(design): Realtime channel split was evaluated and intentionally skipped.
@@ -35,9 +34,10 @@ export type ListNotePatch = {
   content?: string;
   isPinned?: boolean;
   sortOrder?: number;
-  updatedAt?: number;
   baseUpdatedAt?: number;
 };
+
+export type SavedNote = { updatedAt: number; sortOrder: number };
 
 // ---------------------------------------------------------------------------
 // Remote helpers (private)
@@ -47,7 +47,6 @@ async function remoteUpsertFolder(folder: Folder): Promise<void> {
   const { error } = await supabase.rpc("save_knowledge_base", {
     p_id: folder.id, p_name: folder.name,
     p_is_pinned: folder.isPinned ?? false, p_sort_order: folder.sortOrder ?? 0,
-    p_updated_at: new Date().toISOString(),
   });
   throwOnPostgrestError(error, "\u4fdd\u5b58\u77e5\u8bc6\u5e93");
 }
@@ -64,15 +63,15 @@ async function remoteReorderFolders(items: Array<[string, number]>): Promise<voi
   throwOnPostgrestError(error, "\u6392\u5e8f\u77e5\u8bc6\u5e93");
 }
 
-async function remoteUpsertList(list: List): Promise<void> {
-  const { error } = await supabase.rpc("save_knowledge_base_folder", {
+async function remoteUpsertList(list: List): Promise<number> {
+  const { data, error } = await supabase.rpc("save_knowledge_base_folder", {
     p_id: list.id, p_knowledge_base_id: list.folderId ?? null,
     p_name: list.name, p_icon: list.icon ?? "BookOpen",
     p_color: list.color ?? "#6366f1", p_view_type: list.viewType ?? "list",
     p_is_pinned: list.isPinned ?? false, p_sort_order: list.sortOrder ?? 0,
-    p_updated_at: new Date().toISOString(),
   });
   throwOnPostgrestError(error, "\u4fdd\u5b58\u6e05\u5355");
+  return Number(data);
 }
 
 async function remoteDeleteList(id: string): Promise<void> {
@@ -82,7 +81,7 @@ async function remoteDeleteList(id: string): Promise<void> {
 
 async function remoteMoveList(listId: string, folderId: string | null, sortOrder: number): Promise<void> {
   const { error } = await supabase.from("knowledge_base_folders")
-    .update({ knowledge_base_id: folderId, sort_order: sortOrder, updated_at: new Date().toISOString() })
+    .update({ knowledge_base_id: folderId, sort_order: sortOrder })
     .eq("id", listId);
   throwOnPostgrestError(error, "\u79fb\u52a8\u6e05\u5355");
 }
@@ -94,84 +93,79 @@ async function remoteReorderLists(items: Array<[string, number]>): Promise<void>
   throwOnPostgrestError(error, "\u6392\u5e8f\u6e05\u5355");
 }
 
-async function remoteUpsertGroup(group: NoteGroup): Promise<void> {
-  const { error } = await supabase.rpc("save_folder_note_group", {
+async function remoteUpsertGroup(group: NoteGroup): Promise<number> {
+  const { data, error } = await supabase.rpc("save_folder_note_group", {
     p_id: group.id, p_folder_id: group.listId, p_name: group.name,
-    p_sort_order: group.sortOrder ?? 0, p_updated_at: new Date().toISOString(),
+    p_sort_order: group.sortOrder ?? 0,
   });
   throwOnPostgrestError(error, "\u4fdd\u5b58\u5206\u7ec4");
+  return Number(data);
 }
 
 async function remoteDeleteGroup(id: string): Promise<void> {
-  const { error } = await supabase.from("folder_note_groups")
-    .update({ deleted_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.rpc("soft_delete_folder_note_group", { p_id: id });
   throwOnPostgrestError(error, "\u5220\u9664\u5206\u7ec4");
 }
 
-async function remoteReorderNotes(items: Array<[string, number]>): Promise<void> {
-  const { error } = await supabase.rpc("reorder_notes", {
+async function remoteReorderNotes(items: Array<[string, number]>): Promise<Array<[string, number]>> {
+  const { data, error } = await supabase.rpc("reorder_notes", {
     p_items: items.map(([id, sort_order]) => ({ id, sort_order })),
   });
   throwOnPostgrestError(error, "\u6392\u5e8f\u7b14\u8bb0");
+  return ((data ?? []) as Array<{ id: string; updated_at: string }>).map((item) => [
+    item.id,
+    new Date(item.updated_at).getTime(),
+  ]);
 }
 
-async function remoteMoveNote(noteId: string, listId: string, groupId: string | null, sortOrder: number): Promise<void> {
-  const { error } = await supabase.from("notes")
-    .update({ folder_id: listId, group_id: groupId, sort_order: sortOrder, updated_at: new Date().toISOString() })
-    .eq("id", noteId);
+async function remoteMoveNote(noteId: string, listId: string, groupId: string | null, sortOrder: number, baseUpdatedAt: number | undefined): Promise<number> {
+  const { data, error } = await supabase.rpc("move_note", {
+    p_id: noteId, p_folder_id: listId, p_group_id: groupId, p_sort_order: sortOrder,
+    p_expected_updated_at: baseUpdatedAt ? new Date(baseUpdatedAt).toISOString() : null,
+  });
   throwOnPostgrestError(error, "\u79fb\u52a8\u7b14\u8bb0");
+  return new Date(data as string).getTime();
 }
 
-async function remoteSaveNote(note: Note): Promise<number> {
+async function remoteSaveNote(note: Note): Promise<SavedNote> {
   const { data, error } = await supabase.rpc("save_note", {
     p_id: note.id, p_folder_id: note.listId, p_group_id: note.groupId ?? null,
     p_title: note.title, p_content: note.content,
     p_is_pinned: note.isPinned ?? false, p_sort_order: note.sortOrder ?? 0,
-    p_created_at: note.createdAt ? new Date(note.createdAt).toISOString() : new Date().toISOString(),
     p_expected_updated_at: note.baseUpdatedAt ? new Date(note.baseUpdatedAt).toISOString() : null,
-    p_next_updated_at: new Date(note.updatedAt ?? Date.now()).toISOString(),
   });
   throwOnPostgrestError(error, "\u4fdd\u5b58\u7b14\u8bb0");
-  return new Date(data as string).getTime();
+  const saved = (data as Array<{ updated_at: string; sort_order: number }>)[0];
+  return { updatedAt: new Date(saved.updated_at).getTime(), sortOrder: saved.sort_order };
 }
 
 async function remotePatchNote(patch: ListNotePatch): Promise<number> {
-  const payload: Record<string, unknown> = {
-    updated_at: new Date(patch.updatedAt ?? Date.now()).toISOString(),
-  };
-  if (patch.listId !== undefined) payload.folder_id = patch.listId;
-  if (patch.groupId !== undefined) payload.group_id = patch.groupId;
-  if (patch.title !== undefined) payload.title = patch.title;
-  if (patch.content !== undefined) payload.content = patch.content;
-  if (patch.isPinned !== undefined) payload.is_pinned = patch.isPinned;
-  if (patch.sortOrder !== undefined) payload.sort_order = patch.sortOrder;
-
-  let query = supabase.from("notes").update(payload).eq("id", patch.id);
-  if (patch.baseUpdatedAt) {
-    query = query.eq("updated_at", new Date(patch.baseUpdatedAt).toISOString());
-  }
-  const { data, error } = await query.select("updated_at").maybeSingle();
+  const { data, error } = await supabase.rpc("patch_note", {
+    p_id: patch.id,
+    p_expected_updated_at: patch.baseUpdatedAt ? new Date(patch.baseUpdatedAt).toISOString() : null,
+    p_title: patch.title, p_content: patch.content, p_is_pinned: patch.isPinned,
+    p_sort_order: patch.sortOrder, p_folder_id: patch.listId, p_group_id: patch.groupId,
+    p_set_group: patch.groupId !== undefined,
+  });
   throwOnPostgrestError(error, "\u66f4\u65b0\u7b14\u8bb0");
-  return data?.updated_at ? new Date(data.updated_at).getTime() : Date.now();
+  return new Date(data as string).getTime();
 }
 
 async function remoteDeleteNote(id: string): Promise<void> {
-  const { error } = await supabase.from("notes")
-    .update({ deleted_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.rpc("soft_delete_note", { p_id: id });
   throwOnPostgrestError(error, "\u5220\u9664\u7b14\u8bb0");
 }
 
 async function remoteUpsertTemplate(template: Template): Promise<void> {
   const { error } = await supabase.rpc("save_knowledge_base_template", {
     p_id: template.id, p_name: template.name,
-    p_content: { raw: template.content }, p_updated_at: new Date().toISOString(),
+    p_content: { raw: template.content },
   });
   throwOnPostgrestError(error, "\u4fdd\u5b58\u6a21\u677f");
 }
 
 async function remoteDeleteTemplate(id: string): Promise<void> {
-  const { error } = await supabase.from("knowledge_base_templates")
-    .update({ deleted_at: new Date().toISOString() }).eq("id", id);
+  const { error } = await supabase.rpc("soft_delete_knowledge_base_template", { p_id: id });
   throwOnPostgrestError(error, "\u5220\u9664\u6a21\u677f");
 }
 
@@ -183,7 +177,7 @@ registerOfflineExecutor("list-folder:save", async (p) => remoteUpsertFolder(p as
 registerOfflineExecutor("list-folder:delete", async (p) => remoteDeleteFolder(p as string));
 registerOfflineExecutor("list-folder:reorder", async (p) => remoteReorderFolders(p as Array<[string, number]>));
 
-registerOfflineExecutor("list:save", async (p) => remoteUpsertList(p as List));
+registerOfflineExecutor("list:save", async (p) => { await remoteUpsertList(p as List); });
 registerOfflineExecutor("list:delete", async (p) => remoteDeleteList(p as string));
 registerOfflineExecutor("list:move", async (p) => {
   const { listId, folderId, sortOrder } = p as { listId: string; folderId: string | null; sortOrder: number };
@@ -191,18 +185,18 @@ registerOfflineExecutor("list:move", async (p) => {
 });
 registerOfflineExecutor("list:reorder", async (p) => remoteReorderLists(p as Array<[string, number]>));
 
-registerOfflineExecutor("list-group:save", async (p) => remoteUpsertGroup(p as NoteGroup));
+registerOfflineExecutor("list-group:save", async (p) => { await remoteUpsertGroup(p as NoteGroup); });
 registerOfflineExecutor("list-group:delete", async (p) => remoteDeleteGroup(p as string));
 
 registerOfflineExecutor("note:save", async (p) => { await remoteSaveNote(p as Note); });
 registerOfflineExecutor("note:patch", async (p) => { await remotePatchNote(p as ListNotePatch); });
 registerOfflineExecutor("note:delete", async (p) => remoteDeleteNote(p as string));
-registerOfflineExecutor("note:reorder", async (p) => remoteReorderNotes(p as Array<[string, number]>));
+registerOfflineExecutor("note:reorder", async (p) => { await remoteReorderNotes(p as Array<[string, number]>); });
 registerOfflineExecutor("note:move", async (p) => {
-  const { noteId, listId, groupId, sortOrder } = p as {
-    noteId: string; listId: string; groupId: string | null; sortOrder: number;
+  const { noteId, listId, groupId, sortOrder, baseUpdatedAt } = p as {
+    noteId: string; listId: string; groupId: string | null; sortOrder: number; baseUpdatedAt?: number;
   };
-  await remoteMoveNote(noteId, listId, groupId, sortOrder);
+  await remoteMoveNote(noteId, listId, groupId, sortOrder, baseUpdatedAt);
 });
 
 registerOfflineExecutor("template:save", async (p) => remoteUpsertTemplate(p as Template));
@@ -334,7 +328,7 @@ export function reorderFolders(items: Array<[string, number]>): Promise<void | u
   );
 }
 
-export function upsertList(list: List): Promise<void | undefined> {
+export function upsertList(list: List): Promise<number | undefined> {
   return runOrQueue(
     { kind: "list:save", key: "list:" + list.id, payload: list },
     () => remoteUpsertList(list),
@@ -366,7 +360,7 @@ export async function duplicateList(_sourceId: string, newList: List): Promise<v
   await remoteUpsertList(newList);
 }
 
-export function upsertGroup(group: NoteGroup): Promise<void | undefined> {
+export function upsertGroup(group: NoteGroup): Promise<number | undefined> {
   return runOrQueue(
     { kind: "list-group:save", key: "list-group:" + group.id, payload: group },
     () => remoteUpsertGroup(group),
@@ -380,7 +374,7 @@ export function deleteGroup(id: string): Promise<void | undefined> {
   );
 }
 
-export function upsertNote(note: Note): Promise<number | undefined> {
+export function upsertNote(note: Note): Promise<SavedNote | undefined> {
   return runOrQueue(
     { kind: "note:save", key: "note:" + note.id, payload: note },
     () => remoteSaveNote(note),
@@ -401,17 +395,17 @@ export async function deleteNote(id: string): Promise<void> {
   );
 }
 
-export function reorderNotes(items: Array<[string, number]>): Promise<void | undefined> {
+export function reorderNotes(items: Array<[string, number]>): Promise<Array<[string, number]> | undefined> {
   return runOrQueue(
     { kind: "note:reorder", key: "note:reorder", payload: items },
     () => remoteReorderNotes(items),
   );
 }
 
-export function moveNote(noteId: string, listId: string, groupId: string | null, sortOrder: number): Promise<void | undefined> {
+export function moveNote(noteId: string, listId: string, groupId: string | null, sortOrder: number, baseUpdatedAt: number | undefined): Promise<number | undefined> {
   return runOrQueue(
-    { kind: "note:move", key: "note:move:" + noteId, payload: { noteId, listId, groupId, sortOrder } },
-    () => remoteMoveNote(noteId, listId, groupId, sortOrder),
+    { kind: "note:move", key: "note:move:" + noteId, payload: { noteId, listId, groupId, sortOrder, baseUpdatedAt } },
+    () => remoteMoveNote(noteId, listId, groupId, sortOrder, baseUpdatedAt),
   );
 }
 

@@ -168,7 +168,6 @@ export function FocusAssistant() {
         plannedMinutes: minutes,
         activeSeconds: 0,
         restCompleted: false,
-        startedAt: new Date().toISOString(),
       });
       if (nextType === "focus") setFocusSessionId(created.id);
       setSession(created);
@@ -201,7 +200,6 @@ export function FocusAssistant() {
     await focusAssistantApi.update(session.id, {
       status: "interrupted",
       activeSeconds: elapsed,
-      endedAt: new Date().toISOString(),
     });
     setSession(null);
     setFocusSessionId(null);
@@ -224,7 +222,6 @@ export function FocusAssistant() {
     await focusAssistantApi.update(current.id, {
       status: "completed",
       activeSeconds: current.plannedMinutes * 60,
-      endedAt: new Date().toISOString(),
     });
 
     if (currentSessionType === "focus") {
@@ -259,7 +256,6 @@ export function FocusAssistant() {
     await focusAssistantApi.update(current.id, {
       status: "completed",
       activeSeconds: elapsed,
-      endedAt: new Date().toISOString(),
     });
     if (viewModeRef.current === "minimized") {
       void sendDesktopNotification("已跳过专注", "开始休息吧");
@@ -308,7 +304,6 @@ export function FocusAssistant() {
         void focusAssistantApi.update(current.id, {
           status: "interrupted",
           activeSeconds: activeSeconds(),
-          endedAt: new Date().toISOString(),
         });
       }
     };

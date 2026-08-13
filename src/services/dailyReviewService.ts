@@ -6,9 +6,7 @@ import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 async function saveRemote(review: DailyReviewItem): Promise<number> {
   const { data, error } = await supabase.rpc("save_daily_review", {
     p_id: review.id, p_date: review.date, p_content: { text: review.content },
-    p_created_at: new Date(review.createdAt).toISOString(),
     p_expected_updated_at: review.baseUpdatedAt ? new Date(review.baseUpdatedAt).toISOString() : null,
-    p_next_updated_at: new Date(review.updatedAt).toISOString(),
   });
   throwOnPostgrestError(error, "保存每日复盘");
   return new Date(data as string).getTime();
