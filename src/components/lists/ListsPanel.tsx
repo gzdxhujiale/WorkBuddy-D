@@ -204,6 +204,7 @@ const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo((
 interface ListsSidebarProps {
   lists: List[];
   folders: Folder[];
+  notes: Note[];
   activeListId: string | null;
   loadingListId?: string | null;
   dragOverListId?: string | null;
@@ -232,6 +233,7 @@ const ICON_MAP: Record<string, ReactNode> = {
 function ListsSidebar({
   lists,
   folders,
+  notes,
   activeListId,
   loadingListId,
   dragOverListId,
@@ -294,11 +296,14 @@ function ListsSidebar({
           {loadingListId === list.id && (
             <LoaderCircle size={14} className="animate-spin text-sidebar-primary" aria-label="正在加载清单" />
           )}
-          {list.itemCount !== undefined && list.itemCount > 0 && (
-            <span className="text-xs font-normal text-sidebar-foreground/60 group-hover:hidden">
-              {list.itemCount}
-            </span>
-          )}
+          {(() => {
+            const count = notes.filter(n => n.listId === list.id).length;
+            return count > 0 && (
+              <span className="text-xs font-normal text-sidebar-foreground/60 group-hover:hidden">
+                {count}
+              </span>
+            );
+          })()}
           <div className="relative ml-auto" onClick={e => e.stopPropagation()}>
                       <Button
                         variant="ghost"
@@ -1943,7 +1948,7 @@ export function ListsPanel() {
   };
 
   const handleEditTemplate = (id: string, name: string, content: string) => {
-    updateTemplate(id, { name, content: { raw: content } });
+    updateTemplate(id, { name, content });
   };
 
   const handleDeleteTemplate = (id: string) => {
@@ -1992,6 +1997,7 @@ export function ListsPanel() {
         <ListsSidebar
           lists={lists}
           folders={folders}
+          notes={notes}
           activeListId={activeListId}
           loadingListId={isListContentsFetching ? activeListId : null}
           dragOverListId={dragOverSidebarListId}

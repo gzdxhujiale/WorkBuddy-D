@@ -122,16 +122,10 @@ function registerCrossWindowSync(queryClient: QueryClient, userId: string) {
   void listen<NoteSyncPayload>(NOTE_DELETED_EVENT, (event) => {
     const { source, noteId } = event.payload;
     if (source === SYNC_SOURCE_ID) return;
-    setData(queryClient, userId, (data) => {
-      const note = data.notes.find(n => n.id === noteId);
-      if (!note) return data;
-      const newLists = [...data.lists];
-      const listIndex = newLists.findIndex(l => l.id === note.listId);
-      if (listIndex !== -1 && (newLists[listIndex].itemCount || 0) > 0) {
-        newLists[listIndex] = { ...newLists[listIndex], itemCount: newLists[listIndex].itemCount! - 1 };
-      }
-      return { ...data, notes: data.notes.filter(n => n.id !== noteId), lists: newLists };
-    });
+    setData(queryClient, userId, (data) => ({
+      ...data,
+      notes: data.notes.filter(n => n.id !== noteId),
+    }));
   }).catch(e => logSilent('useListsQuery', 'note sync listen failed', e));
 
   void listen<NotesReorderPayload>(NOTES_REORDERED_EVENT, (event) => {
@@ -223,7 +217,6 @@ export function useListsActions(): ListsActions {
       const newList: List = {
         ...list,
         id: genId('list'),
-        itemCount: 0,
         sortOrder: data.lists.length,
       };
       setData(queryClient, userId, () => ({ ...data, lists: [...data.lists, newList] }));
@@ -349,12 +342,7 @@ export function useListsActions(): ListsActions {
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
-      const newLists = [...data.lists];
-      const listIndex = newLists.findIndex(l => l.id === note.listId);
-      if (listIndex !== -1) {
-        newLists[listIndex] = { ...newLists[listIndex], itemCount: (newLists[listIndex].itemCount || 0) + 1 };
-      }
-      setData(queryClient, userId, () => ({ ...data, notes: [...data.notes, newNote], lists: newLists }));
+      setData(queryClient, userId, () => ({ ...data, notes: [...data.notes, newNote] }));
       debouncedSync.schedule(`note:${newNote.id}`, async () => {
         const savedUpdatedAt = await listsService.upsertNote(newNote);
         if (savedUpdatedAt === undefined) return;
@@ -432,22 +420,9 @@ export function useListsActions(): ListsActions {
 
     const deleteNote: ListsActions['deleteNote'] = (id) => {
       const data = getData(queryClient, userId);
-      const note = data.notes.find(n => n.id === id);
-      if (!note) {
-        debouncedSync.cancel(`note:${id}`);
-        listsService.deleteNote(id).catch(() => {});
-        broadcastNoteDelete(id);
-        return;
-      }
-      const newLists = [...data.lists];
-      const listIndex = newLists.findIndex(l => l.id === note.listId);
-      if (listIndex !== -1 && (newLists[listIndex].itemCount || 0) > 0) {
-        newLists[listIndex] = { ...newLists[listIndex], itemCount: newLists[listIndex].itemCount! - 1 };
-      }
       setData(queryClient, userId, () => ({
         ...data,
         notes: data.notes.filter(n => n.id !== id),
-        lists: newLists,
       }));
       debouncedSync.cancel(`note:${id}`);
       listsService.deleteNote(id).catch(() => {});
@@ -503,7 +478,6 @@ export function useListsActions(): ListsActions {
       const oldNote = data.notes[noteIndex];
       if (oldNote.listId === targetListId && oldNote.groupId === targetGroupId) return;
 
-      const oldListId = oldNote.listId;
       const targetListNotes = data.notes.filter(n => n.listId === targetListId);
       const maxSortOrder = targetListNotes.reduce((max, n) => Math.max(max, n.sortOrder || 0), -1);
       const newSortOrder = maxSortOrder + 1;
@@ -517,13 +491,7 @@ export function useListsActions(): ListsActions {
         updatedAt: Date.now(),
       };
 
-      const newLists = data.lists.map(l => {
-        if (l.id === oldListId) return { ...l, itemCount: Math.max(0, (l.itemCount || 0) - 1) };
-        if (l.id === targetListId) return { ...l, itemCount: (l.itemCount || 0) + 1 };
-        return l;
-      });
-
-      setData(queryClient, userId, () => ({ ...data, notes: newNotes, lists: newLists }));
+      setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       broadcastNoteUpdate(noteId, { listId: targetListId, groupId: targetGroupId, sortOrder: newSortOrder });
       debouncedSync.schedule(
         `note:${noteId}`,

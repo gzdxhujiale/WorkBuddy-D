@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { listNotesApi } from '@/services/listNotesService';
-import { ListTemplate } from '@/types/listNotes';
+import { loadTemplates, upsertTemplate, deleteTemplate } from '@/services/listsService';
+import type { Template } from '@/types/lists';
 import { FileText, Trash2, X } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { queryKeys } from '@/lib/syncEngine';
@@ -11,7 +11,7 @@ export function useTemplateData(enabled = true) {
   const queryKey = queryKeys.templates(userId);
   return useQuery({
     queryKey,
-    queryFn: () => listNotesApi.loadTemplates(),
+    queryFn: () => loadTemplates(),
     enabled,
   });
 }
@@ -22,32 +22,30 @@ export function useTemplateActions() {
   const TEMPLATE_QUERY_KEY = queryKeys.templates(userId);
 
   const addTemplate = async (name: string, content: string | Record<string, unknown>) => {
-    const newTpl: ListTemplate = {
+    const newTpl: Template = {
       id: `tpl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       name,
-      content: typeof content === 'string' ? { raw: content } : content,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      content: typeof content === 'string' ? content : JSON.stringify(content),
     };
-    await listNotesApi.upsertTemplate(newTpl);
+    await upsertTemplate(newTpl);
     queryClient.invalidateQueries({ queryKey: TEMPLATE_QUERY_KEY });
   };
 
-  const updateTemplate = async (id: string, updates: Partial<ListTemplate>) => {
-    const data = queryClient.getQueryData<ListTemplate[]>(TEMPLATE_QUERY_KEY) ?? await listNotesApi.loadTemplates();
+  const updateTemplate = async (id: string, updates: Partial<Template>) => {
+    const data = queryClient.getQueryData<Template[]>(TEMPLATE_QUERY_KEY) ?? await loadTemplates();
     const target = data.find((t) => t.id === id);
     if (target) {
-      await listNotesApi.upsertTemplate({ ...target, ...updates, updatedAt: Date.now() });
+      await upsertTemplate({ ...target, ...updates });
       queryClient.invalidateQueries({ queryKey: TEMPLATE_QUERY_KEY });
     }
   };
 
-  const deleteTemplate = async (id: string) => {
-    await listNotesApi.deleteTemplate(id);
+  const deleteTemplateFn = async (id: string) => {
+    await deleteTemplate(id);
     queryClient.invalidateQueries({ queryKey: TEMPLATE_QUERY_KEY });
   };
 
-  return { addTemplate, updateTemplate, deleteTemplate };
+  return { addTemplate, updateTemplate, deleteTemplate: deleteTemplateFn };
 }
 
 interface TemplateModalProps {

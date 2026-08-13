@@ -10,7 +10,7 @@ import { showFocusAssistant } from "@/services/focusAssistantWindow";
 import { discardQuickEditDraft } from "@/services/quickEditWindow";
 import { focusAssistantApi } from "@/services/focusAssistantService";
 import { shouldOpenFocusAssistantOnStart } from "@/lib/preferences";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { setStorageUserId } from "@/lib/userStorage";
 import { flushOfflineQueue } from "@/lib/offlineSyncQueue";
 import { RealtimeProvider } from "@/components/RealtimeProvider";
@@ -39,6 +39,27 @@ function App() {
     });
 
     return () => subscription.unsubscribe();
+  }, []);
+
+  // 修复无边框窗口在 Windows 上跨越不同缩放比例显示器时的尺寸异常问题
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    const setupListener = async () => {
+      try {
+        const window = getCurrentWindow();
+        if (window.label === "main") {
+          unlisten = await window.onScaleChange(async () => {
+            await window.setSize(new LogicalSize(1000, 700)).catch(() => undefined);
+          });
+        }
+      } catch {
+        // 非 Tauri 环境忽略
+      }
+    };
+    setupListener();
+    return () => {
+      if (unlisten) unlisten();
+    };
   }, []);
 
   useEffect(() => {

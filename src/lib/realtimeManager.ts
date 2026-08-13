@@ -140,18 +140,15 @@ class RealtimeManager {
     this.dirtyTargets.clear();
     const now = Date.now();
 
+    let hasDeferred = false;
     for (const target of targets) {
       const keyId = JSON.stringify(target);
       if (now - (this.lastInvalidatedAt.get(keyId) ?? 0) < RealtimeManager.INVALIDATION_COOLDOWN_MS) continue;
       if (isQueryPending(target.queryKey)) {
+        // Re-queue only this target; other targets in the batch continue below.
         this.dirtyTargets.set(keyId, target);
-        if (!this.invalidateTimer) {
-          this.invalidateTimer = setTimeout(() => {
-            this.invalidateTimer = undefined;
-            this.flushInvalidations();
-          }, RealtimeManager.INVALIDATION_DELAY_MS);
-        }
-        return;
+        hasDeferred = true;
+        continue;
       }
       this.lastInvalidatedAt.set(keyId, now);
       void this.queryClient.invalidateQueries({
@@ -159,6 +156,12 @@ class RealtimeManager {
         exact: target.exact,
         refetchType: "active",
       });
+    }
+    if (hasDeferred && !this.invalidateTimer) {
+      this.invalidateTimer = setTimeout(() => {
+        this.invalidateTimer = undefined;
+        this.flushInvalidations();
+      }, RealtimeManager.INVALIDATION_DELAY_MS);
     }
   }
 }

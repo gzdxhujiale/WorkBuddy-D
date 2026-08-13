@@ -7,7 +7,6 @@ export interface List {
   color: string;
   viewType: ViewType;
   folderId: string | null;
-  itemCount?: number;
   isPinned?: boolean;
   sortOrder?: number;
 }

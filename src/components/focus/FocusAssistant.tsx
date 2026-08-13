@@ -277,6 +277,30 @@ export function FocusAssistant() {
     return () => window.clearInterval(timer);
   }, [status]);
 
+  // 修复无边框窗口在 Windows 上跨越不同缩放比例显示器时的尺寸异常问题
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    const setupListener = async () => {
+      try {
+        const window = getCurrentWindow();
+        unlisten = await window.onScaleChange(async () => {
+          const currentMode = viewModeRef.current;
+          if (currentMode === "minimized") {
+            await window.setSize(new LogicalSize(140, 140)).catch(() => undefined);
+          } else {
+            await window.setSize(new LogicalSize(340, 400)).catch(() => undefined);
+          }
+        });
+      } catch {
+        // 非 Tauri 环境忽略
+      }
+    };
+    setupListener();
+    return () => {
+      if (unlisten) unlisten();
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       const current = sessionRef.current;
