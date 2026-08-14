@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useMemo, useRef, cloneElement, ReactElement, ReactNode, useCallback, memo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, ReactNode, useCallback, memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import {
   MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen, CheckCircle, AlertCircle,
-  ChevronRight, Check, Folder as FolderIcon, BookOpen, Briefcase, Home,
-  Package, Activity, Star, ChevronDown, FileText, Search, Cloud, X, Trash2, Library, LoaderCircle
+  ChevronRight, Check, Folder as FolderIcon, ChevronDown, FileText, Search, Cloud, X, Trash2, Library, LoaderCircle
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverEvent, useDroppable } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -159,9 +158,9 @@ const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo((
       ref={setNodeRef}
       className={cn(
         'group relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-all duration-150',
-        isNested ? 'pl-10' : 'pl-6',
+        isNested ? 'pl-10' : 'pl-8',
         isActive
-          ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
+          ? 'bg-sidebar-primary/15 font-medium text-sidebar-primary'
           : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
         isTarget && 'bg-sidebar-primary/10 ring-2 ring-sidebar-ring'
       )}
@@ -204,7 +203,6 @@ const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo((
 interface ListsSidebarProps {
   lists: List[];
   folders: Folder[];
-  notes: Note[];
   activeListId: string | null;
   loadingListId?: string | null;
   dragOverListId?: string | null;
@@ -221,19 +219,9 @@ interface ListsSidebarProps {
   isCollapsed?: boolean;
 }
 
-const ICON_MAP: Record<string, ReactNode> = {
-  BookOpen: <FolderIcon size={16} />,
-  Briefcase: <Briefcase size={16} />,
-  Home: <Home size={16} />,
-  Package: <Package size={16} />,
-  Activity: <Activity size={16} />,
-  Star: <Star size={16} />
-};
-
 function ListsSidebar({
   lists,
   folders,
-  notes,
   activeListId,
   loadingListId,
   dragOverListId,
@@ -263,11 +251,6 @@ function ListsSidebar({
     }));
   };
 
-  const getIcon = (iconName: string, color: string) => {
-    const icon = ICON_MAP[iconName] || <BookOpen size={16} />;
-    return cloneElement(icon as ReactElement<any>, { color: color !== 'none' ? color : 'currentColor' });
-  };
-
   const standaloneLists = useMemo(() => lists.filter(l => !l.folderId), [lists]);
   const listsByFolder = useMemo(() => {
     const acc: Record<string, List[]> = {};
@@ -286,9 +269,6 @@ function ListsSidebar({
         onSelectList={onSelectList}
         isNested={isNested}
       >
-        <div className="shrink-0 text-sidebar-foreground/60 transition-colors group-hover:text-sidebar-primary">
-          {getIcon(list.icon, list.color)}
-        </div>
         <span className="truncate flex-1">{list.name}</span>
         {list.isPinned && <span className="text-[10px] text-amber-500">📌</span>}
 
@@ -296,14 +276,6 @@ function ListsSidebar({
           {loadingListId === list.id && (
             <LoaderCircle size={14} className="animate-spin text-sidebar-primary" aria-label="正在加载清单" />
           )}
-          {(() => {
-            const count = notes.filter(n => n.listId === list.id).length;
-            return count > 0 && (
-              <span className="text-xs font-normal text-sidebar-foreground/60 group-hover:hidden">
-                {count}
-              </span>
-            );
-          })()}
           <div className="relative ml-auto" onClick={e => e.stopPropagation()}>
                       <Button
                         variant="ghost"
@@ -376,9 +348,8 @@ function ListsSidebar({
           isCollapsed && 'pointer-events-none !w-0 border-r-transparent opacity-0'
         )}
       >
-        <div className="group/header flex h-12 shrink-0 items-center justify-between border-b border-border px-4 text-sm font-semibold select-none">
-          <div className="flex items-center gap-2 text-base font-bold text-sidebar-foreground">
-            <Library className="text-indigo-600 dark:text-indigo-400" size={20} />
+        <div className="group/header flex h-12 shrink-0 items-center justify-between border-b border-border px-3 text-sm font-semibold select-none">
+          <div className="flex items-center text-base font-bold text-sidebar-foreground">
             <span>知识库</span>
           </div>
         <Button
@@ -398,6 +369,7 @@ function ListsSidebar({
             const isCollapsedFolder = collapsedFolders[folder.id];
             const folderLists = listsByFolder[folder.id] || [];
             const isTarget = dragOverFolderId === folder.id;
+            const containsActiveList = folderLists.some((list) => list.id === activeListId);
 
             return (
               <div key={folder.id} className="flex flex-col gap-0.5">
@@ -406,7 +378,8 @@ function ListsSidebar({
                     id={folder.id}
                     data={{ type: 'folder' }}
                     className={cn(
-                      'group relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 pl-6 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                      'group relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm text-sidebar-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                      containsActiveList && 'font-medium text-sidebar-primary',
                       isTarget && 'bg-sidebar-primary/10 ring-2 ring-sidebar-ring'
                     )}
                     onClick={() => toggleFolder(folder.id)}
@@ -415,7 +388,6 @@ function ListsSidebar({
                       size={14}
                       className={cn('text-sidebar-foreground/60 transition-transform duration-200', isCollapsedFolder && '-rotate-90')}
                     />
-                    <Library size={16} className="shrink-0 text-sidebar-foreground/70" />
                     <span className="flex-1 truncate">{folder.name}</span>
                     {folder.isPinned && <span className="text-[10px] text-amber-500">📌</span>}
 
@@ -2005,7 +1977,6 @@ export function ListsPanel() {
         <ListsSidebar
           lists={lists}
           folders={folders}
-          notes={notes}
           activeListId={activeListId}
           loadingListId={isListContentsFetching ? activeListId : null}
           dragOverListId={dragOverSidebarListId}
