@@ -11,6 +11,7 @@
 - [同步、版本与编辑器一致性](/design-docs/sync-and-editor-consistency)
 - [产品规范](/product-specs/)
 - [数据库快照](/generated/db-schema)
+- [生成物说明](/generated/)
 - [安全](/SECURITY)
 - [可靠性](/RELIABILITY)
 

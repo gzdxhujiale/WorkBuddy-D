@@ -1,19 +1,200 @@
 # Live database snapshot
 
-Verified against Supabase project `workbuddy` (`cdrdmkojduynctaoymjl`) on 2026-08-14. PostgreSQL 17, `ap-northeast-1`.
+**Verified against:** Supabase project `workbuddy` (`cdrdmkojduynctaoymjl`)
+
+**Verified on:** 2026-08-14
+**Platform:** PostgreSQL 17, `ap-northeast-1`
+
+This is a compact live-state reference, not a replacement for migration SQL. Read [generated-artifact rules](index.md) before refreshing it.
+
+## Scope and authority
+
+| Question | Source to trust |
+| --- | --- |
+| What was installed and observed on the verification date? | This snapshot. |
+| What database behavior is proposed and versioned in the repository? | `supabase/migrations/`. |
+| Exact current columns, policies, functions, grants, indexes, and triggers after later work? | A new verified live inspection plus the applied migration history. |
+| Frontend mapping and loading behavior? | `src/services/`, `src/hooks/`, and [Frontend](/FRONTEND). |
+
+This snapshot does not prove Supabase Dashboard-only settings, such as the global public-channel toggle, or whether every subsequently committed migration has already been applied.
 
 ## Application tables
 
-`knowledge_bases`, `knowledge_base_folders`, `folder_note_groups`, `notes`, `knowledge_base_templates`, `habits`, `habit_checkins`, `daily_reviews`, `time_management_tasks`, and `focus_sessions` are user-owned public tables with RLS enabled.
+All listed tables are user-owned `public` tables with RLS enabled.
+
+| Domain | Tables | Lifecycle notes |
+| --- | --- | --- |
+| Knowledge | `knowledge_bases`, `knowledge_base_folders`, `folder_note_groups`, `notes`, `knowledge_base_templates` | Knowledge bases/folders/groups/notes/templates use `deleted_at` soft deletion. Note bodies are intentionally excluded from Realtime payloads. |
+| Habits | `habits`, `habit_checkins` | Habit definitions and dated check-ins are user-scoped. |
+| Daily review | `daily_reviews` | One review is keyed by user/date; deletion is physical through `delete_daily_review`, allowing a fresh record for that date. |
+| Tasks | `time_management_tasks` | Completion state is coupled to database-owned `completed_at`. |
+| Focus | `focus_sessions` | Session start and terminal end timestamps are assigned by focus RPCs. |
+
+## Field reference
+
+The tables below reproduce the verified application contract. `src/types/database.ts` is a frontend mapping aid, not a fully generated Supabase schema type; use a live schema inspection and the applied migration history to refresh this section.
+
+### Common fields
+
+| Fields | Present on | Meaning |
+| --- | --- | --- |
+| `id uuid` | All application tables | Application record identifier. |
+| `user_id uuid` | All application tables | Authenticated owner; the RLS ownership key. |
+| `created_at timestamptz`, `updated_at timestamptz` | All application tables | Database-owned audit timestamps. |
+| `deleted_at timestamptz nullable` | Knowledge tables, `habits`, `habit_checkins`, `time_management_tasks` | Soft-deletion marker. It is absent from `daily_reviews` and `focus_sessions`. |
+
+### Knowledge
+
+#### `knowledge_bases`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | `text` | User-visible knowledge-base name. |
+| `is_pinned` | `boolean` | Whether the base is pinned in its owning scope. |
+| `sort_order` | `integer` | Display order among active bases. |
+
+#### `knowledge_base_folders`
+
+These rows are the lists/containers displayed inside a knowledge base; older code and documents may call them “lists”.
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `knowledge_base_id` | `uuid nullable` | Optional parent `knowledge_bases.id`; `null` represents the root scope. |
+| `name` | `text` | Container name. |
+| `icon` | `text` | Stored icon identifier. |
+| `color` | `text` | Stored container color value. |
+| `view_type` | `text` | Stored presentation mode, currently consumed as `list` or `board` by the frontend. |
+| `is_pinned` | `boolean` | Pin state. |
+| `sort_order` | `integer` | Display order within the parent scope. |
+
+#### `folder_note_groups`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `folder_id` | `uuid` | Owning `knowledge_base_folders.id`. |
+| `name` | `text` | Group name inside the container. |
+| `sort_order` | `integer` | Group display order. |
+
+#### `notes`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `folder_id` | `uuid` | Owning `knowledge_base_folders.id`. |
+| `group_id` | `uuid nullable` | Optional `folder_note_groups.id`. |
+| `title` | `text` | Note title. |
+| `content` | `text` | Tiptap JSON content. The application deliberately fetches it on demand. |
+| `is_pinned` | `boolean` | Pin state within the list. |
+| `sort_order` | `integer` | Display order within the group/root scope. |
+
+#### `knowledge_base_templates`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | `text` | Template name. |
+| `content` | `jsonb` | Template payload. The frontend stores/loads structured content. |
+
+### Habits
+
+#### `habits`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name` | `text` | Habit name. |
+| `frequency_type` | `text` | Schedule mode: `daily`, `weekly_days`, or `custom`. |
+| `frequency_days` | `integer[] nullable` | Selected weekdays when the schedule requires them. |
+| `goal` | `text nullable` | Optional goal text. |
+| `start_date` | `date nullable` | Optional start date. |
+| `duration` | `text nullable` | Optional duration description. |
+| `category` | `text nullable` | Optional category. |
+| `reminder` | `text nullable` | Optional reminder value. |
+| `auto_popup_log` | `boolean` | Whether the logging UI opens automatically. |
+| `sort_order` | `integer` | Display order. |
+
+#### `habit_checkins`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `habit_id` | `uuid` | Owning `habits.id`. |
+| `date` | `date` | Check-in date. |
+| `completed` | `boolean` | Check-in state. |
+
+The supported save RPC uses `(user_id, habit_id, date)` as the upsert identity, so one user has one check-in state per habit/date.
+
+### Daily review
+
+#### `daily_reviews`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `date` | `date` | Review date. |
+| `content` | `jsonb` | Structured review payload; the frontend maps its text field for editing. |
+
+`(user_id, date)` is the review identity. Reviews are physically deleted through `delete_daily_review`; a new review for that user/date can then be created.
+
+### Tasks
+
+#### `time_management_tasks`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `title` | `text` | Task title. |
+| `quadrant` | `text` | Eisenhower quadrant: `Q1_URGENT_IMPORTANT`, `Q2_NOT_URGENT_IMPORTANT`, `Q3_URGENT_NOT_IMPORTANT`, or `Q4_NOT_URGENT_NOT_IMPORTANT`. |
+| `schedule_mode` | `text nullable` | `point`, `range`, or no schedule. |
+| `scheduled_start_at` | `timestamptz nullable` | Range start time. |
+| `scheduled_end_at` | `timestamptz nullable` | Point deadline or range end time. |
+| `completed` | `boolean` | Completion state. |
+| `completed_at` | `timestamptz nullable` | Database-owned completion transition time. |
+| `description` | `text nullable` | Optional task detail. |
+| `reminder` | `jsonb nullable` | Structured reminder configuration. |
+
+### Focus
+
+#### `focus_sessions`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `cycle_id` | `uuid` | Client-provided cycle identifier. |
+| `task_id` | `uuid nullable` | Optional `time_management_tasks.id`; clearing/deleting a task sets this relation to `null`. |
+| `type` | `text` | `focus` or `rest`. |
+| `status` | `text` | `running`, `paused`, `completed`, or `interrupted`. |
+| `planned_minutes` | `smallint` | Planned session duration, constrained from 1 through 180. |
+| `active_seconds` | `integer` | Recorded active duration; non-negative. |
+| `rest_completed` | `boolean` | Whether associated rest was completed. |
+| `started_at` | `timestamptz` | Database-assigned session start. |
+| `ended_at` | `timestamptz nullable` | Database-assigned terminal end for completed/interrupted sessions. |
+
+## Access and mutation model
+
+RLS scopes rows to the authenticated `user_id`. Application RPCs are granted to `authenticated`; client roles do not execute application trigger functions directly. Database writes use constrained RPCs for stateful operations such as saving, soft deleting, ordering, moving, and session transitions.
+
+The exact policy and function signatures should be read from the latest applied migrations. In particular, do not treat `TO authenticated` by itself as an ownership policy; access must remain tied to the row owner.
 
 ## Realtime model
 
-Migration `20260814010000_replace_postgres_changes_with_private_broadcast.sql` removes application tables from `supabase_realtime`. Each application table uses an `AFTER INSERT OR UPDATE OR DELETE` trigger to call `realtime.send` on `user:<user_id>:sync`. The private-channel `realtime.messages` policy limits receipt to the matching authenticated user.
+Migration `20260814010000_replace_postgres_changes_with_private_broadcast.sql` removes application tables from `supabase_realtime`. Each application table uses an `AFTER INSERT OR UPDATE OR DELETE` trigger to call `realtime.send` on the private topic `user:<user_id>:sync`. The `realtime.messages` receive policy limits the topic to the matching authenticated user.
 
-The payload is `{ table, operation, id, folder_id, previous_folder_id }`; it deliberately excludes note bodies. The application refetches using normal RLS-protected queries.
+The payload is:
 
-## Timestamp ownership and optimistic concurrency
+```text
+{ table, operation, id, folder_id, previous_folder_id }
+```
 
-`created_at` defaults to `now()` and `updated_at` is maintained by the database's `BEFORE UPDATE` trigger. Client write payloads never set either field. Versioned write RPCs accept only the last database `updated_at` as `p_expected_updated_at`; successful writes return the database-generated `updated_at`, while stale writes raise `VERSION_CONFLICT`.
+It deliberately excludes note bodies and complete row values. The main client converts the hint into a narrow Query-key invalidation and refetches with ordinary RLS-protected queries. See [the synchronization decision](/design-docs/sync-and-editor-consistency) for constraints and the current Tauri-event implementation divergence.
 
-`deleted_at` is assigned inside soft-delete RPCs. `completed_at` is assigned or cleared by the task RPC as `completed` transitions. Focus-session `started_at` and terminal `ended_at` are assigned by focus RPCs. New lists, note groups, and notes receive an initial `sort_order` from their save RPC; PostgreSQL transaction advisory locks serialize concurrent creation within the relevant parent scope.
+## Timestamp ownership, locking, and ordering
+
+`created_at` defaults to `now()` and `updated_at` is maintained by a database `BEFORE UPDATE` trigger. Client write payloads never set either field. Versioned writes pass the last observed `updated_at` as `p_expected_updated_at`; successful writes return a database-generated version, while stale writes raise `VERSION_CONFLICT`.
+
+`deleted_at` is assigned by soft-delete RPCs. `completed_at` is assigned or cleared as task completion changes. Focus-session `started_at` and terminal `ended_at` are assigned by focus RPCs. New list/group/note ordering is assigned by save RPCs using transaction advisory locks within the relevant parent scope.
+
+The checked-in migration `20260814040000_fix_save_note_updated_at_ambiguity.sql` clarifies the `save_note` return-column reference. Verify applied migration history before asserting that this repository fix is present in a live environment.
+
+## Refresh checklist
+
+When the database changes or this snapshot is refreshed:
+
+1. Inspect the connected project’s installed schema, policies, functions, grants, triggers, and relevant Realtime configuration.
+2. Compare live migration history with `supabase/migrations/`; record any drift rather than rewriting history.
+3. Update the verification metadata and only the facts confirmed by that inspection.
+4. Check whether architecture, security, reliability, or a design decision needs a separate durable update.
+5. Verify frontend queries/RPC mappings against the refreshed facts and run the applicable build.

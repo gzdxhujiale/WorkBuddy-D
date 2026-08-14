@@ -1,7 +1,15 @@
 # Design documents
 
-| Document | Status | Purpose |
+This directory contains accepted, durable decisions that explain *why* the system has a boundary or invariant. It does not replace the repository map in [Architecture](/architecture), feature behavior in [product specifications](/product-specs/), or implementation workflows in `.agents/skills/`.
+
+| Document | Status | Use it when working on |
 | --- | --- | --- |
-| [Core beliefs](core-beliefs.md) | Accepted | Durable engineering principles |
-| [同步、版本与编辑器一致性](sync-and-editor-consistency.md) | Accepted | 私有 Broadcast、数据库事实与笔记编辑器同步边界 |
-| [Architecture](/architecture) | Accepted | System and data-flow map |
+| [Core beliefs](core-beliefs.md) | Accepted | Any cross-cutting change that affects data authority, loading, user isolation, or recovery. |
+| [同步、版本与编辑器一致性](sync-and-editor-consistency.md) | Accepted; implementation divergence recorded | Supabase Realtime, versioned writes, offline recovery, Tiptap, or cross-window synchronization. |
+| [Architecture](/architecture) | Canonical system map | Locating the owning layer, runtime boundary, or external dependency. |
+
+## Decision lifecycle
+
+Add a design decision when a choice is cross-cutting, difficult to reverse, or repeatedly needed to evaluate changes. Each decision should state its status, scope, constraints, evidence paths, and verification. Move temporary investigation detail to an execution plan; move feature-specific behavior to `docs/product-specs/`.
+
+When current code diverges from an accepted decision, document the divergence in the decision and track the reconciliation rather than silently treating one source as authoritative.

@@ -1,7 +1,8 @@
 # 同步、版本与编辑器一致性
 
-状态：Accepted  
-最后验证：2026-08-14（Supabase `workbuddy`）
+状态：Accepted（当前实现差异见下文）
+
+最后验证：2026-08-14（Supabase `workbuddy` 实时 schema 快照）
 
 ## 决策摘要
 
@@ -11,7 +12,7 @@ WorkBuddy-D 使用 **私有 Supabase Broadcast 作为失效提示**，使用普�
 
 ### 当前实现
 
-- Realtime Settings 中保持服务开启，并关闭 **Allow public access to channels**。
+- Realtime Settings 必须保持服务开启，并关闭 **Allow public access to channels**；这是 Dashboard 设置，仓库文件本身不能证明当前值，变更或发布前必须复核。
 - 客户端只订阅私有主题 `user:<user_id>:sync`。
 - 应用表不加入 `supabase_realtime` publication；每张应用表的 `AFTER INSERT OR UPDATE OR DELETE` 触发器调用 `realtime.send`。
 - 触发器的消息只含 `{ table, operation, id, folder_id, previous_folder_id }`，不含笔记正文或完整行。
@@ -24,6 +25,18 @@ Postgres Changes 会为每个订阅客户端按行执行访问检查并传送行
 Broadcast 不保证作为持久化队列：断线、重连或错过消息必须由正常加载/刷新恢复。不要依据消息 payload 覆盖本地实体，也不要因一个提示重拉整张表；优先失效受影响的列表、单条笔记或当前活动视图。
 
 数据库触发器应只在事务提交后的行变化时发送提示。客户端写成功后仍以 RPC 返回的版本和后续 RLS 查询为准。
+
+### 当前实现差异：列表 Tauri 事件
+
+`src/hooks/useListsQuery.ts` 当前通过 `lists:note-updated`、`lists:note-deleted` 与 `lists:notes-reordered` Tauri 事件，把部分笔记字段直接补丁到其他窗口的 Query cache。这个快速路径与本决策“不要把 Tauri 窗口事件当作行数据复制协议”的边界不一致。
+
+在该差异被解决前：
+
+1. 不要为更多实体或字段扩展这套 Tauri 行补丁协议。
+2. 不要把它作为数据库真相、冲突版本或权限判断的来源。
+3. 任何涉及它的变更都应同时评估两种收敛方向：移除补丁并使用精确失效/重取，或用证据更新本决策、权限模型和验证覆盖。
+
+该差异已在 [Architecture](/architecture)、[Reliability](/RELIABILITY) 和 [Quality score](/QUALITY_SCORE) 中登记。
 
 ## 数据库负责的事实
 
@@ -69,4 +82,16 @@ Broadcast 不保证作为持久化队列：断线、重连或错过消息必须�
 3. 确认新 RPC 的服务端时间、顺序及返回版本被客户端采用。
 4. 验证笔记内容未变时不会更新缓存、发送事件或发起网络写入。
 5. 验证连续输入、关闭抽屉、跨窗口刷新与断线重连。
-6. 运行 `pnpm exec tsc --noEmit`；涉及发布时再运行 `pnpm build`。
+6. 运行 `pnpm build`；涉及原生窗口、权限或打包时再执行相应的 Tauri 验证。
+
+## 验收证据
+
+同步或编辑器改动的验收应覆盖可观察行为，而不只看编译结果：
+
+| 场景 | 预期观察 |
+| --- | --- |
+| 两个同一用户主窗口发生数据库写入 | 私有 Broadcast 只提示受影响范围，活动视图经 RLS 查询收敛。 |
+| 离线后保存支持队列的实体并恢复网络 | 每个实体只保留最新待重放操作；不可恢复错误显式保留为冲突。 |
+| 两个客户端编辑同一版本化记录 | 后到的陈旧写入获得 `VERSION_CONFLICT`，而不是覆盖远端版本。 |
+| 连续编辑笔记并关闭编辑表面 | 相同 JSON 不产生额外写入；最后的有效草稿按防抖/卸载规则保存。 |
+| 失去 Broadcast 或重新连接 | 不依赖补发消息；正常加载或精确失效后的 RLS 查询恢复状态。 |
