@@ -84,13 +84,20 @@ Repository-specific workflows live in `.agents/skills/`. They include routers an
 - For any Tauri or native-window task, start with `.agents/skills/tauri/SKILL.md`, then load the matching focused skill.
 - For any Supabase, Auth, RLS, Realtime, or migration task, use `.agents/skills/supabase/SKILL.md`; use `supabase-postgres-best-practices` when the work concerns Postgres performance or schema design.
 - Use `tiptap` for editor work and `vercel-react-best-practices` for substantial React implementation, review, or performance work.
+- Use `tailwind-design-system` for shared Tailwind tokens, theme variables, reusable component styling, or cross-screen visual consistency; skip it for isolated utility-class edits.
 - Prefer a relevant existing skill over inventing a workflow. Do not load unrelated skills or duplicate their procedures here.
+- Use `tailwind-design-system` when changing shared Tailwind tokens, theme variables, reusable component styling, or cross-screen visual consistency; do not load it for isolated utility-class edits.
 
 ## Documentation routing
 
 When working on:
 
 - system boundaries, data flow, or loading strategy — read [ARCHITECTURE.md](ARCHITECTURE.md).
+- UI/interaction design — read [docs/DESIGN.md](docs/DESIGN.md).
+- frontend engineering — read [docs/FRONTEND.md](docs/FRONTEND.md).
+- complex or risky multi-step work — read [docs/PLANS.md](docs/PLANS.md).
+- ambiguous product trade-offs — read [docs/PRODUCT_SENSE.md](docs/PRODUCT_SENSE.md).
+- current quality gaps or maintenance prioritization — read [docs/QUALITY_SCORE.md](docs/QUALITY_SCORE.md).
 - product behavior — read [docs/product-specs/index.md](docs/product-specs/index.md).
 - synchronization, optimistic concurrency, or editor consistency — read [docs/design-docs/sync-and-editor-consistency.md](docs/design-docs/sync-and-editor-consistency.md).
 - durable engineering decisions — read [docs/design-docs/core-beliefs.md](docs/design-docs/core-beliefs.md).

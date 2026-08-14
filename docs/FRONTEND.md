@@ -1,7 +1,62 @@
-# Frontend
+# Frontend engineering
 
-React 19 + TypeScript + Vite + Tailwind + TanStack Query/Router + Zustand. Pages compose features; services map domain models to Supabase. Query keys in `src/lib/syncEngine.ts` define refresh scope. Use the narrowest valid query key for external invalidations.
+## Overview
 
-## 编辑器与乐观缓存
+The frontend is React 19 + TypeScript + Vite + Tailwind CSS. TanStack Router provides the main route tree, TanStack Query owns remote state, and Zustand holds UI-only state. `pnpm build` runs strict TypeScript checking and the Vite production build.
 
-笔记使用 Tiptap JSON，并以本地 state + 防抖写入的方式保存。编辑器上报、自动保存及 `updateNote` 都必须先对内容做 no-op 去重；外部内容同步仅在真实变化时用 `emitUpdate: false` 写回编辑器。自动保存的卸载 cleanup 不能依赖随 Query cache 更新而重建的回调；用 ref 持有最新回调，避免形成 React `Maximum update depth exceeded` 循环。完整约束见[同步、版本与编辑器一致性](design-docs/sync-and-editor-consistency.md)。
+The application has three HTML/webview entry points:
+
+| Entry point | Role |
+| --- | --- |
+| `src/main.tsx` | Main authenticated application and router. |
+| `src/quick-edit-window.tsx` | Lightweight task quick-edit webview. |
+| `src/focus-assistant-window.tsx` | Authenticated focus-assistant webview with Query support. |
+
+## Structure and routing
+
+- `src/router.tsx` defines `/today`, `/four-quadrants`, `/habit`, `/lists`, and `/daily-review`; route components are lazily imported.
+- `src/components/layout/AppLayout.tsx` supplies the desktop shell and route fallback.
+- `src/pages/` composes the route-level feature panels.
+- `src/components/` contains feature UI, layout, focus UI, and reusable primitives in `components/ui/`.
+- `src/types/` is the frontend type boundary; `@/*` resolves to `src/*`.
+
+The root app resolves the Supabase session before rendering an authenticated route. On auth changes it clears query state and UI user state so a previous account’s cache cannot render for the next account. Secondary windows use `WindowSessionGate`; they must not assume the main app has already supplied React context.
+
+## State and data model
+
+| State kind | Owner | Use it for |
+| --- | --- | --- |
+| Server/cache state | TanStack Query | User-scoped records, refetching, invalidation, and optimistic cache updates. |
+| UI-only shared state | Zustand in `src/stores/` | Selection, drawer/modal state, and per-user UI preferences. |
+| Local component state | React hooks | Drafts, transient interaction state, and surface-local feedback. |
+| Database access | `src/services/` and feature hooks | Mapping Supabase rows, RPC calls, reads, and domain mutations. |
+
+Query keys are defined in `src/lib/syncEngine.ts`. Use the narrowest matching key for an invalidation. Do not add a second global store for data already owned by Query.
+
+## Reads, writes, and synchronization
+
+Domain hooks compose Query with services. Services perform Supabase reads and RPC writes; `useTimeManagement.ts` is an existing hook-level read exception. Follow the closest established domain pattern instead of calling Supabase from new presentation components.
+
+Optimistic writes are immediate and may be debounced by `useDebouncedMutation` or `useOptimisticSync`. Writes for the list, task, habit, and daily-review domains use `runOrQueue` where their service supports offline replay. A queued operation replaces an older pending operation for the same entity key; non-network errors are not silently queued.
+
+The main window’s private Broadcast listener invalidates matching Query keys. It does not merge Broadcast payloads into authoritative records. See [Architecture](/architecture) for the current localized list-note Tauri-event divergence.
+
+## Knowledge editor boundary
+
+The knowledge module first loads its shell, then the selected list’s contents, note body, and templates on demand. Tiptap content is serialized JSON. Editor changes must be deduplicated, debounced, and written back with `emitUpdate: false` only when external content actually changed. Preserve the unmount-save and optimistic-version rules in [sync-and-editor consistency](design-docs/sync-and-editor-consistency.md).
+
+## Styling and accessibility
+
+Tailwind 4 is configured through `src/index.css`. That file owns semantic light/dark tokens, radius, and shared animation definitions. `src/components/ui/` provides existing primitives; compose them before creating another parallel primitive.
+
+Use semantic HTML and the existing accessibility conventions: labelled icon buttons, real dialog semantics, stateful ARIA attributes, labelled navigation, and local alerts/live regions. Accessibility is implemented in many components but has no configured automated audit.
+
+For shared token, theme, reusable-component, or cross-screen visual work, read `.agents/skills/tailwind-design-system/SKILL.md`. Do not load that workflow for an isolated utility-class edit.
+
+## Errors, loading, and performance
+
+The Query client disables automatic retry/reconnect/mount refetching to avoid request bursts during Supabase incidents. Failures must be surfaced by the relevant feature; `logSilent` is diagnostic only. Routes are lazy-loaded and the app shell provides a Suspense fallback. No repository-owned error-monitoring, metrics, tracing, or performance budget is configured.
+
+## Verification
+
+There is no configured frontend test, lint, or formatter script. Run `pnpm build` for frontend changes and manually exercise the affected authenticated route or secondary window. For Tiptap work use the `tiptap` skill; for substantial React implementation, refactoring, review, or performance work use `vercel-react-best-practices`.
