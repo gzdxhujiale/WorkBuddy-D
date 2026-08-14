@@ -3,6 +3,18 @@ import { DailyReviewItem } from "@/types/dailyReview";
 import { throwOnPostgrestError } from "@/lib/sync";
 import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 
+function readReviewContent(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (!content || typeof content !== "object") return "";
+
+  const payload = content as Record<string, unknown>;
+  for (const key of ["text", "html", "raw"]) {
+    if (typeof payload[key] === "string") return payload[key];
+  }
+
+  return JSON.stringify(content);
+}
+
 async function saveRemote(review: DailyReviewItem): Promise<number> {
   const { data, error } = await supabase.rpc("save_daily_review", {
     p_id: review.id, p_date: review.date, p_content: { text: review.content },
@@ -29,12 +41,7 @@ export const dailyReviewApi = {
 
       if (dbReviews && dbReviews.length >= 0) {
         const reviews: DailyReviewItem[] = dbReviews.map((r) => {
-          let contentStr = "";
-          if (typeof r.content === "string") {
-            contentStr = r.content;
-          } else if (r.content && typeof r.content === "object") {
-            contentStr = (r.content as { text?: string; html?: string; raw?: string }).text || JSON.stringify(r.content);
-          }
+          const contentStr = readReviewContent(r.content);
 
           return {
             id: r.id,
@@ -64,12 +71,7 @@ export const dailyReviewApi = {
         .maybeSingle();
 
       if (!error && data) {
-        let contentStr = "";
-        if (typeof data.content === "string") {
-          contentStr = data.content;
-        } else if (data.content && typeof data.content === "object") {
-          contentStr = (data.content as { text?: string }).text || JSON.stringify(data.content);
-        }
+        const contentStr = readReviewContent(data.content);
 
         const review: DailyReviewItem = {
           id: data.id,
