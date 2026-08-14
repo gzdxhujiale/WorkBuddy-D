@@ -45,6 +45,7 @@ export interface ReactjsTiptapEditorProps {
   placeholder?: string;
   className?: string;
   editable?: boolean;
+  showToolbar?: boolean;
 }
 
 type EditorContentValue = string | Record<string, unknown>;
@@ -155,6 +156,7 @@ export function ReactjsTiptapEditor({
   placeholder = "写下内容，或输入 / 使用命令...",
   className,
   editable = true,
+  showToolbar = true,
 }: ReactjsTiptapEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -270,7 +272,7 @@ export function ReactjsTiptapEditor({
       )}
     >
       <RichTextProvider editor={editor}>
-        <EditorToolbar />
+        {showToolbar && <EditorToolbar />}
         <EditorContent
           editor={editor}
           className={

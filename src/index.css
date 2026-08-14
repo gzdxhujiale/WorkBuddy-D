@@ -135,3 +135,9 @@ html.tqe-window #root {
   background: transparent !important;
   background-color: transparent !important;
 }
+
+/* reactjs-tiptap-editor mounts its slash-command menu directly under body.
+   TaskQuickEdit's fixed layers reach z-index 1070, so keep that menu interactive. */
+html.tqe-window body > div:has(> [class*="richtext-max-h-"]) {
+  z-index: 1080 !important;
+}

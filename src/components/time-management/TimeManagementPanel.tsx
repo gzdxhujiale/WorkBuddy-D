@@ -25,6 +25,7 @@ import {
 import { startTaskReminderScheduler } from "@/services/taskReminderScheduler";
 import { getTaskEndAt, taskIntersectsDay, taskIntersectsInterval, taskTimeLabel, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
 import { toggleFocusAssistant } from "@/services/focusAssistantWindow";
+import { getTaskDescriptionText } from "@/lib/taskDescription";
 
 export type ViewType = "quadrant" | "day" | "week" | "month";
 export type StatusFilterType = "uncompleted" | "all" | "completed";
@@ -517,9 +518,9 @@ export const TimeManagementPanel: React.FC = () => {
                           </span>
                         </div>
 
-                        {t.description && (
+                        {getTaskDescriptionText(t.description) && (
                           <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 pl-6">
-                            {t.description}
+                            {getTaskDescriptionText(t.description)}
                           </p>
                         )}
 

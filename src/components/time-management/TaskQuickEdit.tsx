@@ -34,6 +34,8 @@ import {
   reminderLabel,
   TaskDraft,
 } from "@/types/timeManagement";
+import { hasTaskDescription } from "@/lib/taskDescription";
+import { ReactjsTiptapEditor } from "@/components/ui/reactjs-tiptap-editor";
 
 // ==========================================
 // TaskQuickEdit — Tailwind v4 规范精简 3-Layer 快捷编辑浮层
@@ -53,6 +55,11 @@ const L1_WIDTH = 420;
 const L2_WIDTH = 316;
 const L3_WIDTH = 288;
 const MARGIN = 8;
+
+function isRichTextFloatingMenuTarget(target: Node): boolean {
+  const element = target instanceof Element ? target : target.parentElement;
+  return Boolean(element?.closest('[class*="richtext-max-h-"]'));
+}
 
 function splitScheduleEnd(timestamp?: number): { date: string | null; time: string } {
   if (!timestamp) return { date: null, time: "" };
@@ -257,7 +264,7 @@ export const TaskQuickEditPopover = memo(
         const t = latestTitle.current.trim();
         if (!t) return;
         const draft = draftRef.current;
-        const finalDesc = latestDescription.current.trim();
+        const finalDesc = latestDescription.current;
         const isRange = draft.scheduleMode === "range";
         const scheduledStartAt = isRange
           ? composeStart(draft.rangeStartDate, draft.rangeAllDay ? "" : draft.rangeStartTime)
@@ -270,7 +277,7 @@ export const TaskQuickEditPopover = memo(
         if (isRange && (!scheduledStartAt || !scheduledEndAt || scheduledEndAt <= scheduledStartAt)) return;
         onCreate?.({
           title: t,
-          description: finalDesc || undefined,
+          description: hasTaskDescription(finalDesc) ? finalDesc : undefined,
           scheduleMode: scheduledEndAt ? draft.scheduleMode : undefined,
           scheduledStartAt,
           scheduledEndAt,
@@ -294,7 +301,9 @@ export const TaskQuickEditPopover = memo(
 
         const next: Partial<Task> = {
           title: latestTitle.current.trim() || task.title,
-          description: latestDescription.current.trim() || undefined,
+          description: hasTaskDescription(latestDescription.current)
+            ? latestDescription.current
+            : undefined,
           scheduleMode: scheduledEndAt ? draft.scheduleMode : undefined,
           scheduledStartAt,
           scheduledEndAt,
@@ -411,6 +420,10 @@ export const TaskQuickEditPopover = memo(
           const t = e.target as Node;
           if (!t || !document.body.contains(t)) return;
 
+          // reactjs-tiptap-editor mounts slash commands under document.body.
+          // Treat them as part of this popover so selecting a command does not close it.
+          if (isRichTextFloatingMenuTarget(t)) return;
+
           if (timePopRef.current?.contains(t) || remindPopRef.current?.contains(t)) return;
           if (third) {
             setThird(null);
@@ -500,7 +513,9 @@ export const TaskQuickEditPopover = memo(
       }, []);
 
       const focusDesc = () => {
-        const el = popRef.current?.querySelector<HTMLTextAreaElement>(".tqe-desc-input");
+        const el = popRef.current?.querySelector<HTMLElement>(
+          ".tqe-description-editor .ProseMirror",
+        );
         el?.focus();
       };
 
@@ -587,14 +602,15 @@ export const TaskQuickEditPopover = memo(
                 </button>
               </div>
 
-              <div className="min-h-[148px] max-h-[260px] overflow-y-auto">
-                <textarea
+              <div className="h-[260px] min-h-[148px] overflow-hidden">
+                <ReactjsTiptapEditor
                   placeholder="添加任务备注描述..."
-                  value={description}
-                  className="tqe-desc-input w-full h-full min-h-[148px] bg-transparent border-0 outline-none resize-none text-xs leading-relaxed text-slate-600 dark:text-slate-300 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                  onChange={(e) => {
-                    latestDescription.current = e.target.value;
-                    setDescription(e.target.value);
+                  content={description}
+                  showToolbar={false}
+                  className="tqe-description-editor rounded-b-xl border border-slate-200/80 dark:border-slate-800"
+                  onChange={(nextDescription) => {
+                    latestDescription.current = nextDescription;
+                    setDescription(nextDescription);
                   }}
                 />
               </div>

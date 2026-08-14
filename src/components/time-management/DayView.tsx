@@ -1,5 +1,6 @@
 import React from "react";
 import { Task, QuadrantType } from "@/types/timeManagement";
+import { getTaskDescriptionText } from "@/lib/taskDescription";
 import { CheckCircle2, Circle, Clock, Plus } from "lucide-react";
 import { getTaskEndAt, getTaskStartAt, taskIntersectsDay, taskTimeLabel } from "@/lib/taskSchedule";
 
@@ -147,9 +148,9 @@ export const DayView: React.FC<DayViewProps> = ({
                               </div>
                             )}
 
-                            {t.description && (
+                            {getTaskDescriptionText(t.description) && (
                               <div className="text-[11px] text-slate-500 dark:text-slate-400 truncate mt-0.5">
-                                {t.description}
+                                {getTaskDescriptionText(t.description)}
                               </div>
                             )}
                           </div>

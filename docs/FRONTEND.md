@@ -41,13 +41,28 @@ Optimistic writes are immediate and may be debounced by `useDebouncedMutation` o
 
 The main window’s private Broadcast listener invalidates matching Query keys. It does not merge Broadcast payloads into authoritative records. See [Architecture](/architecture) for the current localized list-note Tauri-event divergence.
 
-## Knowledge editor boundary
+## Rich-text editor boundary
 
-The knowledge module first loads its shell, then the selected list’s contents, note body, and templates on demand. Tiptap content is serialized JSON. Editor changes must be deduplicated, debounced, and written back with `emitUpdate: false` only when external content actually changed. Preserve the unmount-save and optimistic-version rules in [sync-and-editor consistency](design-docs/sync-and-editor-consistency.md).
+WorkBuddy-D's application editor is **`reactjs-tiptap-editor`**, not a direct Tiptap integration. Tiptap packages are its underlying editor engine and extension API; business surfaces must reuse `src/components/ui/reactjs-tiptap-editor.tsx` rather than creating another `useEditor` composition. See the [reactjs-tiptap-editor integration reference](references/reactjs-tiptap-editor.md) for supported props, extensions, and usage by surface.
+
+The knowledge module first loads its shell, then the selected list’s contents, note body, and templates on demand. Rich-text content is serialized JSON. Editor changes must be deduplicated, debounced, and written back with `emitUpdate: false` only when external content actually changed. Preserve the unmount-save and optimistic-version rules in [sync-and-editor consistency](design-docs/sync-and-editor-consistency.md).
+
+Task descriptions use the same serialized Tiptap-document format while remaining a database `text` column. The task editor must accept legacy plain text, but compact task lists must render extracted plain text rather than the serialized JSON.
 
 ## Styling and accessibility
 
-Tailwind 4 is configured through `src/index.css`. That file owns semantic light/dark tokens, radius, and shared animation definitions. `src/components/ui/` provides existing primitives; compose them before creating another parallel primitive.
+Tailwind 4 is configured through `src/index.css`; it is the application's Tailwind CSS-first entry point, not a second styling system. That file owns semantic light/dark tokens, radius, shared animation definitions, and narrowly scoped global rules. `src/components/ui/` provides existing primitives; compose them before creating another parallel primitive.
+
+### Tailwind and CSS boundary
+
+| Need | Preferred location | Rationale |
+| --- | --- | --- |
+| A screen- or component-local layout, spacing, color, state, or responsive rule | Tailwind utility classes in the TSX component | Keeps visual intent next to the rendered element and uses semantic theme tokens. |
+| A reusable primitive's variants or internal styling | The owning component in `src/components/ui/` | Prevents page-level copies of the same component contract. |
+| Semantic tokens, dark-theme values, global base styles, shared keyframes, or Tauri window-root styling | `src/index.css` | These rules intentionally apply outside one component and are Tailwind v4 configuration. |
+| A third-party element mounted outside React's component tree, such as a portal directly under `body` | A narrowly scoped rule in `src/index.css`, with a comment explaining the external DOM contract | Utility classes cannot reach an element the application does not render. |
+
+Do not add broad element selectors or unscoped `!important` rules for normal component styling. The `/` command menu rule is an intentional exception: `reactjs-tiptap-editor` mounts it directly under `body`, while the Tauri task quick-edit layers use fixed z-indexes. The selector is scoped to `html.tqe-window` and raises only that third-party floating menu above those layers.
 
 Use semantic HTML and the existing accessibility conventions: labelled icon buttons, real dialog semantics, stateful ARIA attributes, labelled navigation, and local alerts/live regions. Accessibility is implemented in many components but has no configured automated audit.
 

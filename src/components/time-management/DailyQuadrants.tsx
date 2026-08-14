@@ -1,6 +1,7 @@
 import React, { useState, memo } from "react";
 import { Plus, CheckCircle2, Circle, AlignLeft, X, ChevronDown, ChevronRight } from "lucide-react";
 import { Task, QuadrantType } from "@/types/timeManagement";
+import { hasTaskDescription } from "@/lib/taskDescription";
 import { Button } from "@/components/ui/button";
 
 interface CollapsibleGroupProps {
@@ -319,7 +320,7 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
       return taskList.map((task) => {
         const isHovered = dragOverTaskId === task.id;
         const isExpired = task.scheduledEndAt && task.scheduledEndAt < now && !task.completed;
-        const hasContent = Boolean(task.description && task.description.trim());
+        const hasContent = hasTaskDescription(task.description);
 
         return (
           <div

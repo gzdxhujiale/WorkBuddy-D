@@ -5,6 +5,7 @@
 - [架构](/architecture)
 - [设计原则](/DESIGN)
 - [前端工程](/FRONTEND)
+- [reactjs-tiptap-editor 集成参考](/references/reactjs-tiptap-editor)
 - [产品判断](/PRODUCT_SENSE)
 - [执行计划协议](/PLANS)
 - [质量评分](/QUALITY_SCORE)
