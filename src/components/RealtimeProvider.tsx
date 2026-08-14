@@ -5,7 +5,7 @@ import { realtimeManager } from "@/lib/realtimeManager";
 import { useUiStore } from "@/stores/uiStore";
 import { emit, listen } from "@tauri-apps/api/event";
 
-const UI_STATE_EVENT = "fishbuddy:ui-state";
+const UI_STATE_EVENT = "workbuddy:ui-state";
 const UI_SOURCE_ID = crypto.randomUUID();
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {

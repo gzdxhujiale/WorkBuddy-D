@@ -42,7 +42,7 @@ export const LoginPage: React.FC = () => {
           password,
         });
         if (error) throw error;
-        setSuccessMsg("登录成功！正在进入 FishBuddy...");
+        setSuccessMsg("登录成功！正在进入 WorkBuddy...");
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "认证失败，请重试";
@@ -72,7 +72,7 @@ export const LoginPage: React.FC = () => {
           </div>
           <div className="flex items-center gap-1.5 pt-1">
             <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-400 bg-clip-text text-transparent">
-              FishBuddy
+              WorkBuddy
             </h1>
             <Sparkles className="w-5 h-5 text-amber-400" />
           </div>
@@ -89,8 +89,8 @@ export const LoginPage: React.FC = () => {
             </CardTitle>
             <CardDescription className="text-slate-400">
               {isSignUp
-                ? "输入您的电子邮箱注册 FishBuddy 账号"
-                : "输入您的凭据登录您的 FishBuddy 账号"}
+                ? "输入您的电子邮箱注册 WorkBuddy 账号"
+                : "输入您的凭据登录您的 WorkBuddy 账号"}
             </CardDescription>
           </CardHeader>
 
@@ -207,7 +207,7 @@ export const LoginPage: React.FC = () => {
 
         {/* Footer info */}
         <p className="mt-6 text-center text-xs text-slate-500">
-          Powered by Supabase Engine & FishBuddy • {new Date().getFullYear()}
+          Powered by Supabase Engine & WorkBuddy • {new Date().getFullYear()}
         </p>
       </div>
     </div>

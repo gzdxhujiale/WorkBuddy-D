@@ -35,7 +35,9 @@ export const useUiStore = create<UiState>((set) => ({
   setDrawerOpen: (isDrawerOpen) => set({ isDrawerOpen }),
   hydrateForUser: (userId) => {
     try {
-      const raw = localStorage.getItem(`fishbuddy:ui:${userId}`);
+      const key = `workbuddy:ui:${userId}`;
+      const legacyKey = `fishbuddy:ui:${userId}`;
+      const raw = localStorage.getItem(key) ?? localStorage.getItem(legacyKey);
       const saved = raw ? JSON.parse(raw) as Partial<UiState> : {};
       set({
         ...initialState,
@@ -51,7 +53,7 @@ export const useUiStore = create<UiState>((set) => ({
 
 useUiStore.subscribe((state, previous) => {
   if (!state.userId || state.userId !== previous.userId) return;
-  localStorage.setItem(`fishbuddy:ui:${state.userId}`, JSON.stringify({
+  localStorage.setItem(`workbuddy:ui:${state.userId}`, JSON.stringify({
     activeListId: state.activeListId,
     isSidebarCollapsed: state.isSidebarCollapsed,
   }));

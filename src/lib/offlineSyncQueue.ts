@@ -14,10 +14,14 @@ export type OfflineOperation = {
 
 type Executor = (payload: unknown) => Promise<void>;
 const executors = new Map<string, Executor>();
-const STORAGE_KEY = "fishbuddy_offline_operations_v1";
+const STORAGE_KEY = "workbuddy_offline_operations_v1";
+const LEGACY_STORAGE_KEY = "fishbuddy_offline_operations_v1";
 
 function readQueue(): OfflineOperation[] {
-  try { return JSON.parse(localStorage.getItem(userStorageKey(STORAGE_KEY)) ?? "[]"); } catch { return []; }
+  try {
+    const raw = localStorage.getItem(userStorageKey(STORAGE_KEY)) ?? localStorage.getItem(userStorageKey(LEGACY_STORAGE_KEY));
+    return JSON.parse(raw ?? "[]");
+  } catch { return []; }
 }
 function writeQueue(items: OfflineOperation[]) {
   localStorage.setItem(userStorageKey(STORAGE_KEY), JSON.stringify(items));

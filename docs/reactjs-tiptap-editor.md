@@ -173,7 +173,7 @@ themeActions.setBorderRadius('0.5rem')
 - 输入事件只在 `onUpdate` 中序列化；外层持久化应使用 debounce，避免每次按键都写数据库。
 - 外部内容同步使用 `emitUpdate: false`，避免产生保存回路。
 
-## 9. FishBuddy 每日复盘接入约定
+## 9. WorkBuddy 每日复盘接入约定
 
 每日复盘使用 `src/components/daily-review/DailyReviewEditor.tsx`：
 

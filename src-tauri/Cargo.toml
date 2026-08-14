@@ -1,12 +1,12 @@
 [package]
-name = "fishbuddy"
+name = "workbuddy"
 version = "0.1.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
 
 [lib]
-name = "fishbuddy_lib"
+name = "workbuddy_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
