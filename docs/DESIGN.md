@@ -51,11 +51,12 @@ The knowledge editor keeps local draft state and debounced persistence. Do not r
 
 ## Visual consistency limits
 
-The token source is `src/index.css`, but parts of the current shell and feature UI still use hard-coded Slate colors. The repository-root `配色方案.md` identifies this as a proposed consistency refactor, not an accepted implementation contract. Until it is completed, prefer semantic tokens for new shared UI and avoid spreading additional ad-hoc page-surface colors.
+The token source is `src/index.css`, but parts of the current shell and feature UI still use hard-coded Slate colors. [全局背景配色与视觉层级规范](design-docs/color-scheme.md) defines the authoritative 5-level elevation architecture and surface tokens across modules. Prefer semantic tokens and the 5-level elevation system for new UI and avoid spreading additional ad-hoc page-surface colors.
 
 ## Related material
 
 - Frontend implementation: [FRONTEND.md](FRONTEND.md)
+- Color scheme & elevation specification: [design-docs/color-scheme.md](design-docs/color-scheme.md)
 - Product trade-offs: [PRODUCT_SENSE.md](PRODUCT_SENSE.md)
 - Detailed design decisions: [design-docs/](design-docs/index.md)
 - Visual design & aesthetic direction: `.agents/skills/frontend-design/SKILL.md`

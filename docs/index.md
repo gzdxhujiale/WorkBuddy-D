@@ -10,6 +10,7 @@
 - [执行计划协议](/PLANS)
 - [质量评分](/QUALITY_SCORE)
 - [同步、版本与编辑器一致性](/design-docs/sync-and-editor-consistency)
+- [全局背景配色与视觉层级规范](/design-docs/color-scheme)
 - [产品规范](/product-specs/)
 - [数据库快照](/generated/db-schema)
 - [生成物说明](/generated/)

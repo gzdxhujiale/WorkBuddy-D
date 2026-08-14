@@ -28,6 +28,7 @@ export default defineConfig({
         items: [
           { text: "产品规范", link: "/product-specs/" },
           { text: "设计文档", link: "/design-docs/" },
+          { text: "色彩与视觉层级规范", link: "/design-docs/color-scheme" },
           { text: "核心信念", link: "/design-docs/core-beliefs" },
         ],
       },

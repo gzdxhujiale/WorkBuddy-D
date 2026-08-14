@@ -6,6 +6,7 @@ This directory contains accepted, durable decisions that explain *why* the syste
 | --- | --- | --- |
 | [Core beliefs](core-beliefs.md) | Accepted | Any cross-cutting change that affects data authority, loading, user isolation, or recovery. |
 | [同步、版本与编辑器一致性](sync-and-editor-consistency.md) | Accepted; implementation divergence recorded | Supabase Realtime, versioned writes, offline recovery, Tiptap, or cross-window synchronization. |
+| [全局背景配色与视觉层级规范](color-scheme.md) | Accepted | Cross-screen background colors, 5-level elevation, and Tailwind surface tokens. |
 | [Architecture](/architecture) | Canonical system map | Locating the owning layer, runtime boundary, or external dependency. |
 
 ## Decision lifecycle
