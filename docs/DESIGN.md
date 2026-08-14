@@ -58,4 +58,6 @@ The token source is `src/index.css`, but parts of the current shell and feature 
 - Frontend implementation: [FRONTEND.md](FRONTEND.md)
 - Product trade-offs: [PRODUCT_SENSE.md](PRODUCT_SENSE.md)
 - Detailed design decisions: [design-docs/](design-docs/index.md)
+- Visual design & aesthetic direction: `.agents/skills/frontend-design/SKILL.md`
 - Shared Tailwind changes: `.agents/skills/tailwind-design-system/SKILL.md`
+

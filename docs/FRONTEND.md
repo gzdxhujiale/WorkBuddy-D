@@ -66,7 +66,7 @@ Do not add broad element selectors or unscoped `!important` rules for normal com
 
 Use semantic HTML and the existing accessibility conventions: labelled icon buttons, real dialog semantics, stateful ARIA attributes, labelled navigation, and local alerts/live regions. Accessibility is implemented in many components but has no configured automated audit.
 
-For shared token, theme, reusable-component, or cross-screen visual work, read `.agents/skills/tailwind-design-system/SKILL.md`. Do not load that workflow for an isolated utility-class edit.
+For visual design direction, aesthetic choices, typography pairing, and anti-template UI design when creating or reshaping screens, read `.agents/skills/frontend-design/SKILL.md`. For shared token, theme, reusable-component, or cross-screen visual work, read `.agents/skills/tailwind-design-system/SKILL.md`. Do not load that workflow for an isolated utility-class edit.
 
 ## Errors, loading, and performance
 
@@ -74,4 +74,5 @@ The Query client disables automatic retry/reconnect/mount refetching to avoid re
 
 ## Verification
 
-There is no configured frontend test, lint, or formatter script. Run `pnpm build` for frontend changes and manually exercise the affected authenticated route or secondary window. For Tiptap work use the `tiptap` skill; for substantial React implementation, refactoring, review, or performance work use `vercel-react-best-practices`.
+There is no configured frontend test, lint, or formatter script. Run `pnpm build` for frontend changes and manually exercise the affected authenticated route or secondary window. For Tiptap work use the `tiptap` skill; for substantial React implementation, refactoring, review, or performance work use `vercel-react-best-practices`; for distinctive visual design and aesthetic direction use `frontend-design`.
+
