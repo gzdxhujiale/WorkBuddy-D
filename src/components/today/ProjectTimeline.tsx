@@ -19,16 +19,25 @@ const VIEW_MODE_LABELS: Record<TimelineViewMode, string> = {
   month: "月视图",
 };
 
-const VIEW_MODE_DAYS: Record<TimelineViewMode, number> = {
-  week: 7,
-  biweekly: 14,
-  month: 30,
-};
+const WEEKDAY_NAMES = ["日", "一", "二", "三", "四", "五", "六"];
 
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
+}
+
+function getMonday(d: Date): Date {
+  const date = new Date(d);
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+  date.setDate(diff);
+  date.setHours(0, 0, 0, 0);
+  return date;
+}
+
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
 }
 
 function parseDateStr(str?: string): Date | null {
@@ -41,19 +50,36 @@ function parseDateStr(str?: string): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function formatMonthYearLabel(startDate: Date, endDate: Date): string {
+function formatRangeLabel(viewMode: TimelineViewMode, startDate: Date, endDate: Date): string {
   const sYear = startDate.getFullYear();
   const sMonth = startDate.getMonth() + 1;
+  const sDay = startDate.getDate();
   const eYear = endDate.getFullYear();
   const eMonth = endDate.getMonth() + 1;
+  const eDay = endDate.getDate();
 
-  if (sYear === eYear) {
-    if (sMonth === eMonth) {
-      return `${sYear}年${sMonth}月`;
-    }
-    return `${sYear}年${sMonth}-${eMonth}月`;
+  if (viewMode === "month") {
+    return `${sYear}年${sMonth}月`;
   }
-  return `${sYear}年${sMonth}月 - ${eYear}年${eMonth}月`;
+
+  if (viewMode === "week") {
+    if (sMonth === eMonth) {
+      return `${sYear}年${sMonth}月${sDay}日 - ${eDay}日`;
+    }
+    if (sYear === eYear) {
+      return `${sYear}年${sMonth}月${sDay}日 - ${eMonth}月${eDay}日`;
+    }
+    return `${sYear}年${sMonth}月${sDay}日 - ${eYear}年${eMonth}月${eDay}日`;
+  }
+
+  // biweekly
+  if (sMonth === eMonth) {
+    return `${sYear}年${sMonth}月${sDay}日 - ${eDay}日`;
+  }
+  if (sYear === eYear) {
+    return `${sYear}年${sMonth}月${sDay}日 - ${eMonth}月${eDay}日`;
+  }
+  return `${sYear}年${sMonth}月${sDay}日 - ${eYear}年${eMonth}月${eDay}日`;
 }
 
 function formatShortDate(d: Date): string {
@@ -71,17 +97,22 @@ export const ProjectTimeline: React.FC = () => {
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false);
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
 
+  // Active anchor reference date
+  const [anchorDate, setAnchorDate] = useState<Date>(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    return d;
+  });
+
   // Active project selection
   const currentProject: Project | undefined = useMemo(() => {
     if (selectedProjectId) {
       const found = projects.find((p) => p.id === selectedProjectId);
       if (found) return found;
     }
-    // Default to first in_progress project, or first project
     return projects.find((p) => p.status === "in_progress") ?? projects[0];
   }, [projects, selectedProjectId]);
 
-  // Window start date (normalized to midnight)
   const todayStr = todayYMD();
   const todayDate = useMemo(() => {
     const d = new Date();
@@ -89,16 +120,32 @@ export const ProjectTimeline: React.FC = () => {
     return d;
   }, []);
 
-  const [windowStartDate, setWindowStartDate] = useState<Date>(() => {
-    // Center or start window so today is nicely visible
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() - 3); // Start 3 days before today for context
-    return d;
-  });
+  // Compute window start date and total days based on current viewMode & anchorDate
+  const { windowStartDate, totalDays, windowEndDate } = useMemo(() => {
+    if (viewMode === "month") {
+      const year = anchorDate.getFullYear();
+      const month = anchorDate.getMonth();
+      const start = new Date(year, month, 1, 0, 0, 0, 0);
+      const days = getDaysInMonth(year, month);
+      const end = new Date(year, month, days, 0, 0, 0, 0);
+      return { windowStartDate: start, totalDays: days, windowEndDate: end };
+    }
 
-  const totalDays = VIEW_MODE_DAYS[viewMode];
+    if (viewMode === "week") {
+      const start = getMonday(anchorDate);
+      const days = 7;
+      const end = addDays(start, days - 1);
+      return { windowStartDate: start, totalDays: days, windowEndDate: end };
+    }
 
+    // biweekly: 14 days starting from Monday
+    const start = getMonday(anchorDate);
+    const days = 14;
+    const end = addDays(start, days - 1);
+    return { windowStartDate: start, totalDays: days, windowEndDate: end };
+  }, [viewMode, anchorDate]);
+
+  // Date list for the visible window
   const dateList = useMemo(() => {
     const list: Date[] = [];
     for (let i = 0; i < totalDays; i++) {
@@ -107,27 +154,36 @@ export const ProjectTimeline: React.FC = () => {
     return list;
   }, [windowStartDate, totalDays]);
 
-  const windowEndDate = useMemo(() => {
-    return addDays(windowStartDate, totalDays - 1);
-  }, [windowStartDate, totalDays]);
-
-  // Navigation handlers
+  // Navigation handlers per view mode
   const handlePrev = () => {
-    const shift = viewMode === "month" ? 15 : Math.max(7, Math.floor(totalDays / 2));
-    setWindowStartDate((prev) => addDays(prev, -shift));
+    if (viewMode === "month") {
+      setAnchorDate((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    } else if (viewMode === "week") {
+      setAnchorDate((prev) => addDays(prev, -7));
+    } else {
+      setAnchorDate((prev) => addDays(prev, -14));
+    }
   };
 
   const handleNext = () => {
-    const shift = viewMode === "month" ? 15 : Math.max(7, Math.floor(totalDays / 2));
-    setWindowStartDate((prev) => addDays(prev, shift));
+    if (viewMode === "month") {
+      setAnchorDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+    } else if (viewMode === "week") {
+      setAnchorDate((prev) => addDays(prev, 7));
+    } else {
+      setAnchorDate((prev) => addDays(prev, 14));
+    }
   };
 
   const handleGoToday = () => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
-    const offset = viewMode === "month" ? 5 : 3;
-    d.setDate(d.getDate() - offset);
-    setWindowStartDate(d);
+    setAnchorDate(d);
+  };
+
+  const handleSelectViewMode = (mode: TimelineViewMode) => {
+    setViewMode(mode);
+    setViewDropdownOpen(false);
   };
 
   // Find index of today in dateList if visible
@@ -200,13 +256,14 @@ export const ProjectTimeline: React.FC = () => {
           <div className="flex items-center gap-1.5 rounded-xl border border-border/80 bg-muted/30 px-2.5 py-1 text-xs">
             <Calendar className="size-3.5 text-emerald-500" />
             <span className="font-medium tabular-nums text-foreground">
-              {formatMonthYearLabel(windowStartDate, windowEndDate)}
+              {formatRangeLabel(viewMode, windowStartDate, windowEndDate)}
             </span>
             <div className="flex items-center ml-1 border-l border-border/60 pl-1">
               <button
                 type="button"
                 onClick={handlePrev}
-                aria-label="向前查看时间线"
+                aria-label={`向前切换${VIEW_MODE_LABELS[viewMode]}`}
+                title={`向前切换${VIEW_MODE_LABELS[viewMode]}`}
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <ChevronLeft className="size-3.5" />
@@ -214,7 +271,8 @@ export const ProjectTimeline: React.FC = () => {
               <button
                 type="button"
                 onClick={handleNext}
-                aria-label="向后查看时间线"
+                aria-label={`向后切换${VIEW_MODE_LABELS[viewMode]}`}
+                title={`向后切换${VIEW_MODE_LABELS[viewMode]}`}
                 className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <ChevronRight className="size-3.5" />
@@ -231,7 +289,7 @@ export const ProjectTimeline: React.FC = () => {
                   setProjectDropdownOpen(!projectDropdownOpen);
                   setViewDropdownOpen(false);
                 }}
-                className="flex items-center gap-1.5 rounded-xl border border-border/70 bg-muted/20 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+                className="flex items-center gap-1.5 rounded-xl border border-border/70 bg-muted/20 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer"
               >
                 <FolderKanban className="size-3.5 text-sky-500" />
                 <span className="max-w-[120px] truncate">{currentProject?.name ?? "选择项目"}</span>
@@ -251,7 +309,7 @@ export const ProjectTimeline: React.FC = () => {
                         setSelectedProjectId(proj.id);
                         setProjectDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg transition-colors flex items-center justify-between ${
+                      className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg transition-colors flex items-center justify-between cursor-pointer ${
                         currentProject?.id === proj.id
                           ? "bg-accent font-semibold text-foreground"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -276,7 +334,7 @@ export const ProjectTimeline: React.FC = () => {
                 setViewDropdownOpen(!viewDropdownOpen);
                 setProjectDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 rounded-xl border border-border/80 bg-muted/30 px-3 py-1 text-xs font-medium text-foreground hover:bg-accent transition-colors"
+              className="flex items-center gap-1.5 rounded-xl border border-border/80 bg-muted/30 px-3 py-1 text-xs font-medium text-foreground hover:bg-accent transition-colors cursor-pointer"
             >
               <span>{VIEW_MODE_LABELS[viewMode]}</span>
               <ChevronDown className="size-3 text-muted-foreground" />
@@ -291,11 +349,8 @@ export const ProjectTimeline: React.FC = () => {
                   <button
                     key={mode}
                     type="button"
-                    onClick={() => {
-                      setViewMode(mode);
-                      setViewDropdownOpen(false);
-                    }}
-                    className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg transition-colors ${
+                    onClick={() => handleSelectViewMode(mode)}
+                    className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
                       viewMode === mode
                         ? "bg-accent font-semibold text-foreground"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -313,7 +368,7 @@ export const ProjectTimeline: React.FC = () => {
             size="sm"
             variant="ghost"
             onClick={handleGoToday}
-            className="h-7 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-3 text-xs font-semibold"
+            className="h-7 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-3 text-xs font-semibold cursor-pointer"
           >
             今天
           </Button>
@@ -335,20 +390,39 @@ export const ProjectTimeline: React.FC = () => {
               <div className="w-28 shrink-0 font-semibold pl-1 text-muted-foreground">阶段</div>
 
               {/* Day Axis */}
-              <div className="flex-1 grid" style={{ gridTemplateColumns: `repeat(${totalDays}, minmax(0, 1fr))` }}>
+              <div
+                className="flex-1 grid"
+                style={{ gridTemplateColumns: `repeat(${totalDays}, minmax(0, 1fr))` }}
+              >
                 {dateList.map((d, index) => {
                   const isCurrentDay = formatDateYMD(d) === todayStr;
                   const dayNum = d.getDate();
+                  const weekdayName = WEEKDAY_NAMES[d.getDay()];
+
                   return (
                     <div key={index} className="flex flex-col items-center justify-center relative">
                       {isCurrentDay ? (
-                        <span className="grid size-6 place-items-center rounded-full bg-emerald-500 text-[11px] font-bold text-white shadow-[0_0_12px_rgba(16,185,129,0.8)]">
-                          {dayNum}
-                        </span>
+                        <div className="flex flex-col items-center">
+                          {viewMode === "week" && (
+                            <span className="text-[10px] text-emerald-500 font-semibold mb-0.5">
+                              {weekdayName}
+                            </span>
+                          )}
+                          <span className="grid size-6 place-items-center rounded-full bg-emerald-500 text-[11px] font-bold text-white shadow-[0_0_12px_rgba(16,185,129,0.8)]">
+                            {dayNum}
+                          </span>
+                        </div>
                       ) : (
-                        <span className="text-[11px] font-medium tabular-nums text-muted-foreground/80 hover:text-foreground">
-                          {dayNum}
-                        </span>
+                        <div className="flex flex-col items-center">
+                          {viewMode === "week" && (
+                            <span className="text-[10px] text-muted-foreground/60 mb-0.5">
+                              {weekdayName}
+                            </span>
+                          )}
+                          <span className="text-[11px] font-medium tabular-nums text-muted-foreground/80 hover:text-foreground">
+                            {dayNum}
+                          </span>
+                        </div>
                       )}
                     </div>
                   );
@@ -361,10 +435,10 @@ export const ProjectTimeline: React.FC = () => {
               {/* Vertical Guide Line for Today */}
               {todayIndex >= 0 && (
                 <div
-                  className="absolute top-0 bottom-0 pointer-events-none z-20 flex justify-center"
+                  className="absolute top-0 bottom-0 pointer-events-none z-20"
                   style={{
                     left: `calc(112px + ${(todayIndex + 0.5) * (100 / totalDays)}% * ((100% - 112px) / 100))`,
-                    width: "1px",
+                    width: "1.5px",
                   }}
                 >
                   <div className="w-[1.5px] h-full bg-emerald-500/70 shadow-[0_0_8px_rgba(16,185,129,0.6)]" />
@@ -386,7 +460,7 @@ export const ProjectTimeline: React.FC = () => {
                 const isVisible = clampedEnd > 0 && clampedStart < totalDays;
 
                 const leftPct = (clampedStart / totalDays) * 100;
-                const widthPct = Math.max(3, ((clampedEnd - clampedStart) / totalDays) * 100);
+                const widthPct = Math.max(viewMode === "month" ? 2.5 : 4, ((clampedEnd - clampedStart) / totalDays) * 100);
 
                 // Is active / highlighted bar
                 const isTodayActive =
@@ -435,7 +509,7 @@ export const ProjectTimeline: React.FC = () => {
                           title={`${stage.name} (${formatShortDate(stage.computedStart)} - ${formatShortDate(stage.computedEnd)})`}
                         >
                           <span className="truncate font-medium pr-1">{stage.name}</span>
-                          <span className="text-[10px] opacity-85 tabular-nums whitespace-nowrap hidden sm:inline shrink-0">
+                          <span className="text-[10px] opacity-85 tabular-nums whitespace-nowrap hidden md:inline shrink-0">
                             {formatShortDate(stage.computedStart)} - {formatShortDate(stage.computedEnd)}
                           </span>
                         </div>
