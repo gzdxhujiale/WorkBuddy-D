@@ -14,6 +14,7 @@ import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { openQuickEditWindow, prewarmQuickEditWindow } from "@/services/quickEditWindow";
 import { Badge } from "@/components/ui/badge";
 import { taskIntersectsDay, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
+import { ProjectTimeline } from "./ProjectTimeline";
 
 // ============================================================
 // Constants & Pure Selectors
@@ -270,7 +271,7 @@ export const TodayPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full max-w-[1080px] mx-auto px-6 py-7 md:px-9 overflow-hidden select-none">
+    <div className="flex flex-col h-full w-full max-w-[1080px] mx-auto px-6 py-6 md:px-9 overflow-y-auto select-none space-y-6">
       {/* 签名元素: 撕历式头部 */}
       <header className="flex items-start gap-6 pb-5 border-b border-border shrink-0">
         {/* 撕历日期块 */}
@@ -335,25 +336,25 @@ export const TodayPanel: React.FC = () => {
 
       {/* 主体: 主列表 + 右侧轻栏 */}
       {remaining === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center gap-3.5 text-center text-muted-foreground py-8">
-          <div className="text-5xl leading-none">🍃</div>
-          <h2 className="text-lg font-bold text-foreground">今日已清空</h2>
+        <div className="flex flex-col items-center justify-center gap-3.5 text-center text-muted-foreground py-6 rounded-2xl bg-card border border-border/70">
+          <div className="text-4xl leading-none">🍃</div>
+          <h2 className="text-base font-bold text-foreground">今日已清空</h2>
           <p className="text-xs text-muted-foreground max-w-sm">
             {dueTasks.length} 项任务 · {checkedHabits.length} 次打卡 · {reviewWritten ? "1 篇复盘" : "复盘"}
             ，都完成了。剩下的时间是你自己的。
           </p>
         </div>
       ) : (
-        <div className="flex-1 grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px] gap-6 pt-5 min-h-0 overflow-hidden">
+        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px] gap-6">
           {/* 左栏: 任务主列表 */}
-          <div className="min-w-0 overflow-y-auto pr-1">
+          <div className="min-w-0 pr-1">
             <div className="flex items-center gap-2 text-xs font-bold text-foreground mb-2.5">
               <span className="size-2 rounded-2xs bg-blue-500 shrink-0" />
               今日到期 <span className="font-semibold text-muted-foreground tabular-nums">{pendingTasks.length} 项</span>
             </div>
 
             {pendingTasks.length === 0 ? (
-              <div className="py-6 text-center text-xs text-muted-foreground">今天没有待办的到期任务</div>
+              <div className="py-6 text-center text-xs text-muted-foreground bg-card/40 rounded-xl border border-border/60">今天没有待办的到期任务</div>
             ) : (
               <div className="flex flex-col gap-2">{pendingTasks.map(renderTaskItem)}</div>
             )}
@@ -376,7 +377,7 @@ export const TodayPanel: React.FC = () => {
           </div>
 
           {/* 右侧轻栏: 习惯 + 复盘 */}
-          <div className="flex flex-col gap-4 overflow-y-auto">
+          <div className="flex flex-col gap-4">
             {/* 习惯打卡卡片 */}
             <div className="bg-card border border-border rounded-xl p-4 shadow-xs">
               <div className="flex items-center gap-2 text-xs font-bold text-foreground mb-2.5">
@@ -447,6 +448,9 @@ export const TodayPanel: React.FC = () => {
         </div>
       )}
 
+      {/* 项目时间线 */}
+      <ProjectTimeline />
     </div>
   );
 };
+
