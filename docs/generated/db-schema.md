@@ -2,7 +2,7 @@
 
 **Verified against:** Supabase project `workbuddy` (`cdrdmkojduynctaoymjl`)
 
-**Verified on:** 2026-08-14
+**Verified on:** 2026-08-16
 **Platform:** PostgreSQL 17, `ap-northeast-1`
 
 This is a compact live-state reference, not a replacement for migration SQL. Read [generated-artifact rules](index.md) before refreshing it.
@@ -28,6 +28,7 @@ All listed tables are user-owned `public` tables with RLS enabled.
 | Habits | `habits`, `habit_checkins` | Habit definitions and dated check-ins are user-scoped. |
 | Daily review | `daily_reviews` | One review is keyed by user/date; deletion is physical through `delete_daily_review`, allowing a fresh record for that date. |
 | Tasks | `time_management_tasks` | Completion state is coupled to database-owned `completed_at`. |
+| Project center | `projects`, `project_stages`, `project_templates` | Projects are lifecycle containers; their tasks remain rows in `time_management_tasks`. |
 | Focus | `focus_sessions` | Session start and terminal end timestamps are assigned by focus RPCs. |
 
 ## Field reference
@@ -146,6 +147,46 @@ The supported save RPC uses `(user_id, habit_id, date)` as the upsert identity, 
 | `completed_at` | `timestamptz nullable` | Database-owned completion transition time. |
 | `description` | `text nullable` | Optional task detail. |
 | `reminder` | `jsonb nullable` | Structured reminder configuration. |
+| `project_id` | `uuid nullable` | Optional single owning `projects.id`; a task cannot belong to more than one project. |
+| `project_stage_id` | `uuid nullable` | Optional stage inside its owning project. |
+| `priority` | `text` | `low`, `medium`, `high`, or `urgent`. |
+| `assignee_name` | `text nullable` | Task-level responsible person, which may override the stage default. |
+
+### Project center
+
+#### `projects`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name`, `description` | `text`, `text nullable` | Project identity and optional explanation. |
+| `status` | `text` | Lifecycle state: `not_started`, `in_progress`, `completed`, or `archived`; creation begins at `not_started`. |
+| `start_date`, `end_date` | `date nullable`, `date nullable` | Optional project time range; when both are present, the start cannot be after the end. `due_date` is a legacy migration field and is no longer read or written by the application. |
+| `priority` | `text` | `low`, `medium`, `high`, or `urgent`. |
+| `tags` | `text[]` | User-defined project labels. |
+| `owner_name` | `text nullable` | Project-level responsible person. |
+
+The database refuses a transition to `completed` while an active project task remains incomplete.
+
+#### `project_stages`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `project_id` | `uuid` | Owning project. |
+| `name` | `text` | Ordered workflow stage, such as requirement review or testing. |
+| `default_assignee_name` | `text nullable` | Default owner used when adding a task to the stage. |
+| `sort_order` | `integer` | Stage ordering within the project. |
+| `template_key` | `text nullable` | Stable template-stage key used while generating a project. |
+| `start_date`, `end_date` | `date nullable`, `date nullable` | Optional stage time range; when both are present, the start cannot be after the end. |
+
+#### `project_templates`
+
+| Field | Type | Meaning |
+| --- | --- | --- |
+| `name`, `description` | `text`, `text nullable` | Reusable template identity and explanation. |
+| `definition` | `jsonb` | Stages, stage-owner rules, and task blueprints to generate. |
+| `deleted_at` | `timestamptz nullable` | Soft-deletion marker; active template reads exclude it. |
+
+Template-generated tasks always start incomplete and do not copy concrete task dates.
 
 ### Focus
 
@@ -171,7 +212,7 @@ The exact policy and function signatures should be read from the latest applied 
 
 ## Realtime model
 
-Migration `20260814010000_replace_postgres_changes_with_private_broadcast.sql` removes application tables from `supabase_realtime`. Each application table uses an `AFTER INSERT OR UPDATE OR DELETE` trigger to call `realtime.send` on the private topic `user:<user_id>:sync`. The `realtime.messages` receive policy limits the topic to the matching authenticated user.
+Migration `20260814010000_replace_postgres_changes_with_private_broadcast.sql` removes application tables from `supabase_realtime`. Each application table, including Project Center tables, uses an `AFTER INSERT OR UPDATE OR DELETE` trigger to call `realtime.send` on the private topic `user:<user_id>:sync`. The `realtime.messages` receive policy limits the topic to the matching authenticated user.
 
 The payload is:
 

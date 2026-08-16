@@ -6,6 +6,7 @@ import {
   Sparkles,
   BookCheck,
   Library,
+  FolderKanban,
   Settings,
   Copy,
   Minus,
@@ -29,6 +30,7 @@ export interface NavigationTool {
 export const NAV_TOOLS: NavigationTool[] = [
   { id: "today", name: "当日待办", to: "/today", icon: CalendarCheck },
   { id: "four-quadrants", name: "任务中心", to: "/four-quadrants", icon: ListTodo },
+  { id: "projects", name: "项目中心", to: "/projects", icon: FolderKanban },
   { id: "habit", name: "习惯追踪", to: "/habit", icon: Sparkles },
   { id: "lists", name: "知识库", to: "/lists", icon: Library },
   { id: "daily-review", name: "每日复盘", to: "/daily-review", icon: BookCheck },

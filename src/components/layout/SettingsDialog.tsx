@@ -3,6 +3,7 @@ import { FileText, Loader2, LogOut, Mail, Settings2, SlidersHorizontal, Timer, U
 import { useAuth } from "@/lib/auth";
 import { setOpenFocusAssistantOnStart as persistOpenFocusAssistantOnStart, shouldOpenFocusAssistantOnStart } from "@/lib/preferences";
 import { supabase } from "@/lib/supabase";
+import { ProjectTemplateManager } from "@/components/projects/ProjectTemplateManager";
 
 type Tab = "account" | "general" | "templates";
 
@@ -100,7 +101,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 <div className="flex items-center gap-3"><Timer size={19} className="text-primary" /><div><h3 className="font-medium text-foreground">启动时打开悬浮专注助手</h3><p className="mt-1 text-sm text-muted-foreground">打开应用后自动显示专注助手</p></div></div>
                 <button type="button" role="switch" aria-checked={openFocusAssistantOnStart} onClick={toggleFocusAssistantOnStart} className={`relative h-6 w-11 cursor-pointer rounded-full transition-colors ${openFocusAssistantOnStart ? "bg-primary" : "bg-muted-foreground/30"}`}><span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${openFocusAssistantOnStart ? "translate-x-5" : "translate-x-0.5"}`} /></button>
               </div>
-            ) : <div className="rounded-xl border border-border bg-card p-5 text-sm text-muted-foreground">模板在清单和复盘编辑器中按需加载。</div>}
+            ) : <ProjectTemplateManager />}
           </div>
         </div>
       </section>

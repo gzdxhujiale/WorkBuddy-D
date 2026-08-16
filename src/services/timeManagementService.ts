@@ -48,6 +48,10 @@ async function saveRemoteTask(task: Task): Promise<number> {
     p_scheduled_end_at: schedule.scheduledEndAt ? new Date(schedule.scheduledEndAt).toISOString() : null,
     p_completed: task.completed,
     p_description: task.description || null, p_reminder: task.reminder ? JSON.parse(task.reminder) : null,
+    p_project_id: task.projectId || null,
+    p_project_stage_id: task.projectStageId || null,
+    p_priority: task.priority || "medium",
+    p_assignee_name: task.assigneeName || null,
     p_expected_updated_at: task.baseUpdatedAt ? new Date(task.baseUpdatedAt).toISOString() : null,
   });
   throwOnPostgrestError(error, "保存任务");
@@ -64,7 +68,7 @@ export const timeManagementApi = {
     try {
       const { data: dbTasks, error: tasksErr } = await supabase
         .from("time_management_tasks")
-        .select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,created_at,updated_at")
+        .select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,project_id,project_stage_id,priority,assignee_name,created_at,updated_at")
         .eq("user_id", userId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -86,6 +90,10 @@ export const timeManagementApi = {
           completedAt: t.completed_at ? new Date(t.completed_at).getTime() : undefined,
           description: t.description || undefined,
           reminder: typeof t.reminder === "string" ? t.reminder : t.reminder ? JSON.stringify(t.reminder) : undefined,
+          projectId: t.project_id || undefined,
+          projectStageId: t.project_stage_id || undefined,
+          priority: t.priority || "medium",
+          assigneeName: t.assignee_name || undefined,
           createdAt: t.created_at ? new Date(t.created_at).getTime() : Date.now(),
           updatedAt: t.updated_at ? new Date(t.updated_at).getTime() : undefined,
           baseUpdatedAt: t.updated_at ? new Date(t.updated_at).getTime() : undefined,

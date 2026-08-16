@@ -7,6 +7,7 @@ const FourQuadrantsPage = lazy(() => import("@/pages/FourQuadrantsPage").then(m 
 const HabitPage = lazy(() => import("@/pages/HabitPage").then(m => ({ default: m.HabitPage })));
 const DailyReviewPage = lazy(() => import("@/pages/DailyReviewPage").then(m => ({ default: m.DailyReviewPage })));
 const ListsPage = lazy(() => import("@/pages/ListsPage").then(m => ({ default: m.ListsPage })));
+const ProjectsPage = lazy(() => import("@/pages/ProjectsPage").then(m => ({ default: m.ProjectsPage })));
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -50,6 +51,12 @@ const listsRoute = createRoute({
   component: ListsPage,
 });
 
+const projectsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/projects",
+  component: ProjectsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   todayRoute,
@@ -57,6 +64,7 @@ const routeTree = rootRoute.addChildren([
   habitRoute,
   dailyReviewRoute,
   listsRoute,
+  projectsRoute,
 ]);
 
 export const router = createRouter({

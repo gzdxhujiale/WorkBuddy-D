@@ -19,6 +19,11 @@ export interface Task {
   completedAt?: number;
   description?: string;
   reminder?: string;
+  /** A task may belong to one project; it remains the same task everywhere. */
+  projectId?: string;
+  projectStageId?: string;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  assigneeName?: string;
   createdAt: number;
   updatedAt?: number;
   baseUpdatedAt?: number;

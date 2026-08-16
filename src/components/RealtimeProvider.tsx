@@ -9,14 +9,14 @@ const UI_STATE_EVENT = "workbuddy:ui-state";
 const UI_SOURCE_ID = crypto.randomUUID();
 
 export function RealtimeProvider({ children }: { children: ReactNode }) {
-  const { userId } = useAuth();
+  const { userId, session } = useAuth();
   const setUserId = useUiStore((state) => state.setUserId);
   const hydrateForUser = useUiStore((state) => state.hydrateForUser);
   const queryClient = useQueryClient();
 
   useEffect(() => {
     hydrateForUser(userId);
-    realtimeManager.start(userId, queryClient);
+    realtimeManager.start(userId, queryClient, session.access_token);
     let disposed = false;
     let suppressBroadcast = false;
     const unlistenPromise = listen<{ source: string; userId: string; activeListId: string | null; isSidebarCollapsed: boolean }>(
@@ -45,7 +45,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
       realtimeManager.stop();
       setUserId(null);
     };
-  }, [hydrateForUser, queryClient, setUserId, userId]);
+  }, [hydrateForUser, queryClient, session.access_token, setUserId, userId]);
 
   return children;
 }

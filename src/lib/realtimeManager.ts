@@ -24,6 +24,9 @@ const TABLES = [
   "daily_reviews",
   "time_management_tasks",
   "focus_sessions",
+  "projects",
+  "project_stages",
+  "project_templates",
 ] as const;
 
 type InvalidationTarget = {
@@ -41,30 +44,25 @@ class RealtimeManager {
   private static readonly INVALIDATION_DELAY_MS = 500;
   private static readonly INVALIDATION_COOLDOWN_MS = 2_000;
 
-  start(userId: string, queryClient: QueryClient) {
+  start(userId: string, queryClient: QueryClient, accessToken: string) {
     if (this.channel && this.userId === userId) return;
     this.stop();
     this.userId = userId;
     this.queryClient = queryClient;
     this.dirtyTargets.clear();
     this.lastInvalidatedAt.clear();
-    const channel = supabase.channel(`user:${userId}:sync`, {
-      config: { private: true },
-    });
-    this.channel = channel;
-
-    channel.on("broadcast", { event: "entity_changed" }, ({ payload }) => {
-      const event = payload as SyncBroadcast;
-      if (event.table && TABLES.includes(event.table as typeof TABLES[number])) {
-        this.notify(event.table, event);
-      }
-    });
-
-    channel.subscribe((status) => {
-      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
-        logSilent("Realtime", `user Broadcast subscription ${status}`);
-      }
-    });
+    void supabase.realtime.setAuth(accessToken).then(() => {
+      if (this.userId !== userId || this.channel) return;
+      const channel = supabase.channel(`user:${userId}:sync`, { config: { private: true } });
+      this.channel = channel;
+      channel.on("broadcast", { event: "entity_changed" }, ({ payload }) => {
+        const event = payload as SyncBroadcast;
+        if (event.table && TABLES.includes(event.table as typeof TABLES[number])) this.notify(event.table, event);
+      });
+      channel.subscribe((status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") logSilent("Realtime", `user Broadcast subscription ${status}`);
+      });
+    }).catch((error: unknown) => logSilent("Realtime", "unable to set Broadcast authorization", error));
   }
 
   stop() {
@@ -127,10 +125,19 @@ class RealtimeManager {
       case "time_management_tasks":
         this.addPendingTarget(["time-management-tasks", this.userId], false);
         this.addPendingTarget(["focus-assistant-tasks", this.userId], false);
+        this.addPendingTarget(["projects", this.userId], true);
         break;
       case "focus_sessions":
         this.addPendingTarget(["focus-sessions", this.userId], false);
         this.addPendingTarget(["focus-assistant-tasks", this.userId], false);
+        break;
+      case "projects":
+      case "project_stages":
+      case "project_templates":
+        this.addPendingTarget(["projects", this.userId], true);
+        if (table === "projects") {
+          this.addPendingTarget(["time-management-tasks", this.userId], true);
+        }
         break;
     }
 

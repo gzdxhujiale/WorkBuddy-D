@@ -9,6 +9,7 @@ export const queryKeys = {
   templates: (userId: string) => ['knowledge_base_templates', userId] as const,
   timeManagement: (userId: string) => ['time-management-tasks', userId] as const,
   focusAssistantTasks: (userId: string) => ['focus-assistant-tasks', userId] as const,
+  projects: (userId: string) => ['projects', userId] as const,
 };
 
 export const HIGH_FREQ_DELAY = 300;
