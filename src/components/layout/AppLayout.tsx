@@ -72,7 +72,20 @@ export const DesktopMenuBar: React.FC = () => {
       await current.toggleMaximize();
       setIsMaximized(await current.isMaximized());
     } catch (e) {
-      console.log("Toggle maximize window (web fallback):", e);
+      console.log("Toggle maximize window error, attempting fallback:", e);
+      try {
+        const { getCurrentWindow } = await import("@tauri-apps/api/window");
+        const current = getCurrentWindow();
+        const max = await current.isMaximized();
+        if (max) {
+          await current.unmaximize();
+        } else {
+          await current.maximize();
+        }
+        setIsMaximized(!max);
+      } catch (fallbackErr) {
+        console.log("Fallback maximize error:", fallbackErr);
+      }
     }
   };
 
@@ -88,6 +101,7 @@ export const DesktopMenuBar: React.FC = () => {
     <header
       className="flex items-center justify-between h-[38px] w-full bg-[#f5f5f5] dark:bg-slate-900 select-none flex-shrink-0"
       data-tauri-drag-region
+      onDoubleClick={handleToggleMaximize}
     >
       <div
         className="px-4 text-xs font-semibold text-slate-600 dark:text-slate-300 flex items-center h-full flex-1"

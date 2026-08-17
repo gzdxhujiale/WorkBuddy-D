@@ -20,8 +20,8 @@ function asTimestamp(value: string | null | undefined): number {
 export const projectApi = {
   async loadAll(userId: string): Promise<ProjectCenterData> {
     const [projectResult, stageResult, taskResult, templateResult] = await Promise.all([
-      supabase.from("projects").select("id,name,description,status,start_date,end_date,priority,tags,owner_name,created_at,updated_at").eq("user_id", userId).order("updated_at", { ascending: false }),
-      supabase.from("project_stages").select("id,project_id,name,default_assignee_name,sort_order,template_key,start_date,end_date").eq("user_id", userId).order("sort_order"),
+      supabase.from("projects").select("id,name,description,status,start_date,end_date,priority,tags,owner_name,created_at,updated_at").eq("user_id", userId).is("deleted_at", null).order("updated_at", { ascending: false }),
+      supabase.from("project_stages").select("id,project_id,name,default_assignee_name,sort_order,template_key,start_date,end_date").eq("user_id", userId).is("deleted_at", null).order("sort_order"),
       supabase.from("time_management_tasks").select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,project_id,project_stage_id,priority,assignee_name,created_at,updated_at").eq("user_id", userId).is("deleted_at", null).not("project_id", "is", null).order("created_at", { ascending: false }),
       supabase.from("project_templates").select("id,name,description,definition,updated_at").eq("user_id", userId).is("deleted_at", null).order("updated_at", { ascending: false }),
     ]);
@@ -141,6 +141,16 @@ export const projectApi = {
   async deleteTemplate(id: string): Promise<void> {
     const { error } = await supabase.rpc("soft_delete_project_template", { p_id: id });
     throwOnPostgrestError(error, "删除项目模板");
+  },
+
+  async deleteProject(id: string): Promise<void> {
+    const { error } = await supabase.rpc("soft_delete_project", { p_id: id });
+    throwOnPostgrestError(error, "删除项目");
+  },
+
+  async deleteStage(id: string): Promise<void> {
+    const { error } = await supabase.rpc("soft_delete_project_stage", { p_id: id });
+    throwOnPostgrestError(error, "删除项目阶段");
   },
 
   saveTask(task: Task): Promise<number | undefined> {

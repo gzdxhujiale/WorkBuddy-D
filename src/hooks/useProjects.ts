@@ -46,6 +46,14 @@ export function useProjectActions() {
     await projectApi.deleteTemplate(templateId);
     await refresh();
   }, [refresh]);
+  const deleteProject = useCallback(async (projectId: string) => {
+    await projectApi.deleteProject(projectId);
+    await refresh();
+  }, [refresh]);
+  const deleteStage = useCallback(async (stageId: string) => {
+    await projectApi.deleteStage(stageId);
+    await refresh();
+  }, [refresh]);
   const saveTask = useCallback(async (task: Task) => {
     await projectApi.saveTask(task);
     await refresh();
@@ -55,5 +63,5 @@ export function useProjectActions() {
     await refresh();
   }, [refresh]);
 
-  return { saveProject, saveStage, saveTemplate, createFromTemplate, deleteTemplate, saveTask, deleteTask };
+  return { saveProject, saveStage, saveTemplate, createFromTemplate, deleteTemplate, deleteProject, deleteStage, saveTask, deleteTask };
 }

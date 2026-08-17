@@ -8,9 +8,11 @@ import {
   FolderKanban,
   Plus,
   Tag,
+  Trash2,
   Users,
 } from "lucide-react";
 import { ProjectStageBoard } from "@/components/projects/ProjectStageBoard";
+import { useConfirmDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { useProjectActions, useProjectsData } from "@/hooks/useProjects";
 import { Button } from "@/components/ui/button";
 import {
@@ -366,7 +368,8 @@ function CreateTemplateDialog({
 
 export function ProjectsPage() {
   const { data, isPending, error } = useProjectsData();
-  const { saveProject, saveStage, saveTask, saveTemplate, createFromTemplate, deleteTask } = useProjectActions();
+  const { saveProject, saveStage, saveTask, saveTemplate, createFromTemplate, deleteProject, deleteStage, deleteTask } = useProjectActions();
+  const { confirm, dialogElement } = useConfirmDialog();
   const [selectedId, setSelectedId] = useState<string>();
   const [creating, setCreating] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
@@ -512,6 +515,29 @@ export function ProjectsPage() {
                   <Check className="size-4" />
                   {selected.status === "completed" ? "已完成" : "完成项目"}
                 </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={busy}
+                  aria-label={`删除项目 ${selected.name}`}
+                  title="删除项目"
+                  onClick={() =>
+                    void confirm({
+                      title: "删除项目？",
+                      description: "项目、所有阶段及其任务都会移入已删除状态。",
+                      confirmText: "删除项目",
+                    }).then((confirmed) => {
+                      if (!confirmed) return;
+                      void run(async () => {
+                        await deleteProject(selected.id);
+                        setSelectedId(undefined);
+                      });
+                    })
+                  }
+                  className="size-9 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                >
+                  <Trash2 className="size-4" />
+                </Button>
               </div>
             </div>
 
@@ -650,6 +676,15 @@ export function ProjectsPage() {
               disabled={busy}
               onCreateStage={(name) => run(() => saveStage({ id: crypto.randomUUID(), projectId: selected.id, name, sortOrder: 0 }))}
               onSaveStage={(stage) => run(() => saveStage(stage))}
+              onDeleteStage={(stage) =>
+                confirm({
+                  title: `删除阶段“${stage.name}”？`,
+                  description: "该阶段中的任务也会移入已删除状态。",
+                  confirmText: "删除阶段",
+                }).then((confirmed) => {
+                  if (confirmed) void run(() => deleteStage(stage.id));
+                })
+              }
               onSaveTask={(task) => run(() => saveTask(task))}
               onDeleteTask={(taskId) => run(() => deleteTask(taskId))}
             />
@@ -672,6 +707,7 @@ export function ProjectsPage() {
 
       <CreateProjectDialog open={creating} templates={data?.templates ?? []} onOpenChange={setCreating} onCreate={createProject} />
       <CreateTemplateDialog open={creatingTemplate} onOpenChange={setCreatingTemplate} onCreate={saveTemplate} />
+      {dialogElement}
     </main>
   );
 }

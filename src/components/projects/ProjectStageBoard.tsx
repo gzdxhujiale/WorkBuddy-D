@@ -10,6 +10,7 @@ interface Props {
   disabled?: boolean;
   onCreateStage: (name: string) => Promise<void>;
   onSaveStage: (stage: ProjectStage) => Promise<void>;
+  onDeleteStage: (stage: ProjectStage) => Promise<void>;
   onSaveTask: (task: Task) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
 }
@@ -19,6 +20,7 @@ function StageCard({
   tasks,
   disabled,
   onSaveStage,
+  onDeleteStage,
   onSaveTask,
   onDeleteTask,
 }: Omit<Props, "stages" | "onCreateStage"> & { stage: ProjectStage; tasks: ProjectTask[] }) {
@@ -58,7 +60,7 @@ function StageCard({
           </span>
           {stage.defaultAssigneeName && (
             <span className="hidden text-xs text-muted-foreground sm:inline">
-              默认负责人：{stage.defaultAssigneeName}
+              负责人：{stage.defaultAssigneeName}
             </span>
           )}
         </button>
@@ -90,6 +92,16 @@ function StageCard({
           >
             <ChevronDown className={`size-4 transition-transform duration-200 ${expanded ? "" : "-rotate-90"}`} />
           </button>
+          <button
+            type="button"
+            disabled={disabled}
+            aria-label={`删除阶段 ${stage.name}`}
+            title="删除阶段"
+            onClick={() => void onDeleteStage(stage)}
+            className="rounded-md p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:pointer-events-none disabled:opacity-50"
+          >
+            <Trash2 className="size-4" />
+          </button>
         </div>
       </header>
       {expanded && (
@@ -104,11 +116,10 @@ function StageCard({
                 disabled={disabled}
                 onClick={() => void onSaveTask({ ...task, completed: !task.completed })}
                 aria-label={task.completed ? "标记未完成" : "标记完成"}
-                className={`grid size-5 shrink-0 place-items-center rounded-full border transition-colors ${
-                  task.completed
+                className={`grid size-5 shrink-0 place-items-center rounded-full border transition-colors ${task.completed
                     ? "border-emerald-600 bg-emerald-600 text-white"
                     : "border-muted-foreground/50 hover:border-emerald-600"
-                }`}
+                  }`}
               >
                 {task.completed && <Check className="size-3" />}
               </button>
@@ -118,9 +129,8 @@ function StageCard({
                   const title = event.target.value.trim();
                   if (title && title !== task.title) void onSaveTask({ ...task, title });
                 }}
-                className={`min-w-0 flex-1 bg-transparent text-sm outline-none ${
-                  task.completed ? "text-muted-foreground line-through" : "font-medium text-foreground"
-                }`}
+                className={`min-w-0 flex-1 bg-transparent text-sm outline-none ${task.completed ? "text-muted-foreground line-through" : "font-medium text-foreground"
+                  }`}
               />
               <select
                 value={task.priority}
@@ -183,6 +193,7 @@ export function ProjectStageBoard({
   disabled,
   onCreateStage,
   onSaveStage,
+  onDeleteStage,
   onSaveTask,
   onDeleteTask,
 }: Props) {
@@ -224,6 +235,7 @@ export function ProjectStageBoard({
             tasks={tasks.filter((task) => task.projectStageId === stage.id)}
             disabled={disabled}
             onSaveStage={onSaveStage}
+            onDeleteStage={onDeleteStage}
             onSaveTask={onSaveTask}
             onDeleteTask={onDeleteTask}
           />
