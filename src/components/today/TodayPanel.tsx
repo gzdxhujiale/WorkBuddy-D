@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronRight,
+  ChevronDown,
   Check,
+  Calendar,
 } from "lucide-react";
 import { useTimeManagementData, useTaskActions } from "@/hooks/useTimeManagement";
 import { Task, QuadrantType } from "@/types/timeManagement";
@@ -12,9 +14,9 @@ import { useDailyReviewData } from "@/hooks/useDailyReview";
 import { DailyReviewItem } from "@/types/dailyReview";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { openQuickEditWindow, prewarmQuickEditWindow } from "@/services/quickEditWindow";
-import { Badge } from "@/components/ui/badge";
 import { taskIntersectsDay, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
 import { ProjectTimeline } from "./ProjectTimeline";
+import { cn } from "@/lib/utils";
 
 // ============================================================
 // Constants & Pure Selectors
@@ -30,12 +32,39 @@ const MONTH_LABELS = [
   "七月", "八月", "九月", "十月", "十一月", "十二月"
 ] as const;
 
-const QUADRANT_CHIPS: Record<QuadrantType, { label: string; variant: "q1" | "q2" | "q3" | "q4" }> = {
-  Q1: { label: "重要·紧急", variant: "q1" },
-  Q2: { label: "重要·不紧急", variant: "q2" },
-  Q3: { label: "紧急·不重要", variant: "q3" },
-  Q4: { label: "常规", variant: "q4" },
-};
+interface QuadrantConfig {
+  type: QuadrantType;
+  title: string;
+  dotColor: string;
+  badgeBg: string;
+}
+
+const QUADRANTS: QuadrantConfig[] = [
+  {
+    type: "Q1",
+    title: "重要且紧急",
+    dotColor: "bg-red-500",
+    badgeBg: "bg-red-50 text-red-600 border-red-200/80 dark:bg-red-950/40 dark:text-red-400 dark:border-red-800/60",
+  },
+  {
+    type: "Q2",
+    title: "重要不紧急",
+    dotColor: "bg-emerald-500",
+    badgeBg: "bg-emerald-50 text-emerald-600 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/60",
+  },
+  {
+    type: "Q3",
+    title: "紧急不重要",
+    dotColor: "bg-amber-500",
+    badgeBg: "bg-amber-50 text-amber-600 border-amber-200/80 dark:bg-amber-950/40 dark:text-amber-400 dark:border-amber-800/60",
+  },
+  {
+    type: "Q4",
+    title: "不重要不紧急",
+    dotColor: "bg-slate-400 dark:bg-slate-500",
+    badgeBg: "bg-slate-100 text-slate-600 border-slate-200/80 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700",
+  },
+];
 
 function dueLabel(scheduledEndAt: number, now: number): { text: string; overdue: boolean } {
   if (scheduledEndAt < now) {
@@ -140,7 +169,20 @@ export const TodayPanel: React.FC = () => {
   const { data: reviewsData } = useDailyReviewData();
   const reviews = reviewsData ?? EMPTY_REVIEWS;
 
-  const [showDone, setShowDone] = useState(false);
+  const [collapsedQuadrants, setCollapsedQuadrants] = useState<Record<QuadrantType, boolean>>({
+    Q1: false,
+    Q2: false,
+    Q3: false,
+    Q4: false,
+  });
+
+  const toggleQuadrantCollapse = (quadrant: QuadrantType) => {
+    setCollapsedQuadrants((prev) => ({
+      ...prev,
+      [quadrant]: !prev[quadrant],
+    }));
+  };
+
   const [meterReady, setMeterReady] = useState(false);
 
   useEffect(() => {
@@ -174,7 +216,32 @@ export const TodayPanel: React.FC = () => {
     [tasks, today]
   );
   const pendingTasks = useMemo(() => dueTasks.filter((t) => !t.completed), [dueTasks]);
-  const doneTasks = useMemo(() => dueTasks.filter((t) => t.completed), [dueTasks]);
+
+  // Group due tasks by quadrant with uncompleted first, then completed
+  const tasksByQuadrant = useMemo(() => {
+    const map: Record<QuadrantType, Task[]> = {
+      Q1: [],
+      Q2: [],
+      Q3: [],
+      Q4: [],
+    };
+    for (const task of dueTasks) {
+      if (map[task.quadrant]) {
+        map[task.quadrant].push(task);
+      } else {
+        map.Q2.push(task);
+      }
+    }
+    for (const q of Object.keys(map) as QuadrantType[]) {
+      map[q].sort((a, b) => {
+        if (a.completed !== b.completed) {
+          return a.completed ? 1 : -1;
+        }
+        return (a.scheduledEndAt ?? Number.MAX_SAFE_INTEGER) - (b.scheduledEndAt ?? Number.MAX_SAFE_INTEGER);
+      });
+    }
+    return map;
+  }, [dueTasks]);
 
   // Today habits
   const todayHabits = useMemo(() => getHabitsForDate(habits, today), [habits, today]);
@@ -217,54 +284,111 @@ export const TodayPanel: React.FC = () => {
   };
 
   const renderTaskItem = (task: Task) => {
-    const chip = QUADRANT_CHIPS[task.quadrant];
     const due = !task.completed && task.scheduledEndAt ? dueLabel(task.scheduledEndAt, now) : null;
 
     return (
       <div
         key={task.id}
         onClick={(e) => openTaskQuickEdit(task, e.currentTarget)}
-        className={`flex items-center gap-3 px-3.5 py-3 rounded-xl bg-card border border-border hover:border-blue-500/40 hover:shadow-xs transition-all cursor-pointer group select-none ${
-          task.completed ? "opacity-60 bg-muted/30" : ""
-        }`}
+        className={cn(
+          "flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer group select-none",
+          task.completed && "opacity-75 bg-muted/15"
+        )}
       >
-        {/* Checkbox */}
-        <button
-          type="button"
-          role="checkbox"
-          aria-checked={task.completed}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleToggleTask(task);
-          }}
-          className={`size-4.5 rounded-md border-1.5 flex items-center justify-center shrink-0 transition-colors cursor-pointer ${
-            task.completed
-              ? "bg-blue-600 border-blue-600 text-white"
-              : "border-border hover:border-blue-500 bg-background"
-          }`}
-        >
-          {task.completed && <Check size={12} className="stroke-[3]" />}
-        </button>
-
-        {/* Task Title */}
-        <span className={`flex-1 min-w-0 text-sm text-foreground truncate ${task.completed ? "line-through text-muted-foreground" : ""}`}>
-          {task.title}
-        </span>
-
-        {/* Quadrant Badge Chip */}
-        <Badge variant={chip.variant} className="shrink-0">
-          {chip.label}
-        </Badge>
-
-        {/* Due Time */}
-        {due && (
-          <span
-            className={`text-xs tabular-nums shrink-0 ${
-              due.overdue ? "text-red-500 font-semibold" : "text-muted-foreground"
-            }`}
+        {/* Left Side: Circular Checkbox & Task Title */}
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <button
+            type="button"
+            role="checkbox"
+            aria-checked={task.completed}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleTask(task);
+            }}
+            className={cn(
+              "size-5 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer",
+              task.completed
+                ? "bg-emerald-600 dark:bg-emerald-500 text-white shadow-2xs"
+                : "border-2 border-slate-300 dark:border-slate-600 hover:border-emerald-500 bg-transparent"
+            )}
           >
-            {due.text}
+            {task.completed && <Check size={12} className="stroke-[3]" />}
+          </button>
+
+          <span
+            className={cn(
+              "text-sm font-medium text-foreground truncate transition-colors",
+              task.completed && "line-through text-muted-foreground"
+            )}
+          >
+            {task.title}
           </span>
+        </div>
+
+        {/* Right Side: Due Time & Calendar Icon */}
+        <div className="flex items-center gap-2 shrink-0">
+          {due && (
+            <span
+              className={cn(
+                "text-xs tabular-nums",
+                due.overdue ? "text-red-500 font-semibold" : "text-muted-foreground"
+              )}
+            >
+              {due.text}
+            </span>
+          )}
+          <Calendar
+            size={15}
+            className="text-muted-foreground/60 group-hover:text-muted-foreground transition-colors shrink-0"
+          />
+        </div>
+      </div>
+    );
+  };
+
+  const renderQuadrantSection = (q: QuadrantConfig) => {
+    const quadrantTasks = tasksByQuadrant[q.type];
+    if (quadrantTasks.length === 0) return null;
+
+    const isCollapsed = collapsedQuadrants[q.type];
+
+    return (
+      <div
+        key={q.type}
+        className="bg-card border border-border rounded-xl shadow-xs overflow-hidden"
+      >
+        {/* Quadrant Card Header */}
+        <div
+          onClick={() => toggleQuadrantCollapse(q.type)}
+          className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors select-none"
+        >
+          <div className="flex items-center gap-2.5">
+            <span className={cn("size-2.5 rounded-full shrink-0", q.dotColor)} />
+            <span className="text-sm font-bold text-foreground">{q.title}</span>
+            <span
+              className={cn(
+                "px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums border",
+                q.badgeBg
+              )}
+            >
+              {quadrantTasks.length}
+            </span>
+          </div>
+
+          <ChevronDown
+            size={16}
+            className={cn(
+              "text-muted-foreground transition-transform duration-200",
+              isCollapsed ? "-rotate-90" : "rotate-0"
+            )}
+          />
+        </div>
+
+        {/* Quadrant Card Items List */}
+        {!isCollapsed && (
+          <div className="divide-y divide-border/60 border-t border-border/60">
+            {quadrantTasks.map(renderTaskItem)}
+          </div>
         )}
       </div>
     );
@@ -335,7 +459,7 @@ export const TodayPanel: React.FC = () => {
       </header>
 
       {/* 主体: 主列表 + 右侧轻栏 */}
-      {remaining === 0 ? (
+      {remaining === 0 && dueTasks.length === 0 && todayHabits.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3.5 text-center text-muted-foreground py-6 rounded-2xl bg-card border border-border/70">
           <div className="text-4xl leading-none">🍃</div>
           <h2 className="text-base font-bold text-foreground">今日已清空</h2>
@@ -346,32 +470,20 @@ export const TodayPanel: React.FC = () => {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px] gap-6">
-          {/* 左栏: 任务主列表 */}
-          <div className="min-w-0 pr-1">
-            <div className="flex items-center gap-2 text-xs font-bold text-foreground mb-2.5">
+          {/* 左栏: 任务主列表 (按象限分组) */}
+          <div className="min-w-0 pr-1 space-y-3.5">
+            <div className="flex items-center gap-2 text-xs font-bold text-foreground mb-1">
               <span className="size-2 rounded-2xs bg-blue-500 shrink-0" />
-              今日到期 <span className="font-semibold text-muted-foreground tabular-nums">{pendingTasks.length} 项</span>
+              今日到期 <span className="font-semibold text-muted-foreground tabular-nums">{dueTasks.length} 项</span>
             </div>
 
-            {pendingTasks.length === 0 ? (
-              <div className="py-6 text-center text-xs text-muted-foreground bg-card/40 rounded-xl border border-border/60">今天没有待办的到期任务</div>
+            {dueTasks.length === 0 ? (
+              <div className="py-8 text-center text-xs text-muted-foreground bg-card/40 rounded-xl border border-border/60">
+                今天没有到期任务
+              </div>
             ) : (
-              <div className="flex flex-col gap-2">{pendingTasks.map(renderTaskItem)}</div>
-            )}
-
-            {/* 已完成折叠区 */}
-            {doneTasks.length > 0 && (
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={() => setShowDone(!showDone)}
-                  className="inline-flex items-center gap-1.5 my-3 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
-                >
-                  <span className={`text-[9px] transition-transform ${showDone ? "rotate-90" : ""}`}>▶</span>
-                  已完成 {doneTasks.length} 项
-                </button>
-
-                {showDone && <div className="flex flex-col gap-2">{doneTasks.map(renderTaskItem)}</div>}
+              <div className="flex flex-col gap-3.5">
+                {QUADRANTS.map(renderQuadrantSection)}
               </div>
             )}
           </div>
