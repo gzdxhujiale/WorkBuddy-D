@@ -15,6 +15,7 @@ import { ProjectStageBoard } from "@/components/projects/ProjectStageBoard";
 import { useConfirmDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { useProjectActions, useProjectsData } from "@/hooks/useProjects";
 import { Button } from "@/components/ui/button";
+import { DateRangePicker } from "@/components/ui/date-picker";
 import {
   Dialog,
   DialogContent,
@@ -154,26 +155,18 @@ function CreateProjectDialog({
               className="min-h-16 rounded-lg border border-border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
             />
           </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            开始日期
-            <input
-              type="date"
-              value={startDate}
-              max={endDate || undefined}
-              onChange={(event) => setStartDate(event.target.value)}
-              className="h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none"
+          <div className="grid gap-1.5 text-sm font-medium sm:col-span-2">
+            <span>项目周期</span>
+            <DateRangePicker
+              value={startDate || endDate ? [startDate, endDate] : undefined}
+              placeholder={["开始日期", "结束日期"]}
+              onChange={(dateStrings) => {
+                const [start, end] = dateStrings;
+                setStartDate(start || "");
+                setEndDate(end || "");
+              }}
             />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            结束日期
-            <input
-              type="date"
-              value={endDate}
-              min={startDate || undefined}
-              onChange={(event) => setEndDate(event.target.value)}
-              className="h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none"
-            />
-          </label>
+          </div>
           <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
             负责人
             <input
@@ -601,25 +594,27 @@ export function ProjectsPage() {
               <div className="flex items-center gap-2.5">
                 <Calendar className="size-4 text-muted-foreground shrink-0" />
                 <span className="text-xs text-muted-foreground shrink-0">周期</span>
-                <div className="flex items-center gap-1 text-xs">
-                  <input
-                    type="date"
-                    value={selected.startDate ?? ""}
-                    max={selected.endDate}
-                    disabled={busy}
-                    onChange={(event) => void run(() => saveProject({ ...selected, startDate: event.target.value || undefined }))}
-                    className="h-7 rounded-md border border-border/80 bg-background px-1.5 text-xs text-foreground outline-none"
-                  />
-                  <span className="text-muted-foreground">至</span>
-                  <input
-                    type="date"
-                    value={selected.endDate ?? ""}
-                    min={selected.startDate}
-                    disabled={busy}
-                    onChange={(event) => void run(() => saveProject({ ...selected, endDate: event.target.value || undefined }))}
-                    className="h-7 rounded-md border border-border/80 bg-background px-1.5 text-xs text-foreground outline-none"
-                  />
-                </div>
+                <DateRangePicker
+                  size="small"
+                  disabled={busy}
+                  value={
+                    selected.startDate || selected.endDate
+                      ? [selected.startDate ?? "", selected.endDate ?? ""]
+                      : undefined
+                  }
+                  placeholder={["开始日期", "结束日期"]}
+                  onChange={(dateStrings) => {
+                    const [start, end] = dateStrings;
+                    void run(() =>
+                      saveProject({
+                        ...selected,
+                        startDate: start || undefined,
+                        endDate: end || undefined,
+                      })
+                    );
+                  }}
+                  className="h-7 text-xs flex-1 max-w-[240px]"
+                />
               </div>
 
               {/* Tags */}

@@ -36,6 +36,7 @@ import {
 } from "@/types/timeManagement";
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { ReactjsTiptapEditor } from "@/components/ui/reactjs-tiptap-editor";
+import { DateRangePicker } from "@/components/ui/date-picker";
 
 // ==========================================
 // TaskQuickEdit — Tailwind v4 规范精简 3-Layer 快捷编辑浮层
@@ -424,6 +425,9 @@ export const TaskQuickEditPopover = memo(
           // Treat them as part of this popover so selecting a command does not close it.
           if (isRichTextFloatingMenuTarget(t)) return;
 
+          // DatePicker / DateRangePicker portals are mounted directly under document.body
+          if (t instanceof Element && t.closest?.("[class*='fixed z-[2000]']")) return;
+
           if (timePopRef.current?.contains(t) || remindPopRef.current?.contains(t)) return;
           if (third) {
             setThird(null);
@@ -650,166 +654,148 @@ export const TaskQuickEditPopover = memo(
 
               {scheduleMode === "point" ? (
                 <>
-              {/* 快捷日期图标 */}
-              <div className="flex justify-around mb-3">
-                <button
-                  type="button"
-                  title="今天"
-                  aria-label="今天"
-                  className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
-                  onClick={() => quickPick(0)}
-                >
-                  <Sun size={20} />
-                </button>
-                <button
-                  type="button"
-                  title="明天"
-                  aria-label="明天"
-                  className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
-                  onClick={() => quickPick(1)}
-                >
-                  <Sunrise size={20} />
-                </button>
-                <button
-                  type="button"
-                  title="下周（+7 天）"
-                  aria-label="下周，加 7 天"
-                  className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
-                  onClick={() => quickPick(7)}
-                >
-                  <CalendarPlus size={20} />
-                </button>
-                <button
-                  type="button"
-                  title="今晚 20:00"
-                  aria-label="今晚"
-                  className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
-                  onClick={() => quickPick(0, "20:00")}
-                >
-                  <Moon size={20} />
-                </button>
-              </div>
+                  {/* 快捷日期图标 */}
+                  <div className="flex justify-around mb-3">
+                    <button
+                      type="button"
+                      title="今天"
+                      aria-label="今天"
+                      className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
+                      onClick={() => quickPick(0)}
+                    >
+                      <Sun size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      title="明天"
+                      aria-label="明天"
+                      className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
+                      onClick={() => quickPick(1)}
+                    >
+                      <Sunrise size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      title="下周（+7 天）"
+                      aria-label="下周，加 7 天"
+                      className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
+                      onClick={() => quickPick(7)}
+                    >
+                      <CalendarPlus size={20} />
+                    </button>
+                    <button
+                      type="button"
+                      title="今晚 20:00"
+                      aria-label="今晚"
+                      className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
+                      onClick={() => quickPick(0, "20:00")}
+                    >
+                      <Moon size={20} />
+                    </button>
+                  </div>
 
-              {/* 年月导航 */}
-              <div className="flex items-center text-sm font-bold text-slate-900 dark:text-slate-100 px-1 py-1 mb-1">
-                {viewYM.y}年{viewYM.m + 1}月
-                <span className="ml-auto flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    aria-label="上个月"
-                    className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
-                    onClick={() => shiftMonth(-1)}
-                  >
-                    <ChevronLeft size={14} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="回到今天"
-                    className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
-                    onClick={() => setViewYM({ y: dayjs().year(), m: dayjs().month() })}
-                  >
-                    <Circle size={7} />
-                  </button>
-                  <button
-                    type="button"
-                    aria-label="下个月"
-                    className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
-                    onClick={() => shiftMonth(1)}
-                  >
-                    <ChevronRight size={14} />
-                  </button>
-                </span>
-              </div>
+                  {/* 年月导航 */}
+                  <div className="flex items-center text-sm font-bold text-slate-900 dark:text-slate-100 px-1 py-1 mb-1">
+                    {viewYM.y}年{viewYM.m + 1}月
+                    <span className="ml-auto flex items-center gap-0.5">
+                      <button
+                        type="button"
+                        aria-label="上个月"
+                        className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                        onClick={() => shiftMonth(-1)}
+                      >
+                        <ChevronLeft size={14} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="回到今天"
+                        className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                        onClick={() => setViewYM({ y: dayjs().year(), m: dayjs().month() })}
+                      >
+                        <Circle size={7} />
+                      </button>
+                      <button
+                        type="button"
+                        aria-label="下个月"
+                        className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                        onClick={() => shiftMonth(1)}
+                      >
+                        <ChevronRight size={14} />
+                      </button>
+                    </span>
+                  </div>
 
-              {/* 日历网格 */}
-              <div className="grid grid-cols-7 gap-y-0.5 text-center">
-                {["一", "二", "三", "四", "五", "六", "日"].map((w) => (
-                  <span key={w} className="text-xs text-slate-400 dark:text-slate-500 py-1">
-                    {w}
-                  </span>
-                ))}
-                {calendarCells.map((cell) => (
-                  <button
-                    key={cell.ymd}
-                    type="button"
-                    className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs tabular-nums transition-colors cursor-pointer ${
-                      cell.dim
-                        ? "text-slate-300 dark:text-slate-600 opacity-60"
-                        : cell.ymd === dateSel
-                        ? "bg-blue-600 text-white font-bold"
-                        : cell.ymd === todayStr
-                        ? "ring-1 ring-blue-500/50 text-slate-900 dark:text-slate-100 font-semibold"
-                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                    }`}
-                    onClick={() => {
-                      if (cell.dim) {
-                        setViewYM({ y: dayjs(cell.ymd).year(), m: dayjs(cell.ymd).month() });
-                      }
-                      commitDeadline(cell.ymd, timeSel);
-                    }}
-                  >
-                    {cell.label}
-                  </button>
-                ))}
-              </div>
+                  {/* 日历网格 */}
+                  <div className="grid grid-cols-7 gap-y-0.5 text-center">
+                    {["一", "二", "三", "四", "五", "六", "日"].map((w) => (
+                      <span key={w} className="text-xs text-slate-400 dark:text-slate-500 py-1">
+                        {w}
+                      </span>
+                    ))}
+                    {calendarCells.map((cell) => (
+                      <button
+                        key={cell.ymd}
+                        type="button"
+                        className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs tabular-nums transition-colors cursor-pointer ${
+                          cell.dim
+                            ? "text-slate-300 dark:text-slate-600 opacity-60"
+                            : cell.ymd === dateSel
+                            ? "bg-blue-600 text-white font-bold"
+                            : cell.ymd === todayStr
+                            ? "ring-1 ring-blue-500/50 text-slate-900 dark:text-slate-100 font-semibold"
+                            : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
+                        onClick={() => {
+                          if (cell.dim) {
+                            setViewYM({ y: dayjs(cell.ymd).year(), m: dayjs(cell.ymd).month() });
+                          }
+                          commitDeadline(cell.ymd, timeSel);
+                        }}
+                      >
+                        {cell.label}
+                      </button>
+                    ))}
+                  </div>
                 </>
               ) : (
-                <div className="flex flex-col gap-3 mb-3">
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 flex flex-col gap-1.5">
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">开始</span>
-                      <input
-                        type="date"
-                        value={rangeStartDate}
-                        className="w-full bg-transparent text-xs font-semibold outline-none text-slate-800 dark:text-slate-100"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setRangeStartDate(value);
-                          commitRange(value);
-                        }}
-                      />
-                      {!rangeAllDay && (
-                        <input
-                          type="time"
-                          value={rangeStartTime}
-                          className="w-full bg-transparent text-xs tabular-nums outline-none text-blue-600 dark:text-blue-400"
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setRangeStartTime(value);
-                            commitRange(rangeStartDate, value);
-                          }}
-                        />
-                      )}
-                    </label>
-                    <label className="rounded-xl border border-slate-200 dark:border-slate-700 p-2.5 flex flex-col gap-1.5">
-                      <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">结束</span>
-                      <input
-                        type="date"
-                        value={rangeEndDate}
-                        min={rangeStartDate}
-                        className="w-full bg-transparent text-xs font-semibold outline-none text-slate-800 dark:text-slate-100"
-                        onChange={(e) => {
-                          const value = e.target.value;
-                          setRangeEndDate(value);
-                          commitRange(rangeStartDate, rangeStartTime, value);
-                        }}
-                      />
-                      {!rangeAllDay && (
-                        <input
-                          type="time"
-                          value={rangeEndTime}
-                          className="w-full bg-transparent text-xs tabular-nums outline-none text-blue-600 dark:text-blue-400"
-                          onChange={(e) => {
-                            const value = e.target.value;
-                            setRangeEndTime(value);
-                            commitRange(rangeStartDate, rangeStartTime, rangeEndDate, value);
-                          }}
-                        />
-                      )}
-                    </label>
+                <div className="flex flex-col gap-2.5 mb-3">
+                  <div>
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">
+                      起止时间
+                    </span>
+                    <DateRangePicker
+                      size="small"
+                      value={[
+                        rangeStartDate ? (rangeAllDay ? rangeStartDate : `${rangeStartDate} ${rangeStartTime || "00:00"}:00`) : null,
+                        rangeEndDate ? (rangeAllDay ? rangeEndDate : `${rangeEndDate} ${rangeEndTime || "00:00"}:00`) : null,
+                      ]}
+                      placeholder={["开始时间", "结束时间"]}
+                      onChange={(dates, dayjsObjs) => {
+                        const [sDay, eDay] = dayjsObjs;
+                        if (sDay && eDay) {
+                          const nextStart = sDay.format("YYYY-MM-DD");
+                          const nextStartTime = sDay.format("HH:mm");
+                          const nextEnd = eDay.format("YYYY-MM-DD");
+                          const nextEndTime = eDay.format("HH:mm");
+                          setRangeStartDate(nextStart);
+                          setRangeStartTime(nextStartTime);
+                          setRangeEndDate(nextEnd);
+                          setRangeEndTime(nextEndTime);
+                          commitRange(nextStart, nextStartTime, nextEnd, nextEndTime, rangeAllDay);
+                        } else {
+                          const [s, e] = dates;
+                          const nextStart = s ? s.slice(0, 10) : rangeStartDate;
+                          const nextEnd = e ? e.slice(0, 10) : rangeEndDate;
+                          setRangeStartDate(nextStart);
+                          setRangeEndDate(nextEnd);
+                          commitRange(nextStart, rangeStartTime, nextEnd, rangeEndTime, rangeAllDay);
+                        }
+                      }}
+                    />
                   </div>
-                  <div className="flex items-center justify-between px-2 py-1 text-xs text-slate-600 dark:text-slate-300">
-                    <span>全天</span>
+
+                  <div className="flex items-center justify-between px-1 py-1 text-xs text-slate-600 dark:text-slate-300">
+                    <span>全天任务</span>
                     <button
                       type="button"
                       role="switch"

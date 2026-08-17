@@ -141,3 +141,15 @@ html.tqe-window #root {
 html.tqe-window body > div:has(> [class*="richtext-max-h-"]) {
   z-index: 1080 !important;
 }
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+
+
+

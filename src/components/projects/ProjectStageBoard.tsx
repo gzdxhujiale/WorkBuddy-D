@@ -1,6 +1,8 @@
 import { useState } from "react";
+import dayjs from "dayjs";
 import { Check, ChevronDown, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DatePicker, DateRangePicker } from "@/components/ui/date-picker";
 import type { ProjectStage, ProjectTask } from "@/types/projects";
 import type { Task } from "@/types/timeManagement";
 
@@ -64,26 +66,22 @@ function StageCard({
             </span>
           )}
         </button>
-        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <input
-            type="date"
-            value={stage.startDate ?? ""}
-            max={stage.endDate}
-            disabled={disabled}
-            aria-label={`${stage.name}开始日期`}
-            onChange={(event) => void onSaveStage({ ...stage, startDate: event.target.value || undefined })}
-            className="h-7 rounded border border-border bg-background px-1.5 text-xs outline-none"
-          />
-          <span>至</span>
-          <input
-            type="date"
-            value={stage.endDate ?? ""}
-            min={stage.startDate}
-            disabled={disabled}
-            aria-label={`${stage.name}结束日期`}
-            onChange={(event) => void onSaveStage({ ...stage, endDate: event.target.value || undefined })}
-            className="h-7 rounded border border-border bg-background px-1.5 text-xs outline-none"
-          />
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="w-44 sm:w-48">
+            <DateRangePicker
+              size="mini"
+              value={[stage.startDate ?? null, stage.endDate ?? null]}
+              disabled={disabled}
+              placeholder={["阶段开始", "阶段结束"]}
+              onChange={(dates) => {
+                void onSaveStage({
+                  ...stage,
+                  startDate: dates[0] || undefined,
+                  endDate: dates[1] || undefined,
+                });
+              }}
+            />
+          </div>
           <button
             type="button"
             aria-label={expanded ? "收起阶段" : "展开阶段"}
@@ -143,20 +141,23 @@ function StageCard({
                 <option value="high">高</option>
                 <option value="urgent">紧急</option>
               </select>
-              <input
-                type="date"
-                value={task.scheduledEndAt ? new Date(task.scheduledEndAt).toISOString().slice(0, 10) : ""}
-                disabled={disabled}
-                onChange={(event) =>
-                  void onSaveTask({
-                    ...task,
-                    scheduleMode: event.target.value ? "point" : undefined,
-                    scheduledStartAt: undefined,
-                    scheduledEndAt: event.target.value ? new Date(`${event.target.value}T23:59:59`).getTime() : undefined,
-                  })
-                }
-                className="h-7 shrink-0 rounded border border-transparent bg-transparent px-1 text-xs outline-none hover:border-border"
-              />
+              <div className="w-28 sm:w-36 shrink-0">
+                <DatePicker
+                  size="mini"
+                  placeholder="截止日期"
+                  disabled={disabled}
+                  value={task.scheduledEndAt ?? null}
+                  onChange={(dateStr) => {
+                    const parsed = dateStr ? dayjs(dateStr) : null;
+                    void onSaveTask({
+                      ...task,
+                      scheduleMode: dateStr ? "point" : undefined,
+                      scheduledStartAt: undefined,
+                      scheduledEndAt: parsed && parsed.isValid() ? parsed.valueOf() : undefined,
+                    });
+                  }}
+                />
+              </div>
               <button
                 type="button"
                 disabled={disabled}
