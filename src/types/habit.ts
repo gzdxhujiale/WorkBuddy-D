@@ -4,7 +4,6 @@ export interface Habit {
   id: string;
   name: string;
   frequencyType: "daily" | "weekly_days" | "custom";
-  frequencyDays?: number[] | null; // [1, 3, 5] for Mon, Wed, Fri
   goal?: string;
   startDate?: string;
   duration?: string;

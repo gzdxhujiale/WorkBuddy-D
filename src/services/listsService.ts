@@ -45,7 +45,7 @@ export type SavedNote = { updatedAt: number; sortOrder: number };
 async function remoteUpsertFolder(folder: Folder): Promise<void> {
   const { error } = await supabase.rpc("save_knowledge_base", {
     p_id: folder.id, p_name: folder.name,
-    p_is_pinned: false, p_sort_order: folder.sortOrder ?? 0,
+    p_sort_order: folder.sortOrder ?? 0,
   });
   throwOnPostgrestError(error, "\u4fdd\u5b58\u77e5\u8bc6\u5e93");
 }
@@ -65,9 +65,8 @@ async function remoteReorderFolders(items: Array<[string, number]>): Promise<voi
 async function remoteUpsertList(list: List): Promise<number> {
   const { data, error } = await supabase.rpc("save_knowledge_base_folder", {
     p_id: list.id, p_knowledge_base_id: list.folderId ?? null,
-    p_name: list.name, p_icon: "BookOpen",
-    p_color: "#6366f1", p_view_type: "list",
-    p_is_pinned: false, p_sort_order: list.sortOrder ?? 0,
+    p_name: list.name,
+    p_sort_order: list.sortOrder ?? 0,
   });
   throwOnPostgrestError(error, "\u4fdd\u5b58\u6e05\u5355");
   return Number(data);
@@ -130,7 +129,7 @@ async function remoteSaveNote(note: Note): Promise<SavedNote> {
   const { data, error } = await supabase.rpc("save_note", {
     p_id: note.id, p_folder_id: note.listId, p_group_id: note.groupId ?? null,
     p_title: note.title, p_content: note.content,
-    p_is_pinned: false, p_sort_order: note.sortOrder ?? 0,
+    p_sort_order: note.sortOrder ?? 0,
     p_expected_updated_at: note.baseUpdatedAt ? new Date(note.baseUpdatedAt).toISOString() : null,
   });
   throwOnPostgrestError(error, "\u4fdd\u5b58\u7b14\u8bb0");
@@ -142,7 +141,7 @@ async function remotePatchNote(patch: ListNotePatch): Promise<number> {
   const { data, error } = await supabase.rpc("patch_note", {
     p_id: patch.id,
     p_expected_updated_at: patch.baseUpdatedAt ? new Date(patch.baseUpdatedAt).toISOString() : null,
-    p_title: patch.title, p_content: patch.content, p_is_pinned: false,
+    p_title: patch.title, p_content: patch.content,
     p_sort_order: patch.sortOrder, p_folder_id: patch.listId, p_group_id: patch.groupId,
     p_set_group: patch.groupId !== undefined,
   });

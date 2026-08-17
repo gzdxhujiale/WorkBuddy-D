@@ -70,7 +70,6 @@ export interface HabitRow {
   user_id: string;
   name: string;
   frequency_type: 'daily' | 'weekly_days' | 'custom';
-  frequency_days: number[] | null;
   goal: string | null;
   start_date: string | null;
   duration: string | null;
@@ -122,13 +121,10 @@ export type UpdateHabitCheckin = Partial<InsertHabitCheckin>;
 
 // Lists & Notes Module Database Types
 
-export type ListViewType = 'list' | 'kanban' | 'grid';
-
 export interface ListFolderRow {
   id: string;
   user_id: string;
   name: string;
-  is_pinned: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -153,10 +149,6 @@ export interface ListListRow {
   user_id: string;
   knowledge_base_id: string | null;
   name: string;
-  icon: string;
-  color: string;
-  view_type: ListViewType;
-  is_pinned: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -207,7 +199,6 @@ export interface ListNoteRow {
   group_id: string | null;
   title: string;
   content: string;
-  is_pinned: boolean;
   sort_order: number;
   created_at: string;
   updated_at: string;

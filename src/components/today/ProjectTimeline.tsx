@@ -242,7 +242,7 @@ export const ProjectTimeline: React.FC = () => {
   }, [currentProject, projectStages, tasks, todayDate]);
 
   return (
-    <section className="w-full rounded-2xl border border-border/80 bg-card/90 dark:bg-[#12141a] p-5 text-foreground shadow-sm transition-all">
+    <section className="w-full rounded-none border border-border/80 bg-card/90 dark:bg-[#12141a] p-5 text-foreground shadow-sm transition-all">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-border/70">
         {/* Left: Indicator + Title + Date Range Picker */}
@@ -253,7 +253,7 @@ export const ProjectTimeline: React.FC = () => {
           </div>
 
           {/* Date Range & Arrow Controls */}
-          <div className="flex items-center gap-1.5 rounded-xl border border-border/80 bg-muted/30 px-2.5 py-1 text-xs">
+          <div className="flex items-center gap-1.5 rounded-none border border-border/80 bg-muted/30 px-2.5 py-1 text-xs">
             <Calendar className="size-3.5 text-emerald-500" />
             <span className="font-medium tabular-nums text-foreground">
               {formatRangeLabel(viewMode, windowStartDate, windowEndDate)}
@@ -264,7 +264,7 @@ export const ProjectTimeline: React.FC = () => {
                 onClick={handlePrev}
                 aria-label={`向前切换${VIEW_MODE_LABELS[viewMode]}`}
                 title={`向前切换${VIEW_MODE_LABELS[viewMode]}`}
-                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                className="p-1 rounded-none hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <ChevronLeft className="size-3.5" />
               </button>
@@ -273,7 +273,7 @@ export const ProjectTimeline: React.FC = () => {
                 onClick={handleNext}
                 aria-label={`向后切换${VIEW_MODE_LABELS[viewMode]}`}
                 title={`向后切换${VIEW_MODE_LABELS[viewMode]}`}
-                className="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                className="p-1 rounded-none hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 <ChevronRight className="size-3.5" />
               </button>
@@ -289,7 +289,7 @@ export const ProjectTimeline: React.FC = () => {
                   setProjectDropdownOpen(!projectDropdownOpen);
                   setViewDropdownOpen(false);
                 }}
-                className="flex items-center gap-1.5 rounded-xl border border-border/70 bg-muted/20 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 rounded-none border border-border/70 bg-muted/20 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer"
               >
                 <FolderKanban className="size-3.5 text-sky-500" />
                 <span className="max-w-[120px] truncate">{currentProject?.name ?? "选择项目"}</span>
@@ -298,7 +298,7 @@ export const ProjectTimeline: React.FC = () => {
 
               {projectDropdownOpen && (
                 <div
-                  className="absolute left-0 top-full mt-1.5 z-50 min-w-44 rounded-xl border border-border bg-popover p-1 shadow-lg animate-in fade-in zoom-in-95"
+                  className="absolute left-0 top-full mt-1.5 z-50 min-w-44 rounded-none border border-border bg-popover p-1 shadow-lg animate-in fade-in zoom-in-95"
                   onMouseLeave={() => setProjectDropdownOpen(false)}
                 >
                   {projects.map((proj) => (
@@ -309,7 +309,7 @@ export const ProjectTimeline: React.FC = () => {
                         setSelectedProjectId(proj.id);
                         setProjectDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg transition-colors flex items-center justify-between cursor-pointer ${
+                      className={`w-full text-left px-2.5 py-1.5 text-xs rounded-none transition-colors flex items-center justify-between cursor-pointer ${
                         currentProject?.id === proj.id
                           ? "bg-accent font-semibold text-foreground"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -334,7 +334,7 @@ export const ProjectTimeline: React.FC = () => {
                 setViewDropdownOpen(!viewDropdownOpen);
                 setProjectDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 rounded-xl border border-border/80 bg-muted/30 px-3 py-1 text-xs font-medium text-foreground hover:bg-accent transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 rounded-none border border-border/80 bg-muted/30 px-3 py-1 text-xs font-medium text-foreground hover:bg-accent transition-colors cursor-pointer"
             >
               <span>{VIEW_MODE_LABELS[viewMode]}</span>
               <ChevronDown className="size-3 text-muted-foreground" />
@@ -342,7 +342,7 @@ export const ProjectTimeline: React.FC = () => {
 
             {viewDropdownOpen && (
               <div
-                className="absolute right-0 top-full mt-1.5 z-50 min-w-28 rounded-xl border border-border bg-popover p-1 shadow-lg animate-in fade-in zoom-in-95"
+                className="absolute right-0 top-full mt-1.5 z-50 min-w-28 rounded-none border border-border bg-popover p-1 shadow-lg animate-in fade-in zoom-in-95"
                 onMouseLeave={() => setViewDropdownOpen(false)}
               >
                 {(["week", "biweekly", "month"] as TimelineViewMode[]).map((mode) => (
@@ -350,7 +350,7 @@ export const ProjectTimeline: React.FC = () => {
                     key={mode}
                     type="button"
                     onClick={() => handleSelectViewMode(mode)}
-                    className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg transition-colors cursor-pointer ${
+                    className={`w-full text-left px-2.5 py-1.5 text-xs rounded-none transition-colors cursor-pointer ${
                       viewMode === mode
                         ? "bg-accent font-semibold text-foreground"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -368,7 +368,7 @@ export const ProjectTimeline: React.FC = () => {
             size="sm"
             variant="ghost"
             onClick={handleGoToday}
-            className="h-7 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-3 text-xs font-semibold cursor-pointer"
+            className="h-7 rounded-none bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-3 text-xs font-semibold cursor-pointer"
           >
             今天
           </Button>
@@ -385,9 +385,9 @@ export const ProjectTimeline: React.FC = () => {
         <div className="mt-4 overflow-x-auto min-w-0">
           <div className="min-w-[680px]">
             {/* Column Headers */}
-            <div className="flex items-center text-xs text-muted-foreground select-none pb-2 border-b border-border/40">
+            <div className="flex items-center text-xs text-muted-foreground select-none pb-1 border-b border-border/40">
               {/* Stage label column */}
-              <div className="w-28 shrink-0 font-semibold pl-1 text-muted-foreground">阶段</div>
+              <div className="w-28 shrink-0 font-semibold pl-1 text-muted-foreground text-xs">阶段</div>
 
               {/* Day Axis */}
               <div
@@ -400,26 +400,26 @@ export const ProjectTimeline: React.FC = () => {
                   const weekdayName = WEEKDAY_NAMES[d.getDay()];
 
                   return (
-                    <div key={index} className="flex flex-col items-center justify-center relative">
+                    <div key={index} className="flex flex-col items-center justify-center relative py-0.5">
                       {isCurrentDay ? (
                         <div className="flex flex-col items-center">
                           {viewMode === "week" && (
-                            <span className="text-[10px] text-emerald-500 font-semibold mb-0.5">
+                            <span className="text-[9px] leading-none text-emerald-500 font-semibold mb-0.5">
                               {weekdayName}
                             </span>
                           )}
-                          <span className="grid size-6 place-items-center rounded-full bg-emerald-500 text-[11px] font-bold text-white shadow-[0_0_12px_rgba(16,185,129,0.8)]">
+                          <span className="grid size-5 place-items-center rounded-none bg-emerald-500 text-[10px] font-bold text-white shadow-[0_0_8px_rgba(16,185,129,0.8)]">
                             {dayNum}
                           </span>
                         </div>
                       ) : (
                         <div className="flex flex-col items-center">
                           {viewMode === "week" && (
-                            <span className="text-[10px] text-muted-foreground/60 mb-0.5">
+                            <span className="text-[9px] leading-none text-muted-foreground/60 mb-0.5">
                               {weekdayName}
                             </span>
                           )}
-                          <span className="text-[11px] font-medium tabular-nums text-muted-foreground/80 hover:text-foreground">
+                          <span className="text-[10px] leading-5 font-medium tabular-nums text-muted-foreground/80 hover:text-foreground">
                             {dayNum}
                           </span>
                         </div>
@@ -431,7 +431,7 @@ export const ProjectTimeline: React.FC = () => {
             </div>
 
             {/* Stages Rows with Track and Bars */}
-            <div className="relative space-y-2.5 pt-3">
+            <div className="relative space-y-1.5 pt-2.5">
               {/* Vertical Guide Line for Today */}
               {todayIndex >= 0 && (
                 <div
@@ -487,7 +487,7 @@ export const ProjectTimeline: React.FC = () => {
                     </div>
 
                     {/* Track */}
-                    <div className="flex-1 h-9 rounded-full bg-muted/20 dark:bg-slate-900/60 border border-border/30 relative flex items-center overflow-hidden">
+                    <div className="flex-1 h-6 rounded-none bg-muted/20 dark:bg-slate-900/60 border border-border/30 relative flex items-center overflow-hidden">
                       {/* Grid background dashes */}
                       <div
                         className="absolute inset-0 grid pointer-events-none opacity-20"
@@ -501,7 +501,7 @@ export const ProjectTimeline: React.FC = () => {
                       {/* Bar */}
                       {isVisible && (
                         <div
-                          className={`absolute h-7 rounded-full px-3 flex items-center justify-between text-xs transition-all duration-300 z-10 select-none ${barClass}`}
+                          className={`absolute h-5 rounded-none px-2 flex items-center justify-between text-[11px] transition-all duration-300 z-10 select-none ${barClass}`}
                           style={{
                             left: `${leftPct}%`,
                             width: `${widthPct}%`,

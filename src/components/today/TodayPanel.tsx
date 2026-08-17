@@ -340,7 +340,7 @@ export const TodayPanel: React.FC = () => {
     return (
       <div
         key={q.type}
-        className="bg-card border border-border rounded-xl shadow-xs overflow-hidden"
+        className="bg-card border border-border rounded-none shadow-xs overflow-hidden"
       >
         {/* Quadrant Card Header */}
         <div
@@ -383,7 +383,7 @@ export const TodayPanel: React.FC = () => {
     <div className="flex flex-col h-full w-full max-w-[1080px] mx-auto px-6 py-6 md:px-9 overflow-y-auto select-none space-y-6">
       {/* 主体: 主列表 + 右侧轻栏 */}
       {remaining === 0 && dueTasks.length === 0 && todayHabits.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3.5 text-center text-muted-foreground py-6 rounded-2xl bg-card border border-border/70">
+        <div className="flex flex-col items-center justify-center gap-3.5 text-center text-muted-foreground py-6 rounded-none bg-card border border-border/70">
           <div className="text-4xl leading-none">🍃</div>
           <h2 className="text-base font-bold text-foreground">今日已清空</h2>
           <p className="text-xs text-muted-foreground max-w-sm">
@@ -401,7 +401,7 @@ export const TodayPanel: React.FC = () => {
             </div>
 
             {dueTasks.length === 0 ? (
-              <div className="py-8 text-center text-xs text-muted-foreground bg-card/40 rounded-xl border border-border/60">
+              <div className="py-8 text-center text-xs text-muted-foreground bg-card/40 rounded-none border border-border/60">
                 今天没有到期任务
               </div>
             ) : (

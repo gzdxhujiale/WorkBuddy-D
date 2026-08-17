@@ -542,7 +542,7 @@ export const TaskQuickEditPopover = memo(
             role="dialog"
             aria-label="编辑任务"
             style={popoverStyle}
-            className="fixed z-[1050] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none overflow-hidden"
+            className="fixed z-[1050] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none overflow-hidden"
           >
             {/* 顶栏：日期与提醒入口 + 象限 Flag */}
             <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-slate-200/60 dark:border-slate-800/80">
@@ -611,7 +611,7 @@ export const TaskQuickEditPopover = memo(
                   placeholder="添加任务备注描述..."
                   content={description}
                   showToolbar={false}
-                  className="tqe-description-editor rounded-b-xl border border-slate-200/80 dark:border-slate-800"
+                  className="tqe-description-editor rounded-b-none border border-slate-200/80 dark:border-slate-800"
                   onChange={(nextDescription) => {
                     latestDescription.current = nextDescription;
                     setDescription(nextDescription);
@@ -632,7 +632,7 @@ export const TaskQuickEditPopover = memo(
                 left: l2Pos?.left ?? ((l1Pos?.left ?? MARGIN) - L2_WIDTH - 12),
                 width: L2_WIDTH,
               }}
-              className="fixed z-[1060] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl p-3.5 text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none"
+              className="fixed z-[1060] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl p-3.5 text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none"
             >
               <div className="grid grid-cols-2 gap-1 p-1 mb-3 rounded-xl bg-slate-100 dark:bg-slate-800/80">
                 {(["point", "range"] as const).map((mode) => (
@@ -872,7 +872,7 @@ export const TaskQuickEditPopover = memo(
                 left: l3Pos?.left ?? MARGIN,
                 width: L3_WIDTH,
               }}
-              className="fixed z-[1070] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl overflow-hidden animate-in fade-in duration-100 select-none"
+              className="fixed z-[1070] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl overflow-hidden animate-in fade-in duration-100 select-none"
             >
               <div className="max-h-[252px] overflow-y-auto p-1.5 flex flex-col gap-0.5" ref={timeListRef}>
                 {timeOptions.map((t) => (
@@ -933,7 +933,7 @@ export const TaskQuickEditPopover = memo(
                 left: l3Pos?.left ?? MARGIN,
                 width: L3_WIDTH,
               }}
-              className="fixed z-[1070] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl p-2 animate-in fade-in duration-100 select-none flex flex-col gap-0.5 text-slate-900 dark:text-slate-100"
+              className="fixed z-[1070] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl p-2 animate-in fade-in duration-100 select-none flex flex-col gap-0.5 text-slate-900 dark:text-slate-100"
             >
               {[0, 1, 2, 3, 7].map((off) => (
                 <button

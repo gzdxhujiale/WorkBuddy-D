@@ -51,7 +51,6 @@ The tables below reproduce the verified application contract. `src/types/databas
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `name` | `text` | User-visible knowledge-base name. |
-| `is_pinned` | `boolean` | Whether the base is pinned in its owning scope. |
 | `sort_order` | `integer` | Display order among active bases. |
 
 #### `knowledge_base_folders`
@@ -62,10 +61,6 @@ These rows are the lists/containers displayed inside a knowledge base; older cod
 | --- | --- | --- |
 | `knowledge_base_id` | `uuid nullable` | Optional parent `knowledge_bases.id`; `null` represents the root scope. |
 | `name` | `text` | Container name. |
-| `icon` | `text` | Stored icon identifier. |
-| `color` | `text` | Stored container color value. |
-| `view_type` | `text` | Stored presentation mode, currently consumed as `list` or `board` by the frontend. |
-| `is_pinned` | `boolean` | Pin state. |
 | `sort_order` | `integer` | Display order within the parent scope. |
 
 #### `folder_note_groups`
@@ -84,7 +79,6 @@ These rows are the lists/containers displayed inside a knowledge base; older cod
 | `group_id` | `uuid nullable` | Optional `folder_note_groups.id`. |
 | `title` | `text` | Note title. |
 | `content` | `text` | Tiptap JSON content. The application deliberately fetches it on demand. |
-| `is_pinned` | `boolean` | Pin state within the list. |
 | `sort_order` | `integer` | Display order within the group/root scope. |
 
 #### `knowledge_base_templates`
@@ -102,7 +96,6 @@ These rows are the lists/containers displayed inside a knowledge base; older cod
 | --- | --- | --- |
 | `name` | `text` | Habit name. |
 | `frequency_type` | `text` | Schedule mode: `daily`, `weekly_days`, or `custom`. |
-| `frequency_days` | `integer[] nullable` | Selected weekdays when the schedule requires them. |
 | `goal` | `text nullable` | Optional goal text. |
 | `start_date` | `date nullable` | Optional start date. |
 | `duration` | `text nullable` | Optional duration description. |
@@ -160,7 +153,7 @@ The supported save RPC uses `(user_id, habit_id, date)` as the upsert identity, 
 | --- | --- | --- |
 | `name`, `description` | `text`, `text nullable` | Project identity and optional explanation. |
 | `status` | `text` | Lifecycle state: `not_started`, `in_progress`, `completed`, or `archived`; creation begins at `not_started`. |
-| `start_date`, `end_date` | `date nullable`, `date nullable` | Optional project time range; when both are present, the start cannot be after the end. `due_date` is a legacy migration field and is no longer read or written by the application. |
+| `start_date`, `end_date` | `date nullable`, `date nullable` | Optional project time range; when both are present, the start cannot be after the end. |
 | `priority` | `text` | `low`, `medium`, `high`, or `urgent`. |
 | `tags` | `text[]` | User-defined project labels. |
 | `owner_name` | `text nullable` | Project-level responsible person. |

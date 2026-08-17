@@ -123,7 +123,6 @@ export function useHabitActions() {
         id: crypto.randomUUID(),
         name: payload.name || "未命名习惯",
         frequencyType: payload.frequencyType || "daily",
-        frequencyDays: payload.frequencyDays || null,
         goal: payload.goal || "today",
         startDate: payload.startDate || undefined,
         duration: payload.duration || "30days",

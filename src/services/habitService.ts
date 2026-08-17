@@ -16,7 +16,6 @@ function saveHabit(habit: Habit) {
     p_id: habit.id,
     p_name: habit.name,
     p_frequency_type: habit.frequencyType,
-    p_frequency_days: habit.frequencyDays,
     p_goal: habit.goal || null,
     p_start_date: habit.startDate || null,
     p_duration: habit.duration || null,
@@ -43,7 +42,7 @@ export const habitApi = {
       const [habitsRes, checkInsRes] = await Promise.all([
         supabase
           .from("habits")
-          .select("id,name,frequency_type,frequency_days,goal,start_date,duration,category,reminder,auto_popup_log,sort_order,created_at,updated_at")
+          .select("id,name,frequency_type,goal,start_date,duration,category,reminder,auto_popup_log,sort_order,created_at,updated_at")
           .is("deleted_at", null)
           .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true }),
@@ -63,7 +62,6 @@ export const habitApi = {
         id: r.id,
         name: r.name,
         frequencyType: (r.frequency_type as "daily" | "weekly_days" | "custom") || "daily",
-        frequencyDays: r.frequency_days,
         goal: r.goal || undefined,
         startDate: r.start_date || undefined,
         duration: r.duration || undefined,
