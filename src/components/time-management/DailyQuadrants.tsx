@@ -361,7 +361,6 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
                 {task.title}
               </span>
 
-
               {isExpired && (
                 <button
                   type="button"
@@ -448,7 +447,7 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
           key={type}
           onDragOver={handleDragOver}
           onDrop={(e) => handleDropOnQuadrant(e, type)}
-          className={`flex flex-col h-full rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 ${config.accentBorder} ${config.bgGradient} shadow-xs overflow-hidden select-none`}
+          className={`flex flex-col h-full rounded-t-2xl rounded-b-none border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 ${config.accentBorder} ${config.bgGradient} shadow-xs overflow-hidden select-none`}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800/80" onDragOver={handleDragOver}>

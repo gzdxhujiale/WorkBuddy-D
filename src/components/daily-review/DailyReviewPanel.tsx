@@ -188,7 +188,7 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
   });
 
   return (
-    <article className="flex-1 flex flex-col bg-card border border-border rounded-xl shadow-2xs overflow-hidden transition-colors">
+    <article className="flex-1 flex flex-col bg-card border border-border rounded-t-2xl rounded-b-none shadow-2xs overflow-hidden transition-colors">
       <ReactjsTiptapEditor
         key={date}
         content={content}

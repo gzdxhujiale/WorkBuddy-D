@@ -146,15 +146,13 @@ html.tqe-window #root {
 }
 
 html.tqe-window * {
-  outline: none !important;
+  outline: none;
   -webkit-tap-highlight-color: transparent !important;
 }
 
 html.tqe-window *:focus,
-html.tqe-window *:focus-visible,
-html.tqe-window *:active {
-  outline: none !important;
-  box-shadow: none !important;
+html.tqe-window *:focus-visible {
+  outline: none;
 }
 
 /* reactjs-tiptap-editor mounts its slash-command menu directly under body.
