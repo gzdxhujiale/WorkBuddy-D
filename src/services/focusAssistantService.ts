@@ -14,7 +14,52 @@ function fromDb(row: Record<string, unknown>): FocusSession {
   };
 }
 
+export interface FocusStats {
+  todayMinutes: number;
+  weekMinutes: number;
+}
+
 export const focusAssistantApi = {
+  async getFocusStats(userId: string): Promise<FocusStats> {
+    const now = new Date();
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - diffToMonday);
+    monday.setHours(0, 0, 0, 0);
+
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+
+    const { data, error } = await supabase
+      .from("focus_sessions")
+      .select("active_seconds, started_at")
+      .eq("user_id", userId)
+      .eq("type", "focus")
+      .gte("started_at", monday.toISOString());
+
+    if (error || !data) {
+      return { todayMinutes: 0, weekMinutes: 0 };
+    }
+
+    let todaySec = 0;
+    let weekSec = 0;
+    const todayStartTime = todayStart.getTime();
+
+    for (const session of data) {
+      const sec = (session.active_seconds as number) || 0;
+      const started = new Date(session.started_at as string).getTime();
+      weekSec += sec;
+      if (started >= todayStartTime) {
+        todaySec += sec;
+      }
+    }
+
+    return {
+      todayMinutes: Math.round(todaySec / 60),
+      weekMinutes: Math.round(weekSec / 60),
+    };
+  },
   async create(input: CreateSession): Promise<FocusSession> {
     const id = crypto.randomUUID();
     const { data, error } = await supabase.rpc("create_focus_session", {

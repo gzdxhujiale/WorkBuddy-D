@@ -22,7 +22,7 @@ import {
   convertMarkdownToTipTapJson,
   convertTipTapJsonToMarkdown,
 } from '@/components/ui/reactjs-tiptap-editor';
-import { useConfirmDialog } from '@/components/ui/ConfirmDeleteDialog';
+import { Popconfirm } from '@/components/ui/popconfirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -237,7 +237,6 @@ function ListsSidebar({
   onDeleteList,
   isCollapsed
 }: ListsSidebarProps) {
-  const { confirm: confirmDelete, dialogElement } = useConfirmDialog();
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
   const [activeDropdown, setActiveDropdown] = useState<{ type: 'folder' | 'list', id: string } | null>(null);
 
@@ -277,23 +276,23 @@ function ListsSidebar({
             <LoaderCircle size={14} className="animate-spin text-sidebar-primary" aria-label="正在加载清单" />
           )}
           <div className="relative ml-auto" onClick={e => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveDropdown(activeDropdown?.id === list.id ? null : { type: 'list', id: list.id });
-                        }}
-                      >
-                        <MoreHorizontal size={15} />
-                      </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveDropdown(activeDropdown?.id === list.id ? null : { type: 'list', id: list.id });
+              }}
+            >
+              <MoreHorizontal size={15} />
+            </Button>
 
-                      {activeDropdown?.type === 'list' && activeDropdown.id === list.id && (
-                        <div
-                          className="absolute top-full right-0 mt-1 z-50 min-w-30 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95"
-                          ref={dropdownRef}
-                        >
+            {activeDropdown?.type === 'list' && activeDropdown.id === list.id && (
+              <div
+                className="absolute top-full right-0 mt-1 z-50 min-w-30 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95"
+                ref={dropdownRef}
+              >
                           <button
                             className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
                             onClick={() => { setActiveDropdown(null); onEditList(list); }}
@@ -312,23 +311,28 @@ function ListsSidebar({
                           >
                             复制
                           </button>
-                          <button
-                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                            onClick={async (e) => {
-                              e.stopPropagation();
+                          <Popconfirm
+                            title={`确定要删除清单 "${list.name}" 吗？`}
+                            description="其中的笔记也会被删除。"
+                            okText="删除"
+                            cancelText="取消"
+                            okType="danger"
+                            position="right"
+                            onOk={() => {
                               setActiveDropdown(null);
-                              const confirmed = await confirmDelete({
-                                title: '删除文件夹',
-                                description: `确定要删除文件夹 "${list.name}" 吗？其中的笔记也会被删除。`,
-                                confirmText: '删除',
-                              });
-                              if (confirmed) {
-                                onDeleteList(list);
-                              }
+                              onDeleteList(list);
+                            }}
+                            onCancel={() => {
+                              setActiveDropdown(null);
                             }}
                           >
-                            删除
-                          </button>
+                            <button
+                              className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              删除
+                            </button>
+                          </Popconfirm>
                         </div>
                       )}
                     </div>
@@ -340,8 +344,6 @@ function ListsSidebar({
   const isTargetStandalone = dragOverFolderId === 'standalone-area';
 
   return (
-    <>
-      {dialogElement}
       <aside
         className={cn(
           'flex w-[206px] flex-none flex-col overflow-hidden border-r border-border bg-sidebar text-sidebar-foreground transition-all duration-[250ms] ease-in-out',
@@ -427,23 +429,28 @@ function ListsSidebar({
                           >
                             {folder.isPinned ? '取消置顶' : '置顶'}
                           </button>
-                          <button
-                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                            onClick={async (e) => {
-                              e.stopPropagation();
+                          <Popconfirm
+                            title={`确定要删除知识库 "${folder.name}" 吗？`}
+                            description="其中的文件夹和笔记也会被删除。"
+                            okText="解散"
+                            cancelText="取消"
+                            okType="danger"
+                            position="right"
+                            onOk={() => {
                               setActiveDropdown(null);
-                              const confirmed = await confirmDelete({
-                                title: '删除知识库',
-                                description: `确定要删除知识库 "${folder.name}" 吗？其中的文件夹和笔记也会被删除。`,
-                                confirmText: '解散',
-                              }, e);
-                              if (confirmed) {
-                                onDissolveFolder(folder);
-                              }
+                              onDissolveFolder(folder);
+                            }}
+                            onCancel={() => {
+                              setActiveDropdown(null);
                             }}
                           >
-                            解散
-                          </button>
+                            <button
+                              className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              解散
+                            </button>
+                          </Popconfirm>
                         </div>
                       )}
                     </div>
@@ -475,7 +482,6 @@ function ListsSidebar({
         </DroppableArea>
       </div>
       </aside>
-    </>
   );
 }
 
@@ -740,17 +746,29 @@ function NoteGroupView({ group, notes, allLists, isUngrouped, isDragOverTarget, 
                   >
                     重命名
                   </button>
-                  <button
-                    className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1.5 cursor-pointer"
-                    onClick={(e) => {
-                      e.stopPropagation();
+                  <Popconfirm
+                    title={`确定要删除分组 "${group.name}" 吗？`}
+                    description="分组内的笔记将被移至未分组。"
+                    okText="删除"
+                    cancelText="取消"
+                    okType="danger"
+                    position="left"
+                    onOk={() => {
                       setMenuOpen(false);
                       onDeleteGroup(group.id);
                     }}
+                    onCancel={() => {
+                      setMenuOpen(false);
+                    }}
                   >
-                    <Trash2 size={13} />
-                    <span>删除</span>
-                  </button>
+                    <button
+                      className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1.5 cursor-pointer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Trash2 size={13} />
+                      <span>删除</span>
+                    </button>
+                  </Popconfirm>
                 </div>
               )}
             </>
@@ -822,7 +840,6 @@ function NoteDrawerContent({
   onDelete: (note: Note) => void;
   showToast?: (message: string, type?: 'success' | 'error') => void;
 }) {
-  const { confirm: confirmDelete, dialogElement } = useConfirmDialog();
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || '');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
@@ -902,7 +919,6 @@ function NoteDrawerContent({
 
   return (
     <>
-      {dialogElement}
       <div className="flex h-12 items-center justify-between border-b border-border px-4 shrink-0">
         <Input
           type="text"
@@ -965,24 +981,28 @@ function NoteDrawerContent({
                 >
                   导出MD
                 </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                  onClick={async (e) => {
-                    e.stopPropagation();
+                <Popconfirm
+                  title={`确定要删除笔记 "${note.title || '未命名笔记'}" 吗？`}
+                  okText="删除"
+                  cancelText="取消"
+                  okType="danger"
+                  position="bottomRight"
+                  onOk={() => {
                     setMenuOpen(false);
-                    const confirmed = await confirmDelete({
-                      title: '删除笔记',
-                      description: `确定要删除笔记"${note.title || '未命名笔记'}"吗？`,
-                      confirmText: '删除',
-                    }, e);
-                    if (confirmed) {
-                      onDelete(note);
-                      onClose();
-                    }
+                    onDelete(note);
+                    onClose();
+                  }}
+                  onCancel={() => {
+                    setMenuOpen(false);
                   }}
                 >
-                  删除
-                </button>
+                  <button
+                    className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    删除
+                  </button>
+                </Popconfirm>
               </div>
             )}
           </div>

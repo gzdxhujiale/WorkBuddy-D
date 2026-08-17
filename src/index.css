@@ -134,6 +134,27 @@ html.tqe-window body,
 html.tqe-window #root {
   background: transparent !important;
   background-color: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  -webkit-tap-highlight-color: transparent !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+html.tqe-window * {
+  outline: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+}
+
+html.tqe-window *:focus,
+html.tqe-window *:focus-visible,
+html.tqe-window *:active {
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 /* reactjs-tiptap-editor mounts its slash-command menu directly under body.
@@ -149,7 +170,3 @@ html.tqe-window body > div:has(> [class*="richtext-max-h-"]) {
     display: none;
   }
 }
-
-
-
-
