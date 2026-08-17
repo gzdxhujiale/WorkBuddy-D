@@ -403,11 +403,11 @@ export function ProjectsPage() {
   if (error) return <div className="p-8 text-sm text-destructive">加载项目中心失败：{error.message}</div>;
 
   return (
-    <main className="flex h-full min-h-0 bg-background text-foreground">
+    <div className="flex flex-row h-full w-full min-h-0 overflow-hidden bg-background text-foreground">
       {/* Sidebar */}
-      <aside className="flex w-[300px] shrink-0 flex-col border-r border-border bg-muted/20">
+      <aside className="flex flex-col h-full w-[300px] shrink-0 border-r border-border bg-muted/20 overflow-hidden">
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4 select-none">
-          <h1 className="text-base font-bold text-foreground">项目中心</h1>
+          <h3 className="text-base font-bold text-foreground">项目中心</h3>
           <Button
             variant="ghost"
             size="icon"
@@ -429,11 +429,10 @@ export function ProjectsPage() {
                 key={project.id}
                 type="button"
                 onClick={() => setSelectedId(project.id)}
-                className={`w-full rounded-xl border p-3 text-left transition-all ${
-                  isCurrent
+                className={`w-full rounded-xl border p-3 text-left transition-all ${isCurrent
                     ? "border-sky-300 bg-sky-50/80 shadow-sm dark:border-sky-800 dark:bg-sky-950/40"
                     : "border-transparent hover:bg-accent/60"
-                }`}
+                  }`}
               >
                 <div className="flex items-start gap-3">
                   <ProgressRing completed={done} total={taskSet.length} />
@@ -466,7 +465,7 @@ export function ProjectsPage() {
 
       {/* Main Details Panel */}
       {selected ? (
-        <section className="min-w-0 flex-1 overflow-y-auto">
+        <section className="flex-1 h-full min-w-0 overflow-y-auto">
           <div className="mx-auto max-w-5xl p-6 lg:p-8">
             {/* Header: Title & Actions */}
             <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border pb-4">
@@ -480,7 +479,7 @@ export function ProjectsPage() {
                       void run(() => saveProject({ ...selected, name: val }));
                     }
                   }}
-                  className="w-full rounded-lg bg-transparent px-1 py-0.5 text-xl font-bold tracking-tight text-foreground outline-none transition-colors hover:bg-muted/40 focus:bg-background focus:ring-2 focus:ring-ring sm:text-2xl"
+                  className="w-full rounded-lg bg-transparent px-1 py-0.5 text-base font-bold text-foreground outline-none transition-colors hover:bg-muted/40 focus:bg-background focus:ring-2 focus:ring-ring"
                   aria-label="项目名称"
                   placeholder="项目名称"
                 />
@@ -703,7 +702,6 @@ export function ProjectsPage() {
       <CreateProjectDialog open={creating} templates={data?.templates ?? []} onOpenChange={setCreating} onCreate={createProject} />
       <CreateTemplateDialog open={creatingTemplate} onOpenChange={setCreatingTemplate} onCreate={saveTemplate} />
       {dialogElement}
-    </main>
+    </div>
   );
 }
-

@@ -51,7 +51,18 @@ Task descriptions use the same serialized Tiptap-document format while remaining
 
 ## Styling and accessibility
 
-Tailwind 4 is configured through `src/index.css`; it is the application's Tailwind CSS-first entry point, not a second styling system. That file owns semantic light/dark tokens, radius, shared animation definitions, and narrowly scoped global rules. `src/components/ui/` provides existing primitives; compose them before creating another parallel primitive.
+Tailwind 4 is configured through `src/index.css`; it is the application's Tailwind CSS-first entry point, not a second styling system. That file owns semantic light/dark tokens, radius, shared animation definitions, and narrowly scoped global rules. `src/components/ui/` provides standard primitives; compose them before creating another parallel primitive.
+
+Key reusable primitives in `src/components/ui/`:
+- `modal.tsx` — bridges the official `@arco-design/web-react` Modal component and official Arco styling for desktop dialogs.
+- `select.tsx` — bridges the official `@arco-design/web-react` Select dropdown component with search and grouping support.
+- `dropdown-menu.tsx` — accessible floating dropdown menu replacing ad-hoc `useClickOutside` layers.
+- `toast.tsx` — application-wide toast notification system mounted globally in `AppLayout.tsx`.
+- `popconfirm.tsx` — inline confirmation popovers for destructive and critical actions.
+
+### Drag and drop coordination
+
+Drag and drop across the application (including knowledge base sidebar ordering, note sorting/moving across lists and groups in `src/components/lists/ListsPanel.tsx`, and project task boards) is centrally coordinated via `@dnd-kit`. Do not implement custom HTML5 drag listeners or parallel drag libraries.
 
 ### Tailwind and CSS boundary
 

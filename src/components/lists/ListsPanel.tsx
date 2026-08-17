@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo, useRef, ReactNode, useCallback, memo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, type ReactNode, memo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import {
-  MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen, CheckCircle, AlertCircle,
-  ChevronRight, Check, Folder as FolderIcon, ChevronDown, FileText, Search, Cloud, X, Trash2, Library, LoaderCircle
+  MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen,
+  ChevronDown, FileText, Cloud, LoaderCircle,
+  Folder as FolderIcon, Check, Library
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverEvent, useDroppable } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -11,7 +12,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 import { useListContents, useListsData, useListsActions } from '@/hooks/useListsQuery';
 import { sortLists, sortFolders } from '@/utils/listsSelectors';
-import { List, Folder, ViewType, Note, NoteGroup, Template } from '@/types/lists';
+import { List, Folder, Note, NoteGroup, Template } from '@/types/lists';
 
 import { TemplateModal, useTemplateData, useTemplateActions } from '../templates';
 import * as listsService from '@/services/listsService';
@@ -25,76 +26,18 @@ import {
 import { Popconfirm } from '@/components/ui/popconfirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Modal } from '@/components/ui/modal';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from '@/components/ui/dropdown-menu';
+import { toast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { useUiStore } from '@/stores/uiStore';
 import { queryKeys } from '@/lib/syncEngine';
-
-// ============================================================================
-// 0. Shared Helpers & Custom Hooks
-// ============================================================================
-function useClickOutside<T extends HTMLElement>(handler: () => void) {
-  const ref = useRef<T>(null);
-  useEffect(() => {
-    const listener = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        handler();
-      }
-    };
-    document.addEventListener('mousedown', listener);
-    return () => document.removeEventListener('mousedown', listener);
-  }, [handler]);
-  return ref;
-}
-
-interface ModalShellProps {
-  title: string;
-  onClose: () => void;
-  children: ReactNode;
-  footer?: ReactNode;
-  width?: string;
-  headerRight?: ReactNode;
-}
-
-/** Unified Modal Shell rendered via Portal with Dialog + semantic tokens */
-const ModalShell: React.FC<ModalShellProps> = memo(({ title, onClose, children, footer, width = '520px', headerRight }) => {
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [onClose]);
-
-  return createPortal(
-    <div
-      className="fixed inset-0 z-[1000] bg-black/20 flex items-center justify-center p-4 transition-all duration-200 animate-in fade-in"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div
-        className="bg-card text-card-foreground border border-border rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.1)] w-full flex flex-col overflow-visible"
-        style={{ maxWidth: width, width: '92vw' }}
-      >
-        <div className="relative flex items-center justify-center px-6 py-5">
-          <DialogTitle className="text-lg font-semibold m-0">{title}</DialogTitle>
-          {headerRight || (
-            <Button variant="ghost" size="icon" className="absolute right-4 rounded-lg" onClick={onClose}>
-              <X className="size-[18px]" />
-            </Button>
-          )}
-        </div>
-        <div className="px-6 pb-6 pt-0 flex flex-col gap-5 overflow-visible max-h-[75vh]">{children}</div>
-        {footer && (
-          <DialogFooter className="px-6 pb-6 pt-0">
-            {footer}
-          </DialogFooter>
-        )}
-      </div>
-    </div>,
-    document.body
-  );
-});
 
 // ============================================================================
 // 1. SortableItem & Droppable Helper Components
@@ -144,13 +87,11 @@ interface SidebarListItemDroppableProps {
 }
 
 const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo(({ list, activeListId, dragOverListId, onSelectList, isNested, children }) => {
-  const { moveNoteToList } = useListsActions();
-  const [isHovered, setIsHovered] = useState(false);
   const { setNodeRef, isOver } = useDroppable({
     id: `sidebar-list-${list.id}`,
     data: { type: 'sidebar-list', listId: list.id }
   });
-  const isTarget = isOver || isHovered || dragOverListId === list.id;
+  const isTarget = isOver || dragOverListId === list.id;
   const isActive = activeListId === list.id;
 
   return (
@@ -165,32 +106,6 @@ const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo((
         isTarget && 'bg-sidebar-primary/10 ring-2 ring-sidebar-ring'
       )}
       onClick={() => onSelectList(list.id)}
-      onDragOver={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        e.dataTransfer.dropEffect = 'move';
-        if (!isHovered) setIsHovered(true);
-      }}
-      onDragLeave={(e) => {
-        e.preventDefault();
-        setIsHovered(false);
-      }}
-      onDrop={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        setIsHovered(false);
-        try {
-          const raw = e.dataTransfer.getData('text/plain');
-          if (raw) {
-            const parsed = JSON.parse(raw);
-            if (parsed.type === 'note' && parsed.noteId) {
-              moveNoteToList(parsed.noteId, list.id);
-            }
-          }
-        } catch (err) {
-          logSilent('listsPanel', 'invalid note drag payload', err);
-        }
-      }}
     >
       {children}
     </div>
@@ -210,10 +125,8 @@ interface ListsSidebarProps {
   onSelectList: (id: string) => void;
   onAddClick: (folderId?: string) => void;
   onEditFolder: (folder: Folder) => void;
-  onPinFolder: (folder: Folder) => void;
   onDissolveFolder: (folder: Folder) => void;
   onEditList: (list: List) => void;
-  onPinList: (list: List) => void;
   onDuplicateList: (list: List) => void;
   onDeleteList: (list: List) => void;
   isCollapsed?: boolean;
@@ -229,19 +142,13 @@ function ListsSidebar({
   onSelectList,
   onAddClick,
   onEditFolder,
-  onPinFolder,
   onDissolveFolder,
   onEditList,
-  onPinList,
   onDuplicateList,
   onDeleteList,
   isCollapsed
 }: ListsSidebarProps) {
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
-  const [activeDropdown, setActiveDropdown] = useState<{ type: 'folder' | 'list', id: string } | null>(null);
-
-  const closeDropdown = useCallback(() => setActiveDropdown(null), []);
-  const dropdownRef = useClickOutside<HTMLDivElement>(closeDropdown);
 
   const toggleFolder = (folderId: string) => {
     setCollapsedFolders(prev => ({
@@ -269,73 +176,45 @@ function ListsSidebar({
         isNested={isNested}
       >
         <span className="truncate flex-1">{list.name}</span>
-        {list.isPinned && <span className="text-[10px] text-amber-500">📌</span>}
 
         <div className="ml-auto flex items-center gap-1">
           {loadingListId === list.id && (
             <LoaderCircle size={14} className="animate-spin text-sidebar-primary" aria-label="正在加载清单" />
           )}
           <div className="relative ml-auto" onClick={e => e.stopPropagation()}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveDropdown(activeDropdown?.id === list.id ? null : { type: 'list', id: list.id });
-              }}
-            >
-              <MoreHorizontal size={15} />
-            </Button>
-
-            {activeDropdown?.type === 'list' && activeDropdown.id === list.id && (
-              <div
-                className="absolute top-full right-0 mt-1 z-50 min-w-30 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95"
-                ref={dropdownRef}
-              >
-                          <button
-                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                            onClick={() => { setActiveDropdown(null); onEditList(list); }}
-                          >
-                            编辑
-                          </button>
-                          <button
-                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                            onClick={() => { setActiveDropdown(null); onPinList(list); }}
-                          >
-                            {list.isPinned ? '取消置顶' : '置顶'}
-                          </button>
-                          <button
-                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                            onClick={() => { setActiveDropdown(null); onDuplicateList(list); }}
-                          >
-                            复制
-                          </button>
-                          <Popconfirm
-                            title={`确定要删除清单 "${list.name}" 吗？`}
-                            description="其中的笔记也会被删除。"
-                            okText="删除"
-                            cancelText="取消"
-                            okType="danger"
-                            position="right"
-                            onOk={() => {
-                              setActiveDropdown(null);
-                              onDeleteList(list);
-                            }}
-                            onCancel={() => {
-                              setActiveDropdown(null);
-                            }}
-                          >
-                            <button
-                              className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              删除
-                            </button>
-                          </Popconfirm>
-                        </div>
-                      )}
-                    </div>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <MoreHorizontal size={15} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-30">
+                <DropdownMenuItem onClick={() => onEditList(list)}>
+                  编辑
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onDuplicateList(list)}>
+                  复制
+                </DropdownMenuItem>
+                <Popconfirm
+                  title={`确定要删除清单 "${list.name}" 吗？`}
+                  description="其中的笔记也会被删除。"
+                  okText="删除"
+                  cancelText="取消"
+                  okType="danger"
+                  position="right"
+                  onOk={() => onDeleteList(list)}
+                >
+                  <DropdownMenuItem destructive closeOnClick={false}>
+                    删除
+                  </DropdownMenuItem>
+                </Popconfirm>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </SidebarListItemDroppable>
     </SortableItem>
@@ -391,44 +270,25 @@ function ListsSidebar({
                       className={cn('text-sidebar-foreground/60 transition-transform duration-200', isCollapsedFolder && '-rotate-90')}
                     />
                     <span className="flex-1 truncate">{folder.name}</span>
-                    {folder.isPinned && <span className="text-[10px] text-amber-500">📌</span>}
 
                     <div className="relative ml-auto" onClick={e => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="rounded-md text-sidebar-foreground opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover:opacity-100"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setActiveDropdown(activeDropdown?.id === folder.id ? null : { type: 'folder', id: folder.id });
-                        }}
-                      >
-                        <MoreHorizontal size={15} />
-                      </Button>
-
-                      {activeDropdown?.type === 'folder' && activeDropdown.id === folder.id && (
-                        <div
-                          className="absolute top-full right-0 mt-1 z-50 min-w-30 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95"
-                          ref={dropdownRef}
-                        >
-                          <button
-                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                            onClick={() => { setActiveDropdown(null); onAddClick(folder.id); }}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="rounded-md text-sidebar-foreground opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover:opacity-100"
                           >
+                            <MoreHorizontal size={15} />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-30">
+                          <DropdownMenuItem onClick={() => onAddClick(folder.id)}>
                             添加文件夹
-                          </button>
-                          <button
-                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                            onClick={() => { setActiveDropdown(null); onEditFolder(folder); }}
-                          >
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => onEditFolder(folder)}>
                             编辑
-                          </button>
-                          <button
-                            className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                            onClick={() => { setActiveDropdown(null); onPinFolder(folder); }}
-                          >
-                            {folder.isPinned ? '取消置顶' : '置顶'}
-                          </button>
+                          </DropdownMenuItem>
                           <Popconfirm
                             title={`确定要删除知识库 "${folder.name}" 吗？`}
                             description="其中的文件夹和笔记也会被删除。"
@@ -436,23 +296,14 @@ function ListsSidebar({
                             cancelText="取消"
                             okType="danger"
                             position="right"
-                            onOk={() => {
-                              setActiveDropdown(null);
-                              onDissolveFolder(folder);
-                            }}
-                            onCancel={() => {
-                              setActiveDropdown(null);
-                            }}
+                            onOk={() => onDissolveFolder(folder)}
                           >
-                            <button
-                              className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                              onClick={(e) => e.stopPropagation()}
-                            >
+                            <DropdownMenuItem destructive closeOnClick={false}>
                               解散
-                            </button>
+                            </DropdownMenuItem>
                           </Popconfirm>
-                        </div>
-                      )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </DroppableArea>
                 </SortableItem>
@@ -490,147 +341,45 @@ function ListsSidebar({
 // ============================================================================
 interface NoteItemProps {
   note: Note;
-  allLists: List[];
   onClick: () => void;
-  onPin: (note: Note) => void;
   onDuplicate: (note: Note) => void;
   onDelete: (note: Note) => void;
-  onMove: (note: Note, targetListId: string) => void;
 }
 
-function NoteItem({ note, allLists, onClick, onPin, onDuplicate, onDelete, onMove }: NoteItemProps) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showMoveTo, setShowMoveTo] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const closeMenu = useCallback(() => {
-    setMenuOpen(false);
-    setShowMoveTo(false);
-    setSearchQuery('');
-  }, []);
-  const menuRef = useClickOutside<HTMLDivElement>(closeMenu);
-
-  const otherLists = allLists.filter(l => l.id !== note.listId && l.name.toLowerCase().includes(searchQuery.toLowerCase()));
-
+function NoteItem({ note, onClick, onDuplicate, onDelete }: NoteItemProps) {
   return (
     <div
       className="group relative flex items-center gap-3 bg-card border border-border hover:border-muted-foreground/30 rounded-lg px-4 py-3 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all duration-200 mb-3 text-card-foreground"
       onClick={onClick}
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData('text/plain', JSON.stringify({ type: 'note', noteId: note.id }));
-        e.dataTransfer.effectAllowed = 'move';
-      }}
     >
       <FileText size={16} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
       <div className="flex-1 text-sm font-medium text-foreground truncate">
         {note.title || '无标题笔记'}
       </div>
-      {note.isPinned && (
-        <span className="text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-full border border-amber-200/60 dark:border-amber-900/50 shrink-0">
-          📌 置顶
-        </span>
-      )}
 
-      <div className="relative shrink-0" onClick={e => e.stopPropagation()} ref={menuRef}>
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn(
-            'rounded-lg',
-            menuOpen && 'bg-accent text-accent-foreground'
-          )}
-          onClick={(e) => {
-            e.stopPropagation();
-            setMenuOpen(!menuOpen);
-            setShowMoveTo(false);
-            setSearchQuery('');
-          }}
-        >
-          <MoreHorizontal size={16} />
-        </Button>
-
-        {menuOpen && (
-          <div className="absolute right-0 top-full mt-1.5 z-50 min-w-44 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95">
-            {showMoveTo ? (
-              <div className="flex flex-col p-1">
-                <div className="flex items-center gap-1.5 px-2 py-2 border-b border-border text-sm text-foreground">
-                  <button
-                    className="p-0.5 hover:bg-muted rounded-sm transition-colors cursor-pointer"
-                    onClick={(e) => { e.stopPropagation(); setShowMoveTo(false); }}
-                  >
-                    <ChevronRight size={14} className="rotate-180" />
-                  </button>
-                  <span>移动到...</span>
-                </div>
-                <div className="p-1">
-                  <div className="flex items-center gap-1.5 px-2 py-1.5 bg-muted rounded-md text-sm">
-                    <Search size={13} className="text-muted-foreground shrink-0" />
-                    <input
-                      type="text"
-                      placeholder="搜索文件夹..."
-                      value={searchQuery}
-                      onChange={e => setSearchQuery(e.target.value)}
-                      className="w-full bg-transparent border-none outline-none text-foreground placeholder:text-muted-foreground"
-                    />
-                  </div>
-                </div>
-                <div className="max-h-40 overflow-y-auto">
-                  {otherLists.length === 0 ? (
-                    <div className="p-2 text-sm text-muted-foreground text-center">无匹配文件夹</div>
-                  ) : (
-                    otherLists.map(list => (
-                      <button
-                        key={list.id}
-                        className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors truncate cursor-pointer"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMenuOpen(false);
-                          setShowMoveTo(false);
-                          onMove(note, list.id);
-                        }}
-                      >
-                        {list.name}
-                      </button>
-                    ))
-                  )}
-                </div>
-              </div>
-            ) : (
-              <>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onPin(note); }}
-                >
-                  {note.isPinned ? '取消置顶' : '置顶'}
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors flex items-center justify-between cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); setShowMoveTo(true); }}
-                >
-                  <span>移动到</span>
-                  <ChevronRight size={14} />
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  onClick={(e) => { e.stopPropagation(); setMenuOpen(false); onDuplicate(note); }}
-                >
-                  创建副本
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setMenuOpen(false);
-                    onDelete(note);
-                  }}
-                >
-                  删除
-                </button>
-              </>
-            )}
-          </div>
-        )}
+      <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-lg"
+            >
+              <MoreHorizontal size={16} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="min-w-32">
+            <DropdownMenuItem onClick={() => onDuplicate(note)}>
+              创建副本
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              destructive
+              onClick={() => onDelete(note)}
+            >
+              删除
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );
@@ -639,26 +388,19 @@ function NoteItem({ note, allLists, onClick, onPin, onDuplicate, onDelete, onMov
 interface NoteGroupViewProps {
   group: { id: string; listId: string; name: string };
   notes: Note[];
-  allLists: List[];
   isUngrouped?: boolean;
   isDragOverTarget?: boolean;
   onRenameGroup: (id: string, newName: string) => void;
   onDeleteGroup: (id: string) => void;
   onNoteClick: (note: Note) => void;
-  onPinNote: (note: Note) => void;
   onDuplicateNote: (note: Note) => void;
   onDeleteNote: (note: Note) => void;
-  onMoveNote: (note: Note, targetListId: string) => void;
 }
 
-function NoteGroupView({ group, notes, allLists, isUngrouped, isDragOverTarget, onRenameGroup, onDeleteGroup, onNoteClick, onPinNote, onDuplicateNote, onDeleteNote, onMoveNote }: NoteGroupViewProps) {
+function NoteGroupView({ group, notes, isUngrouped, isDragOverTarget, onRenameGroup, onDeleteGroup, onNoteClick, onDuplicateNote, onDeleteNote }: NoteGroupViewProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(group.name);
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const closeMenu = useCallback(() => setMenuOpen(false), []);
-  const menuRef = useClickOutside<HTMLDivElement>(closeMenu);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { setNodeRef } = useDroppable({
@@ -669,6 +411,7 @@ function NoteGroupView({ group, notes, allLists, isUngrouped, isDragOverTarget, 
   useEffect(() => {
     if (isEditing && inputRef.current) {
       inputRef.current.focus();
+      inputRef.current.select();
     }
   }, [isEditing]);
 
@@ -718,60 +461,40 @@ function NoteGroupView({ group, notes, allLists, isUngrouped, isDragOverTarget, 
           <span className="text-sm font-semibold text-foreground">{group.name}</span>
         )}
 
-        <div className="ml-auto flex items-center gap-2 relative" onClick={e => e.stopPropagation()} ref={menuRef}>
+        <div className="ml-auto flex items-center gap-2 relative" onClick={e => e.stopPropagation()}>
           <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
             {notes.length}
           </span>
           {!isUngrouped && (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className={cn(
-                  'rounded-md',
-                  menuOpen && 'bg-accent text-accent-foreground'
-                )}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMenuOpen(!menuOpen);
-                }}
-              >
-                <MoreHorizontal size={15} />
-              </Button>
-              {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 z-50 min-w-32 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95">
-                  <button
-                    className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                    onClick={(e) => { e.stopPropagation(); setIsEditing(true); setMenuOpen(false); }}
-                  >
-                    重命名
-                  </button>
-                  <Popconfirm
-                    title={`确定要删除分组 "${group.name}" 吗？`}
-                    description="分组内的笔记将被移至未分组。"
-                    okText="删除"
-                    cancelText="取消"
-                    okType="danger"
-                    position="left"
-                    onOk={() => {
-                      setMenuOpen(false);
-                      onDeleteGroup(group.id);
-                    }}
-                    onCancel={() => {
-                      setMenuOpen(false);
-                    }}
-                  >
-                    <button
-                      className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1.5 cursor-pointer"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      <Trash2 size={13} />
-                      <span>删除</span>
-                    </button>
-                  </Popconfirm>
-                </div>
-              )}
-            </>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-md"
+                >
+                  <MoreHorizontal size={15} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-32">
+                <DropdownMenuItem onClick={() => setIsEditing(true)}>
+                  重命名
+                </DropdownMenuItem>
+                <Popconfirm
+                  title={`确定要删除分组 "${group.name}" 吗？`}
+                  description="分组内的笔记将被移至未分组。"
+                  okText="删除"
+                  cancelText="取消"
+                  okType="danger"
+                  position="left"
+                  onOk={() => onDeleteGroup(group.id)}
+                >
+                  <DropdownMenuItem destructive closeOnClick={false}>
+                    删除
+                  </DropdownMenuItem>
+                </Popconfirm>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       </div>
@@ -786,12 +509,9 @@ function NoteGroupView({ group, notes, allLists, isUngrouped, isDragOverTarget, 
                 <SortableItem key={note.id} id={note.id}>
                   <NoteItem
                     note={note}
-                    allLists={allLists}
                     onClick={() => onNoteClick(note)}
-                    onPin={onPinNote}
                     onDuplicate={onDuplicateNote}
                     onDelete={onDeleteNote}
-                    onMove={onMoveNote}
                   />
                 </SortableItem>
               ))}
@@ -811,12 +531,10 @@ interface NoteDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (id: string, title: string, content: string) => void;
-  onPin: (note: Note) => void;
   onDuplicate: (note: Note) => void;
   onSaveAsTemplate: (note: Note) => void;
   onDelete: (note: Note) => void;
   onOpenTemplate?: () => void;
-  showToast?: (message: string, type?: 'success' | 'error') => void;
 }
 
 function NoteDrawerContent({
@@ -824,37 +542,26 @@ function NoteDrawerContent({
   isOpen,
   onClose,
   onUpdate,
-  onPin,
   onDuplicate,
   onSaveAsTemplate,
   onDelete,
-  showToast,
 }: {
   note: Note;
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (id: string, title: string, content: string) => void;
-  onPin: (note: Note) => void;
   onDuplicate: (note: Note) => void;
   onSaveAsTemplate: (note: Note) => void;
   onDelete: (note: Note) => void;
-  showToast?: (message: string, type?: 'success' | 'error') => void;
 }) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || '');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
-  const [menuOpen, setMenuOpen] = useState(false);
-
-  const closeMenu = useCallback(() => setMenuOpen(false), []);
-  const menuRef = useClickOutside<HTMLDivElement>(closeMenu);
 
   const isDirtyRef = useRef(false);
   const latestDataRef = useRef({ title: note.title, content: note.content || '', note });
   const onUpdateRef = useRef(onUpdate);
 
-  // The parent recreates its action callbacks whenever its query cache changes.
-  // Keep the latest callback without treating a cache refresh as an unmount: the
-  // cleanup below must run only when this drawer content actually unmounts.
   useEffect(() => {
     onUpdateRef.current = onUpdate;
   }, [onUpdate]);
@@ -871,7 +578,6 @@ function NoteDrawerContent({
     latestDataRef.current = { title, content, note };
   }, [title, content, note]);
 
-  // Clean unmount auto-save
   useEffect(() => {
     return () => {
       if (isDirtyRef.current) {
@@ -883,7 +589,6 @@ function NoteDrawerContent({
     };
   }, []);
 
-  // Debounced auto-save effect
   useEffect(() => {
     if (!isOpen) return;
     if (title !== note.title || content !== note.content) {
@@ -903,7 +608,7 @@ function NoteDrawerContent({
     if (mdContent) {
       const jsonStr = convertMarkdownToTipTapJson(mdContent);
       setContent(jsonStr);
-      if (showToast) showToast('导入成功！');
+      toast.success('导入成功！');
     }
   };
 
@@ -911,9 +616,8 @@ function NoteDrawerContent({
     try {
       const exportText = convertTipTapJsonToMarkdown(content);
       await listsService.saveMarkdownFile(`${title || '未命名笔记'}.md`, exportText);
-      if (showToast) showToast('导出成功！');
+      toast.success('导出成功！');
     } catch (err) {
-      // Cancellation handled gracefully
     }
   };
 
@@ -939,48 +643,30 @@ function NoteDrawerContent({
             />
             <span>{saveStatus === 'saving' ? '保存中' : '已保存'}</span>
           </span>
-          <div className="relative" ref={menuRef}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-lg"
-              onClick={() => setMenuOpen(!menuOpen)}
-            >
-              <MoreHorizontal size={20} />
-            </Button>
-
-            {menuOpen && (
-              <div className="absolute right-0 top-full mt-2 z-50 min-w-36 p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col animate-in fade-in zoom-in-95">
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  onClick={() => { setMenuOpen(false); onPin(note); }}
+          <div className="relative">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="rounded-lg"
                 >
-                  {note.isPinned ? '取消置顶' : '置顶'}
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  onClick={() => { setMenuOpen(false); onDuplicate(note); }}
-                >
+                  <MoreHorizontal size={20} />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-36">
+                <DropdownMenuItem onClick={() => onDuplicate(note)}>
                   创建副本
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  onClick={() => { setMenuOpen(false); onSaveAsTemplate(note); }}
-                >
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onSaveAsTemplate(note)}>
                   保存为模板
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  onClick={() => { setMenuOpen(false); handleImport(); }}
-                >
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleImport}>
                   导入MD
-                </button>
-                <button
-                  className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                  onClick={() => { setMenuOpen(false); handleExport(); }}
-                >
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExport}>
                   导出MD
-                </button>
+                </DropdownMenuItem>
                 <Popconfirm
                   title={`确定要删除笔记 "${note.title || '未命名笔记'}" 吗？`}
                   okText="删除"
@@ -988,23 +674,16 @@ function NoteDrawerContent({
                   okType="danger"
                   position="bottomRight"
                   onOk={() => {
-                    setMenuOpen(false);
                     onDelete(note);
                     onClose();
                   }}
-                  onCancel={() => {
-                    setMenuOpen(false);
-                  }}
                 >
-                  <button
-                    className="w-full text-left px-3 py-2 text-sm rounded-sm text-destructive hover:bg-destructive/10 transition-colors cursor-pointer"
-                    onClick={(e) => e.stopPropagation()}
-                  >
+                  <DropdownMenuItem destructive closeOnClick={false}>
                     删除
-                  </button>
+                  </DropdownMenuItem>
                 </Popconfirm>
-              </div>
-            )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
@@ -1023,16 +702,21 @@ function NoteDrawerContent({
   );
 }
 
-function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSaveAsTemplate, onDelete, showToast, isLoading = false }: NoteDrawerProps & { isLoading?: boolean }) {
+function NoteDrawer({
+  note,
+  isOpen,
+  isLoading,
+  onClose,
+  onUpdate,
+  onDuplicate,
+  onSaveAsTemplate,
+  onDelete,
+}: NoteDrawerProps & { isLoading?: boolean }) {
   const [drawerWidth, setDrawerWidth] = useState(600);
   const isResizing = useRef(false);
-  const startX = useRef(0);
-  const startWidth = useRef(0);
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handleMouseDown = () => {
     isResizing.current = true;
-    startX.current = e.clientX;
-    startWidth.current = drawerWidth;
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
     document.body.style.userSelect = 'none';
@@ -1040,9 +724,10 @@ function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSav
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isResizing.current) return;
-    const deltaX = startX.current - e.clientX;
-    const newWidth = Math.min(Math.max(400, startWidth.current + deltaX), window.innerWidth - 200);
-    setDrawerWidth(newWidth);
+    const newWidth = window.innerWidth - e.clientX;
+    if (newWidth >= 320 && newWidth <= window.innerWidth * 0.8) {
+      setDrawerWidth(newWidth);
+    }
   };
 
   const handleMouseUp = () => {
@@ -1080,11 +765,9 @@ function NoteDrawer({ note, isOpen, onClose, onUpdate, onPin, onDuplicate, onSav
             isOpen={isOpen}
             onClose={onClose}
             onUpdate={onUpdate}
-            onPin={onPin}
             onDuplicate={onDuplicate}
             onSaveAsTemplate={onSaveAsTemplate}
             onDelete={onDelete}
-            showToast={showToast}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -1117,21 +800,16 @@ function FolderModal({ initialData, onClose, onSave }: FolderModalProps) {
   };
 
   return (
-    <ModalShell
+    <Modal
+      visible={true}
       title={initialData ? '编辑知识库' : '添加知识库'}
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            取消
-          </Button>
-          <Button variant="default" onClick={handleSave} disabled={!name.trim()}>
-            {initialData ? '保存' : '添加'}
-          </Button>
-        </>
-      }
+      onCancel={onClose}
+      onOk={handleSave}
+      okText={initialData ? '保存' : '添加'}
+      okDisabled={!name.trim()}
+      width={480}
     >
-      <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3 pt-2">
+      <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3">
         <label className="text-sm font-medium text-muted-foreground">知识库名称</label>
         <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
           <Library size={18} className="text-primary shrink-0" />
@@ -1146,7 +824,7 @@ function FolderModal({ initialData, onClose, onSave }: FolderModalProps) {
           />
         </div>
       </div>
-    </ModalShell>
+    </Modal>
   );
 }
 
@@ -1155,25 +833,18 @@ interface AddListModalProps {
   initialFolderId?: string;
   initialData?: List;
   onClose: () => void;
-  onAdd: (data: { name: string; color: string; viewType: ViewType; folderId: string | null; icon: string }, newFolderName?: string) => void;
+  onAdd: (data: { name: string; folderId: string | null }, newFolderName?: string) => void;
   onAddFolder: (name: string) => Folder;
 }
 
-const COLORS = ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#3b82f6', '#6366f1', '#a855f7'];
-
 function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, onAddFolder }: AddListModalProps) {
   const [name, setName] = useState(initialData?.name || '');
-  const [color, setColor] = useState(initialData?.color || COLORS[6]);
   const [folderId, setFolderId] = useState<string | null>(initialData?.folderId !== undefined ? initialData.folderId : (initialFolderId || null));
-  const [isFolderDropdownOpen, setIsFolderDropdownOpen] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
-
-  const closeDropdown = useCallback(() => setIsFolderDropdownOpen(false), []);
-  const dropdownRef = useClickOutside<HTMLDivElement>(closeDropdown);
 
   const handleAdd = () => {
     if (!name.trim()) return;
-    onAdd({ name, color, viewType: 'list', folderId, icon: 'BookOpen' });
+    onAdd({ name, folderId });
   };
 
   const getFolderDisplay = () => {
@@ -1183,19 +854,14 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
   };
 
   return (
-    <ModalShell
+    <Modal
+      visible={true}
       title={initialData ? '编辑文件夹' : '添加文件夹'}
-      onClose={onClose}
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            取消
-          </Button>
-          <Button variant="default" onClick={handleAdd} disabled={!name.trim()}>
-            {initialData ? '保存' : '添加'}
-          </Button>
-        </>
-      }
+      onCancel={onClose}
+      onOk={handleAdd}
+      okText={initialData ? '保存' : '添加'}
+      okDisabled={!name.trim()}
+      width={500}
     >
       <div className="flex flex-col gap-4">
         <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3">
@@ -1214,65 +880,37 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
           </div>
         </div>
 
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold text-muted-foreground">颜色主题</span>
-          <div className="flex items-center gap-2">
-            <div
-              className={cn(
-                'size-5 rounded-full cursor-pointer border-2 transition-transform hover:scale-110',
-                color === 'none' ? 'border-ring ring-2 ring-ring/20' : 'border-border'
-              )}
-              onClick={() => setColor('none')}
-            />
-            {COLORS.map(c => (
-              <div
-                key={c}
-                className={cn(
-                  'size-5 rounded-full cursor-pointer border-2 transition-transform hover:scale-110',
-                  color === c ? 'border-foreground ring-2 ring-ring/30' : 'border-transparent'
-                )}
-                style={{ background: c }}
-                onClick={() => setColor(c)}
-              />
-            ))}
-          </div>
-        </div>
-
-
-
         <div className="flex items-center justify-between relative">
-              <span className="text-xs font-semibold text-muted-foreground">所属知识库</span>
-          <div className="relative flex-1 max-w-[220px]" ref={dropdownRef}>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full flex items-center justify-between px-3 text-xs font-medium"
-              onClick={() => setIsFolderDropdownOpen(!isFolderDropdownOpen)}
-            >
-              <span>{getFolderDisplay()}</span>
-              <ChevronDown size={14} className="text-muted-foreground" />
-            </Button>
-
-            {isFolderDropdownOpen && (
-              <div className="absolute top-full right-0 mt-1.5 z-50 w-full p-1 bg-popover border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex flex-col max-h-48 overflow-y-auto">
-                <button
-                  type="button"
-                  className="flex items-center justify-between px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer w-full text-left"
-                  onClick={() => { setFolderId(null); setIsFolderDropdownOpen(false); }}
+          <span className="text-xs font-semibold text-muted-foreground">所属知识库</span>
+          <div className="relative flex-1 max-w-[220px]">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full flex items-center justify-between px-3 text-xs font-medium"
+                >
+                  <span>{getFolderDisplay()}</span>
+                  <ChevronDown size={14} className="text-muted-foreground" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-[220px] max-h-48 overflow-y-auto">
+                <DropdownMenuItem
+                  className="flex items-center justify-between"
+                  onClick={() => setFolderId(null)}
                 >
                   <span>无</span>
                   {folderId === null && <Check size={14} className="text-primary" />}
-                </button>
+                </DropdownMenuItem>
                 {folders.map(f => (
-                  <button
+                  <DropdownMenuItem
                     key={f.id}
-                    type="button"
-                    className="flex items-center justify-between px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer w-full text-left"
-                    onClick={() => { setFolderId(f.id); setIsFolderDropdownOpen(false); }}
+                    className="flex items-center justify-between"
+                    onClick={() => setFolderId(f.id)}
                   >
                     <span>{f.name}</span>
                     {folderId === f.id && <Check size={14} className="text-primary" />}
-                  </button>
+                  </DropdownMenuItem>
                 ))}
                 <div className="pt-1 border-t border-border flex items-center gap-1.5 px-2 py-1">
                   <Plus size={14} className="text-muted-foreground shrink-0" />
@@ -1290,22 +928,19 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
                           const newFolder = onAddFolder(newFolderName.trim());
                           setFolderId(newFolder.id);
                           setNewFolderName('');
-                          setIsFolderDropdownOpen(false);
                         }
                       }
                     }}
                   />
                 </div>
-              </div>
-            )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </div>
-    </ModalShell>
+    </Modal>
   );
 }
-
-
 
 interface BatchExportModalProps {
   notes: Note[];
@@ -1336,7 +971,7 @@ function BatchExportModal({ notes, onExport, onClose }: BatchExportModalProps) {
 
   const handleConfirm = () => {
     if (selectedIds.size === 0) {
-      alert('请至少选择一条笔记进行导出。');
+      toast.error('请至少选择一条笔记进行导出。');
       return;
     }
     onExport(Array.from(selectedIds));
@@ -1345,20 +980,14 @@ function BatchExportModal({ notes, onExport, onClose }: BatchExportModalProps) {
   const allSelected = selectedIds.size === notes.length && notes.length > 0;
 
   return (
-    <ModalShell
+    <Modal
+      visible={true}
       title="批量导出笔记"
-      onClose={onClose}
-      width="500px"
-      footer={
-        <>
-          <Button variant="secondary" onClick={onClose}>
-            取消
-          </Button>
-          <Button variant="default" onClick={handleConfirm} disabled={selectedIds.size === 0 || notes.length === 0}>
-            导出选中的笔记 ({selectedIds.size})
-          </Button>
-        </>
-      }
+      onCancel={onClose}
+      onOk={handleConfirm}
+      okText={`导出选中的笔记 (${selectedIds.size})`}
+      okDisabled={selectedIds.size === 0 || notes.length === 0}
+      width={500}
     >
       <div className="overflow-y-auto max-h-[50vh] space-y-1">
         {notes.length === 0 ? (
@@ -1398,7 +1027,7 @@ function BatchExportModal({ notes, onExport, onClose }: BatchExportModalProps) {
           </>
         )}
       </div>
-    </ModalShell>
+    </Modal>
   );
 }
 
@@ -1472,8 +1101,6 @@ export function ListsPanel() {
     return rawNotes
       .filter(n => n.listId === activeListId)
       .sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
         if (a.sortOrder !== b.sortOrder) {
           return (a.sortOrder || 0) - (b.sortOrder || 0);
         }
@@ -1531,7 +1158,6 @@ export function ListsPanel() {
   });
   const drawerNote = activeNote?.contentLoaded ? activeNote : activeNoteDetail ?? null;
   const [newNoteTitle, setNewNoteTitle] = useState('');
-  const [listMenuOpen, setListMenuOpen] = useState(false);
   const [isAddingGroup, setIsAddingGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
 
@@ -1546,28 +1172,6 @@ export function ListsPanel() {
 
   // Template & Export state
   const [batchExportModalOpen, setBatchExportModalOpen] = useState(false);
-
-  // Toast state
-  interface ToastMessage {
-    id: string;
-    message: string;
-    type: 'success' | 'error';
-    isFadingOut?: boolean;
-  }
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    const id = Math.random().toString(36).substring(2, 9);
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      setToasts(prev =>
-        prev.map(t => (t.id === id ? { ...t, isFadingOut: true } : t))
-      );
-    }, 2700);
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 3000);
-  };
 
   const didInitActiveList = useRef(false);
   useEffect(() => {
@@ -1700,7 +1304,7 @@ export function ListsPanel() {
         const targetList = listMap.get(targetListId);
         moveNoteToList(activeId, targetListId);
         if (targetList) {
-          showToast(`已成功移动笔记到文件夹「${targetList.name}」`);
+          toast.success(`已成功移动笔记到文件夹「${targetList.name}」`);
         }
         return;
       }
@@ -1711,7 +1315,7 @@ export function ListsPanel() {
         if (folderLists.length > 0) {
           const targetList = folderLists[0];
           moveNoteToList(activeId, targetList.id);
-          showToast(`已成功移动笔记到文件夹「${targetList.name}」`);
+          toast.success(`已成功移动笔记到文件夹「${targetList.name}」`);
         }
         return;
       }
@@ -1770,38 +1374,33 @@ export function ListsPanel() {
     }
   };
 
-  // --- List Handlers ---
+  // --- Handlers ---
   const handleAddListClick = (folderId?: string) => {
     setEditListId(null);
     setAddModalInitialFolderId(folderId);
     setIsAddModalOpen(true);
   };
 
-  const handleAddFolder = (name: string) => {
+  const handleAddFolder = (name: string): Folder => {
     return addFolder(name);
   };
 
-  const handleAddList = (data: { name: string; color: string; viewType: ViewType; folderId: string | null; icon: string }, newFolderName?: string) => {
+  const handleAddList = (data: { name: string; folderId: string | null; newFolderName?: string }) => {
     let finalFolderId = data.folderId;
-    if (newFolderName) {
-      const newFolder = addFolder(newFolderName);
-      finalFolderId = newFolder.id;
+    if (data.newFolderName) {
+      const created = handleAddFolder(data.newFolderName);
+      finalFolderId = created.id;
     }
+
     if (editListId) {
       updateList(editListId, {
         name: data.name,
-        color: data.color,
-        viewType: data.viewType,
         folderId: finalFolderId,
-        icon: data.icon,
       });
     } else {
       const newList = addList({
         name: data.name,
-        color: data.color,
-        viewType: data.viewType,
         folderId: finalFolderId,
-        icon: data.icon,
       });
       setActiveListId(newList.id);
     }
@@ -1809,7 +1408,6 @@ export function ListsPanel() {
     setEditListId(null);
   };
 
-  // --- Sidebar Actions ---
   const handleEditFolder = (folder: Folder) => {
     setEditFolderId(folder.id);
     setIsFolderModalOpen(true);
@@ -1823,10 +1421,6 @@ export function ListsPanel() {
     setEditFolderId(null);
   };
 
-  const handlePinFolder = (folder: Folder) => {
-    updateFolder(folder.id, { isPinned: !folder.isPinned });
-  };
-
   const handleDissolveFolder = (folder: Folder) => {
     deleteFolder(folder.id);
   };
@@ -1834,10 +1428,6 @@ export function ListsPanel() {
   const handleEditList = (list: List) => {
     setEditListId(list.id);
     setIsAddModalOpen(true);
-  };
-
-  const handlePinList = (list: List) => {
-    updateList(list.id, { isPinned: !list.isPinned });
   };
 
   const handleDuplicateList = (list: List) => {
@@ -1879,7 +1469,7 @@ export function ListsPanel() {
           content: jsonContent,
         });
       }
-      showToast(`已成功导入 ${importedFiles.length} 条笔记！`);
+      toast.success(`已成功导入 ${importedFiles.length} 条笔记！`);
     } catch (err) {
       logSilent('listsPanel', 'batch import cancelled or failed', err);
     }
@@ -1890,7 +1480,7 @@ export function ListsPanel() {
       const count = await listsService.exportNotesToMarkdown(notes, selectedNoteIds, convertTipTapJsonToMarkdown);
       if (count > 0) {
         setBatchExportModalOpen(false);
-        showToast(`已成功导出 ${count} 条笔记！`);
+        toast.success(`已成功导出 ${count} 条笔记！`);
       }
     } catch (err) {
       logSilent('listsPanel', 'batch export cancelled or failed', err);
@@ -1899,10 +1489,6 @@ export function ListsPanel() {
 
   const handleNoteUpdate = (id: string, title: string, content: string) => {
     updateNote(id, { title, content });
-  };
-
-  const handlePinNote = (note: Note) => {
-    updateNote(note.id, { isPinned: !note.isPinned });
   };
 
   const handleDuplicateNote = async (note: Note) => {
@@ -1916,13 +1502,6 @@ export function ListsPanel() {
     handleOpenNote(newNote.id, newNote.title);
   };
 
-  const handleSaveAsTemplate = async (note: Note) => {
-    const source = note.contentLoaded ? note : await listsService.loadNote(note.id);
-    if (!source) return;
-    await addTemplate(source.title || '自定义模板', source.content);
-    showToast('已保存为模板！');
-  };
-
   const handleDeleteNote = (note: Note) => {
     deleteNote(note.id);
     if (activeNoteId === note.id) {
@@ -1931,19 +1510,19 @@ export function ListsPanel() {
     }
   };
 
-  const ensureJsonFormat = (text: string) => {
-    if (!text) return JSON.stringify({ type: 'doc', content: [{ type: 'paragraph' }] });
-    const trimmed = text.trim();
-    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
-      return trimmed;
-    }
-    return convertMarkdownToTipTapJson(text);
+  const handleSaveAsTemplate = (note: Note) => {
+    addTemplate(note.title || '未命名模板', note.content);
+    toast.success('已成功保存为模板！');
   };
 
   const handleSelectTemplate = (template: Template) => {
-    if (!activeNoteId) return;
-    const jsonContent = ensureJsonFormat(template.content);
-    updateNote(activeNoteId, { content: jsonContent });
+    if (!activeListId) return;
+    const newNote = addNote({
+      listId: activeListId,
+      title: template.name,
+      content: template.content,
+    });
+    handleOpenNote(newNote.id, newNote.title);
     setIsTemplateModalOpen(false);
   };
 
@@ -1955,17 +1534,19 @@ export function ListsPanel() {
     deleteTemplate(id);
   };
 
-  // --- Group Actions ---
+  // Group actions
   const handleAddGroupClick = () => {
     setIsAddingGroup(true);
     setNewGroupName('');
   };
 
   const handleConfirmAddGroup = () => {
-    if (!activeListId) return;
-    if (newGroupName.trim()) {
-      addGroup(activeListId, newGroupName.trim());
+    if (!activeListId || !newGroupName.trim()) {
+      setIsAddingGroup(false);
+      return;
     }
+    addGroup(activeListId, newGroupName.trim());
+    setNewGroupName('');
     setIsAddingGroup(false);
   };
 
@@ -1977,16 +1558,7 @@ export function ListsPanel() {
     deleteGroup(id);
   };
 
-  const handleMoveNote = (note: Note, targetListId: string) => {
-    updateNote(note.id, { listId: targetListId, groupId: null });
-    if (activeNoteId === note.id && activeListId !== targetListId) {
-      setActiveNoteId(null);
-      setIsDrawerOpen(false);
-    }
-  };
-
   const activeList = listMap.get(activeListId || '');
-
   const ungroupedNotes = useMemo(() => notes.filter(n => !n.groupId), [notes]);
   const activeNoteItem = useMemo(() => (activeDragNoteId ? noteMap.get(activeDragNoteId) : null), [noteMap, activeDragNoteId]);
   const isUngroupedDragOverTarget = dragOverGroupId === 'ungrouped' && activeNoteItem && activeNoteItem.groupId !== null;
@@ -2004,69 +1576,36 @@ export function ListsPanel() {
           onSelectList={setActiveListId}
           onAddClick={handleAddListClick}
           onEditFolder={handleEditFolder}
-          onPinFolder={handlePinFolder}
           onDissolveFolder={handleDissolveFolder}
           onEditList={handleEditList}
-          onPinList={handlePinList}
           onDuplicateList={handleDuplicateList}
           onDeleteList={handleDeleteList}
           isCollapsed={isSidebarCollapsed}
         />
 
-        <main
-          className="flex-1 flex flex-col bg-transparent relative overflow-hidden"
-          onClick={() => setListMenuOpen(false)}
-        >
+        <main className="flex-1 flex flex-col bg-transparent relative overflow-hidden">
           {activeList ? (
             <>
               <div className="flex h-12 items-center justify-between border-b border-border bg-card px-6 shrink-0 z-30 relative">
                 <div className="flex items-center gap-2 text-base font-bold text-foreground">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-lg"
-                    onClick={toggleSidebar}
-                    title={isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}
-                  >
+                  <Button variant="ghost" size="icon" className="rounded-lg" onClick={toggleSidebar} title={isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}>
                     <MenuIcon isCollapsed={isSidebarCollapsed} />
                   </Button>
                   <span>{activeList.name}</span>
                 </div>
                 <div className="flex items-center gap-4 text-muted-foreground">
-                  <div className="relative">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="rounded-lg"
-                      onClick={(e) => { e.stopPropagation(); setListMenuOpen(!listMenuOpen); }}
-                    >
-                      <MoreHorizontal size={18} />
-                    </Button>
-                    {listMenuOpen && (
-                      <div className="absolute right-0 top-full mt-2 z-[100] min-w-44 p-1 bg-popover text-popover-foreground border border-border rounded-xl shadow-2xl flex flex-col animate-in fade-in zoom-in-95">
-
-
-                        <button
-                          className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                          onClick={() => { handleAddGroupClick(); setListMenuOpen(false); }}
-                        >
-                          新建分组
-                        </button>
-                        <button
-                          className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                          onClick={() => { handleBatchImport(); setListMenuOpen(false); }}
-                        >
-                          批量导入MD
-                        </button>
-                        <button
-                          className="w-full text-left px-3 py-2 text-sm rounded-sm text-foreground hover:bg-muted transition-colors cursor-pointer"
-                          onClick={() => { setBatchExportModalOpen(true); setListMenuOpen(false); }}
-                        >
-                          批量导出MD
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="rounded-lg">
+                        <MoreHorizontal size={18} />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="min-w-44">
+                      <DropdownMenuItem onClick={handleAddGroupClick}>新建分组</DropdownMenuItem>
+                      <DropdownMenuItem onClick={handleBatchImport}>批量导入MD</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setBatchExportModalOpen(true)}>批量导出MD</DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
 
@@ -2078,17 +1617,13 @@ export function ListsPanel() {
                     placeholder="添加笔记..."
                     value={newNoteTitle}
                     onChange={e => setNewNoteTitle(e.target.value)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleAddNote();
-                    }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddNote(); }}
                     className="border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto"
                   />
                 </div>
 
                 {notes.length === 0 && !isAddingGroup ? (
-                  <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-                    暂无笔记
-                  </div>
+                  <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">暂无笔记</div>
                 ) : (
                   <div className="flex flex-col pb-8">
                     {isAddingGroup && (
@@ -2115,12 +1650,9 @@ export function ListsPanel() {
                             <NoteItem
                               key={note.id}
                               note={note}
-                              allLists={lists}
                               onClick={() => handleOpenNote(note.id, note.title)}
-                              onPin={handlePinNote}
                               onDuplicate={handleDuplicateNote}
                               onDelete={handleDeleteNote}
-                              onMove={handleMoveNote}
                             />
                           </SortableItem>
                         ))}
@@ -2135,15 +1667,12 @@ export function ListsPanel() {
                               key={group.id}
                               group={group}
                               notes={groupNotes}
-                              allLists={lists}
                               isDragOverTarget={!!isDragOverTarget}
                               onRenameGroup={handleRenameGroup}
                               onDeleteGroup={handleDeleteGroup}
                               onNoteClick={(note) => handleOpenNote(note.id, note.title)}
-                              onPinNote={handlePinNote}
                               onDuplicateNote={handleDuplicateNote}
                               onDeleteNote={handleDeleteNote}
-                              onMoveNote={handleMoveNote}
                             />
                           );
                         })}
@@ -2152,16 +1681,13 @@ export function ListsPanel() {
                             key="ungrouped"
                             group={{ id: 'ungrouped', listId: activeListId!, name: '未分组' }}
                             notes={ungroupedNotes}
-                            allLists={lists}
                             isUngrouped={true}
                             isDragOverTarget={!!isUngroupedDragOverTarget}
                             onRenameGroup={() => { }}
                             onDeleteGroup={() => { }}
                             onNoteClick={(note) => handleOpenNote(note.id, note.title)}
-                            onPinNote={handlePinNote}
                             onDuplicateNote={handleDuplicateNote}
                             onDeleteNote={handleDeleteNote}
-                            onMoveNote={handleMoveNote}
                           />
                         )}
                       </>
@@ -2176,11 +1702,9 @@ export function ListsPanel() {
                 isOpen={isDrawerOpen}
                 onClose={() => setIsDrawerOpen(false)}
                 onUpdate={handleNoteUpdate}
-                onPin={handlePinNote}
                 onDuplicate={handleDuplicateNote}
                 onSaveAsTemplate={handleSaveAsTemplate}
                 onDelete={handleDeleteNote}
-                showToast={showToast}
               />
             </>
           ) : (
@@ -2226,28 +1750,6 @@ export function ListsPanel() {
             onClose={() => setBatchExportModalOpen(false)}
           />
         )}
-
-
-
-        {/* Toast notifications */}
-        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-2 pointer-events-none">
-          {toasts.map(t => (
-            <div
-              key={t.id}
-              className={cn(
-                'pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl bg-foreground/90 dark:bg-background/90 text-background dark:text-foreground shadow-2xl backdrop-blur-md border border-border text-sm font-medium transition-all duration-300',
-                t.isFadingOut ? 'opacity-0 translate-y-2' : 'animate-in slide-in-from-bottom-4'
-              )}
-            >
-              {t.type === 'success' ? (
-                <CheckCircle size={18} className="text-emerald-400 dark:text-emerald-600 shrink-0" />
-              ) : (
-                <AlertCircle size={18} className="text-red-400 dark:text-red-600 shrink-0" />
-              )}
-              <span>{t.message}</span>
-            </div>
-          ))}
-        </div>
       </section>
     </DndContext>
   );

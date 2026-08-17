@@ -8,31 +8,21 @@ import type { List, Folder, Note, NoteGroup } from "@/types/lists";
  * rules that previously lived inside the Zustand store getters.
  */
 
-/** Pinned first, then by sortOrder ascending. */
+/** Ordered by sortOrder ascending. */
 export function sortLists(lists: List[]): List[] {
-  return [...lists].sort((a, b) => {
-    if (a.isPinned && !b.isPinned) return -1;
-    if (!a.isPinned && b.isPinned) return 1;
-    return (a.sortOrder || 0) - (b.sortOrder || 0);
-  });
+  return [...lists].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 }
 
-/** Pinned first, then by sortOrder ascending. */
+/** Ordered by sortOrder ascending. */
 export function sortFolders(folders: Folder[]): Folder[] {
-  return [...folders].sort((a, b) => {
-    if (a.isPinned && !b.isPinned) return -1;
-    if (!a.isPinned && b.isPinned) return 1;
-    return (a.sortOrder || 0) - (b.sortOrder || 0);
-  });
+  return [...folders].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 }
 
-/** Notes for a list: pinned first, then sortOrder, then most-recently-updated. */
+/** Notes for a list: sortOrder ascending, then most-recently-updated. */
 export function getNotesByListId(notes: Note[], listId: string): Note[] {
   return notes
     .filter(n => n.listId === listId)
     .sort((a, b) => {
-      if (a.isPinned && !b.isPinned) return -1;
-      if (!a.isPinned && b.isPinned) return 1;
       if (a.sortOrder !== b.sortOrder) {
         return (a.sortOrder || 0) - (b.sortOrder || 0);
       }

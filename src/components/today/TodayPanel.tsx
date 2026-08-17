@@ -26,12 +26,6 @@ const EMPTY_HABITS: Habit[] = [];
 const EMPTY_CHECKINS: HabitCheckIn[] = [];
 const EMPTY_REVIEWS: DailyReviewItem[] = [];
 
-const WEEKDAY_LABELS = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"] as const;
-const MONTH_LABELS = [
-  "一月", "二月", "三月", "四月", "五月", "六月",
-  "七月", "八月", "九月", "十月", "十一月", "十二月"
-] as const;
-
 interface QuadrantConfig {
   type: QuadrantType;
   title: string;
@@ -183,12 +177,7 @@ export const TodayPanel: React.FC = () => {
     }));
   };
 
-  const [meterReady, setMeterReady] = useState(false);
 
-  useEffect(() => {
-    const raf = requestAnimationFrame(() => setMeterReady(true));
-    return () => cancelAnimationFrame(raf);
-  }, []);
 
   // The editor is an event-only window. Warm it after the first paint so the
   // first task click does not pay the cost of creating a new WebView.
@@ -205,7 +194,7 @@ export const TodayPanel: React.FC = () => {
 
   const now = Date.now();
   const today = todayYMD();
-  const todayDate = useMemo(() => new Date(), []);
+
 
   // Filter tasks due today sorted by quadrant (Q2 > Q1 > Q3 > Q4) then deadline
   const dueTasks = useMemo(
@@ -257,11 +246,7 @@ export const TodayPanel: React.FC = () => {
   // Daily review status
   const reviewWritten = useMemo(() => isReviewWritten(reviews, today), [reviews, today]);
 
-  // Progress metrics
-  const totalCount = dueTasks.length + todayHabits.length + 1;
   const remaining = pendingTasks.length + uncheckedHabits.length + (reviewWritten ? 0 : 1);
-  const clearedPct = totalCount > 0 ? Math.round(((totalCount - remaining) / totalCount) * 100) : 100;
-  const segWidth = (count: number) => (meterReady && totalCount > 0 ? `${(count / totalCount) * 100}%` : "0%");
 
   const handleToggleTask = useCallback(
     (task: Task) => {
@@ -279,7 +264,7 @@ export const TodayPanel: React.FC = () => {
       task,
       anchorEl: anchor,
       onCommit: (taskId, updates) => updateTask(taskId, updates),
-      onClosed: () => {},
+      onClosed: () => { },
     });
   };
 
@@ -396,68 +381,6 @@ export const TodayPanel: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full w-full max-w-[1080px] mx-auto px-6 py-6 md:px-9 overflow-y-auto select-none space-y-6">
-      {/* 签名元素: 撕历式头部 */}
-      <header className="flex items-start gap-6 pb-5 border-b border-border shrink-0">
-        {/* 撕历日期块 */}
-        <div className="relative flex flex-col items-center shrink-0 px-4 py-2.5 bg-card border border-border rounded-xl shadow-xs">
-          {/* 两个装订孔 */}
-          <div className="absolute -top-1 left-[22%] size-1.5 rounded-full bg-background border border-border" />
-          <div className="absolute -top-1 right-[22%] size-1.5 rounded-full bg-background border border-border" />
-
-          <div className="text-5xl font-black text-foreground leading-none tracking-tight tabular-nums pt-1">
-            {todayDate.getDate()}
-          </div>
-          <div className="text-xs text-muted-foreground tracking-[3px] pl-0.5 mt-1">
-            {MONTH_LABELS[todayDate.getMonth()]} · {WEEKDAY_LABELS[todayDate.getDay()]}
-          </div>
-        </div>
-
-        {/* Header Main */}
-        <div className="flex-1 min-w-0 pt-1">
-          <div className="flex items-baseline justify-between gap-3 mb-3">
-            <h1 className="text-xl font-bold text-foreground">
-              {remaining === 0 ? (
-                "今日已清空"
-              ) : (
-                <>
-                  今天还剩 <span className="text-blue-600 dark:text-blue-400 font-bold">{remaining}</span> 件事
-                </>
-              )}
-            </h1>
-            <span className="text-xs text-muted-foreground tabular-nums ml-auto">
-              已清空 {clearedPct}%
-            </span>
-          </div>
-
-          {/* 清空进度条: 三色分段燃尽条 */}
-          <div
-            className="flex h-2.5 rounded-full overflow-hidden bg-muted border border-border"
-            role="img"
-            aria-label={`今日剩余：任务${pendingTasks.length}件、习惯${uncheckedHabits.length}项、复盘${reviewWritten ? "已写" : "未写"}`}
-          >
-            <div className="h-full bg-blue-500 transition-all duration-500 ease-out" style={{ width: segWidth(pendingTasks.length) }} />
-            <div className="h-full bg-emerald-500 transition-all duration-500 ease-out" style={{ width: segWidth(uncheckedHabits.length) }} />
-            <div className="h-full bg-violet-500 transition-all duration-500 ease-out" style={{ width: segWidth(reviewWritten ? 0 : 1) }} />
-          </div>
-
-          {/* 图例 */}
-          <div className="flex items-center gap-4 mt-2.5 text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1.5">
-              <span className="size-2 rounded-2xs bg-blue-500" />
-              今日到期任务 <b className="text-foreground font-semibold tabular-nums">{pendingTasks.length}</b>
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="size-2 rounded-2xs bg-emerald-500" />
-              待打卡习惯 <b className="text-foreground font-semibold tabular-nums">{uncheckedHabits.length}</b>
-            </span>
-            <span className="inline-flex items-center gap-1.5">
-              <span className="size-2 rounded-2xs bg-violet-500" />
-              复盘 <b className="text-foreground font-semibold">{reviewWritten ? "已写" : "未写"}</b>
-            </span>
-          </div>
-        </div>
-      </header>
-
       {/* 主体: 主列表 + 右侧轻栏 */}
       {remaining === 0 && dueTasks.length === 0 && todayHabits.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-3.5 text-center text-muted-foreground py-6 rounded-2xl bg-card border border-border/70">

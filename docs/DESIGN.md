@@ -39,7 +39,8 @@ The knowledge editor keeps local draft state and debounced persistence. Do not r
 | Desktop chrome | Window controls and persistent tool navigation | `src/components/layout/AppLayout.tsx` |
 | Route canvas | Active task, habit, knowledge, or review work | `src/router.tsx`, `src/pages/` |
 | Cards and panels | Group related information and actions | `src/components/ui/card.tsx`, feature panels |
-| Dialogs and drawers | Focused editing, settings, and confirmation | `src/components/ui/dialog.tsx`, `drawer.tsx`, `confirm-dialog.tsx` |
+| Dialogs, modals, and drawers | Focused editing, settings, and standard dialogs | `src/components/ui/modal.tsx` (Arco Modal), `dialog.tsx`, `popconfirm.tsx` |
+| Floating menus and toasts | Transient actions and global feedback | `src/components/ui/dropdown-menu.tsx`, `src/components/ui/toast.tsx` |
 | Secondary webviews | Quick task editing and focus assistance | `quick-edit.html`, `focus-assistant.html` |
 
 ## Interaction and accessibility expectations

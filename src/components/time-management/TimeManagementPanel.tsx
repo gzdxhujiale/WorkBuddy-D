@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
-  ListTodo,
   LayoutGrid,
   Sun,
   CalendarRange,
@@ -213,7 +212,7 @@ export const TimeManagementPanel: React.FC = () => {
       return (
         <>
           {monthLabel}
-          <span className="text-slate-400 dark:text-slate-500 font-medium ml-2 text-xs">
+          <span className="text-muted-foreground font-medium ml-2 text-xs">
             · 月度任务截止表
           </span>
         </>
@@ -224,7 +223,7 @@ export const TimeManagementPanel: React.FC = () => {
       return (
         <>
           {monday.getMonth() + 1}月{monday.getDate()}日 - {sunday.getMonth() + 1}月{sunday.getDate()}日
-          <span className="text-slate-400 dark:text-slate-500 font-medium ml-2 text-xs">
+          <span className="text-muted-foreground font-medium ml-2 text-xs">
             · 周度任务视图
           </span>
         </>
@@ -233,7 +232,7 @@ export const TimeManagementPanel: React.FC = () => {
     return (
       <>
         {currentDate.getFullYear()}年{currentDate.getMonth() + 1}月{currentDate.getDate()}日
-        <span className="text-slate-400 dark:text-slate-500 font-medium ml-2 text-xs">
+        <span className="text-muted-foreground font-medium ml-2 text-xs">
           · 日任务时间轴
         </span>
       </>
@@ -243,28 +242,18 @@ export const TimeManagementPanel: React.FC = () => {
   return (
     <div className="flex flex-col h-full w-full bg-transparent overflow-hidden select-none">
       {/* Panel Header */}
-      <header className="flex items-center justify-between px-6 py-3 border-b border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md flex-shrink-0">
-        <div className="flex items-center gap-3">
-          <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <ListTodo className="text-blue-600 dark:text-blue-400" size={20} />
-            {activeView === "quadrant" && "任务中心"}
-            {activeView === "day" && "时间管理 · 日视图"}
-            {activeView === "week" && "时间管理 · 周视图"}
-            {activeView === "month" && "时间管理 · 月视图"}
-          </h1>
-        </div>
-
+      <header className="flex h-12 items-center justify-end px-6 border-b border-border bg-card flex-shrink-0 select-none">
         {/* Header Right Actions */}
         <div className="flex items-center gap-3">
-          <button onClick={() => void toggleFocusAssistant()} className="flex items-center gap-1.5 rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300" title="显示或隐藏悬浮专注助手"><Timer size={14} />悬浮专注</button>
-          {/* View Switcher Tabs (筛选组件左侧 Tabs) */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800/90 p-1 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+          <button onClick={() => void toggleFocusAssistant()} className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300 cursor-pointer" title="显示或隐藏悬浮专注助手"><Timer size={14} />悬浮专注</button>
+          {/* View Switcher Tabs */}
+          <div className="flex items-center bg-muted p-0.5 rounded-lg border border-border">
             <button
               onClick={() => setActiveView("quadrant")}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
                 activeView === "quadrant"
-                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs font-semibold"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                  ? "bg-card text-foreground shadow-2xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <LayoutGrid size={14} />
@@ -272,10 +261,10 @@ export const TimeManagementPanel: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveView("day")}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
                 activeView === "day"
-                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs font-semibold"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                  ? "bg-card text-foreground shadow-2xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <Sun size={14} />
@@ -283,10 +272,10 @@ export const TimeManagementPanel: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveView("week")}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
                 activeView === "week"
-                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs font-semibold"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                  ? "bg-card text-foreground shadow-2xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <CalendarRange size={14} />
@@ -294,10 +283,10 @@ export const TimeManagementPanel: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveView("month")}
-              className={`flex items-center gap-1.5 px-3 py-1 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
                 activeView === "month"
-                  ? "bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs font-semibold"
-                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
+                  ? "bg-card text-foreground shadow-2xs font-semibold"
+                  : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <CalendarIcon size={14} />
@@ -305,12 +294,12 @@ export const TimeManagementPanel: React.FC = () => {
             </button>
           </div>
 
-          {/* Status Filter Selector (状态筛选: 默认未完成) */}
-          <div className="flex items-center text-xs text-slate-500 font-medium">
+          {/* Status Filter Selector */}
+          <div className="flex items-center text-xs font-medium">
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as StatusFilterType)}
-              className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs focus:outline-none cursor-pointer"
+              className="bg-card text-foreground border border-border rounded-lg px-2.5 py-1 text-xs focus:outline-none cursor-pointer"
             >
               <option value="uncompleted">状态: 未完成</option>
               <option value="all">状态: 全部</option>
@@ -318,12 +307,12 @@ export const TimeManagementPanel: React.FC = () => {
             </select>
           </div>
 
-          {/* Priority / Quadrant Filter Selector (Q1~Q4) */}
-          <div className="flex items-center text-xs text-slate-500 font-medium">
+          {/* Priority Filter Selector */}
+          <div className="flex items-center text-xs font-medium">
             <select
               value={quadrantFilter}
               onChange={(e) => setQuadrantFilter(e.target.value)}
-              className="bg-slate-100 dark:bg-slate-800 text-slate-800 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 py-1 text-xs focus:outline-none cursor-pointer"
+              className="bg-card text-foreground border border-border rounded-lg px-2.5 py-1 text-xs focus:outline-none cursor-pointer"
             >
               <option value="ALL">优先级: 全部</option>
               <option value="Q1">Q1 (重要且紧急)</option>
@@ -354,29 +343,29 @@ export const TimeManagementPanel: React.FC = () => {
         ) : (
           <div className="flex-1 min-h-0 flex gap-3.5 items-stretch">
             {/* Left Panel: Card containing Date Navigation Header & Main View */}
-            <div className="min-w-0 flex-1 bg-white/50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs backdrop-blur-xs flex flex-col min-h-0 h-full overflow-hidden">
-              {/* Date Navigation Header inside Left Panel (Reference: workbuddy) */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200/80 dark:border-slate-800 shrink-0 gap-2">
-                <div className="text-sm font-bold text-slate-800 dark:text-slate-100 whitespace-nowrap">
+            <div className="min-w-0 flex-1 bg-card rounded-2xl p-4 border border-border shadow-xs flex flex-col min-h-0 h-full overflow-hidden">
+              {/* Date Navigation Header inside Left Panel */}
+              <div className="flex items-center justify-between pb-3 border-b border-border shrink-0 gap-2">
+                <div className="text-sm font-bold text-foreground whitespace-nowrap">
                   {getLeftHeaderTitle()}
                 </div>
-                <div className="flex items-center gap-1 text-slate-500 shrink-0">
+                <div className="flex items-center gap-1 text-muted-foreground shrink-0">
                   <button
                     onClick={handlePrevDate}
-                    className="p-1.5 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                    className="p-1.5 rounded-lg hover:bg-accent text-foreground transition-colors cursor-pointer"
                     title="上一阶段"
                   >
                     <ChevronLeft size={16} />
                   </button>
                   <button
                     onClick={handleGoToday}
-                    className="px-2.5 py-1 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-xs font-semibold border border-blue-200 dark:border-blue-800 hover:bg-blue-200/60 dark:hover:bg-blue-900/60 transition-colors cursor-pointer"
+                    className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold border border-primary/20 hover:bg-primary/20 transition-colors cursor-pointer"
                   >
                     今天
                   </button>
                   <button
                     onClick={handleNextDate}
-                    className="p-1.5 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
+                    className="p-1.5 rounded-lg hover:bg-accent text-foreground transition-colors cursor-pointer"
                     title="下一阶段"
                   >
                     <ChevronRight size={16} />
@@ -432,19 +421,19 @@ export const TimeManagementPanel: React.FC = () => {
             </div>
 
             {/* Right Panel: Period Task Overview Sidebar (Reference: workbuddy) */}
-            <aside className="w-80 shrink-0 bg-white/50 dark:bg-slate-900/50 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-800 shadow-xs backdrop-blur-xs flex flex-col min-h-0 h-full overflow-hidden">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800 shrink-0">
-                <h3 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+            <aside className="w-80 shrink-0 bg-card rounded-2xl p-4 border border-border shadow-xs flex flex-col min-h-0 h-full overflow-hidden">
+              <div className="flex items-center justify-between pb-3 border-b border-border shrink-0">
+                <h3 className="text-xs font-bold text-foreground">
                   {getSidebarTitle()}
                 </h3>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 font-semibold">
+                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">
                   {periodTasks.length} 项
                 </span>
               </div>
 
               <div className="flex-1 min-h-0 overflow-y-auto space-y-2 py-3 pr-1">
                 {periodTasks.length === 0 ? (
-                  <div className="h-full min-h-[160px] flex flex-col items-center justify-center text-xs text-slate-400 dark:text-slate-500 gap-2.5">
+                  <div className="h-full min-h-[160px] flex flex-col items-center justify-center text-xs text-muted-foreground gap-2.5">
                     <p>
                       {activeView === "day"
                         ? "当日暂无任务"
@@ -456,7 +445,7 @@ export const TimeManagementPanel: React.FC = () => {
                       onClick={() =>
                         handleOpenTaskEditor(undefined, "Q2", undefined, currentDateStr)
                       }
-                      className="px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 text-xs font-medium border border-blue-200 dark:border-blue-800 hover:bg-blue-100 transition-colors cursor-pointer flex items-center gap-1"
+                      className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium border border-primary/20 hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1"
                     >
                       <Plus size={13} />
                       <span>添加任务</span>
@@ -470,8 +459,8 @@ export const TimeManagementPanel: React.FC = () => {
                         onClick={(e) => handleOpenTaskEditor(t, t.quadrant, e.currentTarget)}
                         className={`p-2.5 rounded-xl border transition-all space-y-1.5 relative cursor-pointer ${
                           t.completed
-                            ? "bg-slate-100/50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-60"
-                            : "bg-white/80 dark:bg-slate-850 border-slate-200/80 dark:border-slate-700/80 hover:border-blue-400/60 shadow-2xs"
+                            ? "bg-muted/40 border-border opacity-60"
+                            : "bg-card border-border hover:border-primary/60 shadow-2xs"
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -482,7 +471,7 @@ export const TimeManagementPanel: React.FC = () => {
                                 e.stopPropagation();
                                 handleToggleComplete(t.id);
                               }}
-                              className="mt-0.5 text-slate-400 hover:text-blue-600 transition-colors shrink-0 cursor-pointer"
+                              className="mt-0.5 text-muted-foreground hover:text-primary transition-colors shrink-0 cursor-pointer"
                             >
                               {t.completed ? (
                                 <CheckCircle2 size={16} className="text-emerald-500" />
@@ -494,8 +483,8 @@ export const TimeManagementPanel: React.FC = () => {
                               <div
                                 className={`text-xs font-bold leading-snug break-words ${
                                   t.completed
-                                    ? "line-through text-slate-400 dark:text-slate-500"
-                                    : "text-slate-800 dark:text-slate-100"
+                                    ? "line-through text-muted-foreground"
+                                    : "text-foreground"
                                 }`}
                               >
                                 {t.title}
@@ -506,12 +495,12 @@ export const TimeManagementPanel: React.FC = () => {
                           <span
                             className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 border ${
                               t.quadrant === "Q1"
-                                ? "bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800"
+                                ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
                                 : t.quadrant === "Q2"
-                                ? "bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                                ? "bg-primary/10 text-primary border-primary/20"
                                 : t.quadrant === "Q3"
-                                ? "bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800"
-                                : "bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700"
+                                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20"
+                                : "bg-muted text-muted-foreground border-border"
                             }`}
                           >
                             {t.quadrant}
@@ -519,22 +508,21 @@ export const TimeManagementPanel: React.FC = () => {
                         </div>
 
                         {getTaskDescriptionText(t.description) && (
-                          <p className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-2 pl-6">
+                          <p className="text-[11px] text-muted-foreground line-clamp-2 pl-6">
                             {getTaskDescriptionText(t.description)}
                           </p>
                         )}
 
-                        <div className="flex items-center justify-between pl-6 pt-0.5 text-[10px] text-slate-400 dark:text-slate-500">
+                        <div className="flex items-center justify-between pl-6 pt-0.5 text-[10px] text-muted-foreground">
                           {getTaskEndAt(t) && (
                             <span className="flex items-center gap-1 font-mono">
-                              <Clock size={11} className="text-blue-500" />
+                              <Clock size={11} className="text-primary" />
                               {new Date(getTaskEndAt(t)!).toLocaleDateString("zh-CN", {
                                 month: "numeric",
                                 day: "numeric",
                               })} {taskTimeLabel(t)}
                             </span>
                           )}
-
                         </div>
                       </div>
                     );

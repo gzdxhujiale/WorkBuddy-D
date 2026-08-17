@@ -80,7 +80,7 @@ async function fetchListsData(): Promise<ListsQueryData> {
   const allData = await listsService.loadAll();
   return {
     folders: allData.folders.map(f => ({ ...f })),
-    lists: allData.lists.map(l => ({ ...l, viewType: l.viewType as 'list' | 'board' })),
+    lists: allData.lists.map(l => ({ ...l })),
     noteGroups: allData.noteGroups.map(g => ({ ...g })),
     notes: allData.notes.map(n => ({ ...n })),
   };
@@ -421,7 +421,6 @@ export function useListsActions(): ListsActions {
             listId: updates.listId,
             groupId: updates.groupId,
             title: updates.title,
-            isPinned: updates.isPinned,
             sortOrder: updates.sortOrder,
             baseUpdatedAt: latest.baseUpdatedAt,
           });
@@ -466,8 +465,6 @@ export function useListsActions(): ListsActions {
       const siblingNotes = newNotes
         .filter(n => n.listId === note.listId && n.groupId === groupId && n.id !== noteId)
         .sort((a, b) => {
-          if (a.isPinned && !b.isPinned) return -1;
-          if (!a.isPinned && b.isPinned) return 1;
           if (a.sortOrder !== b.sortOrder) return (a.sortOrder || 0) - (b.sortOrder || 0);
           return b.updatedAt - a.updatedAt;
         });
@@ -648,7 +645,7 @@ export function useListsActions(): ListsActions {
 
     // ── Duplicate (composes the primitives above) ──
     const duplicateList: ListsActions['duplicateList'] = (list) => {
-      const newList = addList({ ...list, name: list.name + ' (副本)', isPinned: false });
+      const newList = addList({ ...list, name: list.name + ' (副本)' });
 
       const sourceGroups = selectNoteGroups(getData(queryClient, userId).noteGroups, list.id);
       const groupMap = new Map<string, string>();
@@ -665,7 +662,6 @@ export function useListsActions(): ListsActions {
           groupId: note.groupId ? groupMap.get(note.groupId) || null : null,
           title: note.title,
           content: note.content,
-          isPinned: note.isPinned,
         });
       });
 

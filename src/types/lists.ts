@@ -1,20 +1,13 @@
-export type ViewType = 'list' | 'board';
-
 export interface List {
   id: string;
   name: string;
-  icon: string;
-  color: string;
-  viewType: ViewType;
   folderId: string | null;
-  isPinned?: boolean;
   sortOrder?: number;
 }
 
 export interface Folder {
   id: string;
   name: string;
-  isPinned?: boolean;
   sortOrder?: number;
 }
 
@@ -33,7 +26,6 @@ export interface Note {
   content: string;
   /** `false` means this is a list summary; load the body before editing/exporting. */
   contentLoaded?: boolean;
-  isPinned?: boolean;
   sortOrder?: number;
   createdAt: number;
   updatedAt: number;

@@ -15,6 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { SettingsDialog } from "./SettingsDialog";
+import { Toaster } from "../ui/toast";
 import { invoke } from "@tauri-apps/api/core";
 
 // ============================================================
@@ -230,6 +231,7 @@ export const AppLayout: React.FC = () => {
       </div>
 
       {isSettingsOpen && <SettingsDialog onClose={() => setIsSettingsOpen(false)} />}
+      <Toaster />
     </div>
   );
 };

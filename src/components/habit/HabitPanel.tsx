@@ -19,7 +19,8 @@ import { Habit, HabitCheckIn, HabitStats } from "@/types/habit";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Modal } from "@/components/ui/modal";
+import { Select } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerContent } from "@/components/ui/drawer";
 import { Item, ItemAvatar, ItemContent, ItemTitle, ItemDescription, ItemActions } from "@/components/ui/item";
@@ -62,15 +63,15 @@ const STAT_CARDS: {
   icon: React.FC<{ size?: number; className?: string }>;
   bgClass: string;
   textClass: string;
-  key: keyof HabitStats;
+  key: keyof HabitStats & string;
   label: string;
   suffix?: string;
 }[] = [
-  { icon: Calendar, bgClass: "bg-blue-50 dark:bg-blue-950/40", textClass: "text-blue-500 dark:text-blue-400", key: "monthCheckIns", label: "本月完成/天" },
-  { icon: CheckCircle2, bgClass: "bg-emerald-50 dark:bg-emerald-950/40", textClass: "text-emerald-500 dark:text-emerald-400", key: "totalCheckIns", label: "累计完成/天" },
-  { icon: Flame, bgClass: "bg-orange-50 dark:bg-orange-950/40", textClass: "text-orange-500 dark:text-orange-400", key: "currentStreak", label: "当前连续/天" },
-  { icon: Award, bgClass: "bg-indigo-50 dark:bg-indigo-950/40", textClass: "text-indigo-500 dark:text-indigo-400", key: "monthlyCompletionRate", label: "本月完成率", suffix: "%" },
-];
+    { icon: Calendar, bgClass: "bg-blue-50 dark:bg-blue-950/40", textClass: "text-blue-500 dark:text-blue-400", key: "monthCheckIns", label: "本月完成/天" },
+    { icon: CheckCircle2, bgClass: "bg-emerald-50 dark:bg-emerald-950/40", textClass: "text-emerald-500 dark:text-emerald-400", key: "totalCheckIns", label: "累计完成/天" },
+    { icon: Flame, bgClass: "bg-orange-50 dark:bg-orange-950/40", textClass: "text-orange-500 dark:text-orange-400", key: "currentStreak", label: "当前连续/天" },
+    { icon: Award, bgClass: "bg-indigo-50 dark:bg-indigo-950/40", textClass: "text-indigo-500 dark:text-indigo-400", key: "monthlyCompletionRate", label: "本月完成率", suffix: "%" },
+  ];
 
 const getDaysAround = () => {
   const base = new Date();
@@ -432,8 +433,7 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
     }
   }, [visible, initialData]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async () => {
     if (!name.trim()) {
       setErrorMsg("请输入习惯名称");
       return;
@@ -455,160 +455,131 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
   };
 
   return (
-    <Dialog open={visible} onOpenChange={(open) => !open && onCancel()}>
-      <DialogContent onClose={onCancel}>
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Sparkles className="text-amber-500" size={18} />
-            {initialData ? "编辑习惯" : "添加新习惯"}
-          </DialogTitle>
-        </DialogHeader>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3 mb-2">
-            <label className="text-sm font-medium text-muted-foreground">习惯名称</label>
-            <div className="flex items-center">
-            <div className="w-full">
-              <Input
-                type="text"
-                value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  if (errorMsg) setErrorMsg("");
-                }}
-                placeholder="习惯名称（例：每天阅读30分钟）"
-                className={`h-10 flex-1 rounded-md ${errorMsg ? "border-destructive bg-destructive/10" : "bg-background"}`}
-              />
-              {errorMsg && <p className="text-xs text-destructive mt-1 pl-1">{errorMsg}</p>}
-            </div>
-            </div>
+    <Modal
+      visible={visible}
+      title={
+        <div className="flex items-center gap-2">
+          <Sparkles className="text-amber-500" size={18} />
+          <span>{initialData ? "编辑习惯" : "添加新习惯"}</span>
+        </div>
+      }
+      onCancel={onCancel}
+      onOk={handleSubmit}
+      okText="保存"
+      cancelText="取消"
+      width={480}
+    >
+      <div className="space-y-4 py-2 text-foreground">
+        <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
+          <label className="text-sm font-medium text-muted-foreground text-right">习惯名称</label>
+          <div className="w-full">
+            <Input
+              type="text"
+              value={name}
+              onChange={(e) => {
+                setName(e.target.value);
+                if (errorMsg) setErrorMsg("");
+              }}
+              placeholder="习惯名称（例：每天阅读30分钟）"
+              className={`h-9 ${errorMsg ? "border-destructive bg-destructive/10" : ""}`}
+            />
+            {errorMsg && <p className="text-xs text-destructive mt-1 pl-1">{errorMsg}</p>}
           </div>
+        </div>
 
-          <div className="space-y-3.5 pt-2">
-            <div className="grid grid-cols-4 items-center gap-3">
-              <label className="text-sm font-medium text-muted-foreground text-right">频率</label>
-              <select
-                value={frequencyType}
-                onChange={(e) => setFrequencyType(e.target.value as "daily" | "weekly_days" | "custom")}
-                className="col-span-3 h-10 px-3 rounded-lg border border-input bg-background text-sm outline-none focus:border-blue-500 cursor-pointer"
-              >
-                {FREQUENCY_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
+        <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
+          <label className="text-sm font-medium text-muted-foreground text-right">频率</label>
+          <Select
+            value={frequencyType}
+            onChange={(val) => setFrequencyType(val as "daily" | "weekly_days" | "custom")}
+            options={FREQUENCY_OPTIONS as unknown as { value: string; label: string }[]}
+            className="w-full"
+          />
+        </div>
 
-            <div className="grid grid-cols-4 items-center gap-3">
-              <label className="text-sm font-medium text-muted-foreground text-right">目标</label>
-              <select
-                value={goal}
-                onChange={(e) => setGoal(e.target.value)}
-                className="col-span-3 h-10 px-3 rounded-lg border border-input bg-background text-sm outline-none focus:border-blue-500 cursor-pointer"
-              >
-                {GOAL_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
+        <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
+          <label className="text-sm font-medium text-muted-foreground text-right">目标</label>
+          <Select
+            value={goal}
+            onChange={(val) => setGoal(val)}
+            options={GOAL_OPTIONS as unknown as { value: string; label: string }[]}
+            className="w-full"
+          />
+        </div>
 
-            <div className="grid grid-cols-4 items-center gap-3">
-              <label className="text-sm font-medium text-muted-foreground text-right">开始日期</label>
-              <div className="col-span-3">
-                <DatePicker
-                  value={startDate}
-                  onChange={setStartDate}
-                  placeholder="选择开始日期"
+        <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
+          <label className="text-sm font-medium text-muted-foreground text-right">开始日期</label>
+          <div className="w-full">
+            <DatePicker
+              value={startDate}
+              onChange={setStartDate}
+              placeholder="选择开始日期"
+            />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
+          <label className="text-sm font-medium text-muted-foreground text-right">坚持时间</label>
+          <div className="flex items-center gap-2">
+            <Select
+              value={duration}
+              onChange={(val) => setDuration(val)}
+              options={DURATION_OPTIONS as unknown as { value: string; label: string }[]}
+              className="flex-1"
+            />
+            {duration === "custom" && (
+              <div className="flex items-center gap-1 shrink-0">
+                <Input
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={customDays}
+                  onChange={(e) => setCustomDays(e.target.value)}
+                  className="w-20 h-9"
                 />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-3">
-              <label className="text-sm font-medium text-muted-foreground text-right">坚持时间</label>
-              <div className="col-span-3 flex items-center gap-2">
-                <select
-                  value={duration}
-                  onChange={(e) => setDuration(e.target.value)}
-                  className="flex-1 h-10 px-3 rounded-lg border border-input bg-background text-sm outline-none focus:border-blue-500 cursor-pointer"
-                >
-                  {DURATION_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                {duration === "custom" && (
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      min="1"
-                      max="365"
-                      value={customDays}
-                      onChange={(e) => setCustomDays(e.target.value)}
-                      className="w-20 h-10 px-2 rounded-lg border border-input bg-background text-sm outline-none focus:border-blue-500"
-                    />
-                    <span className="text-sm text-muted-foreground">天</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-3">
-              <label className="text-sm font-medium text-muted-foreground text-right">所属分组</label>
-              <select
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-                className="col-span-3 h-10 px-3 rounded-lg border border-input bg-background text-sm outline-none focus:border-blue-500 cursor-pointer"
-              >
-                {GROUP_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="grid grid-cols-4 items-center gap-3 pt-2">
-              <div />
-              <label className="col-span-3 flex items-center gap-2 cursor-pointer select-none text-sm text-foreground">
-                <input
-                  type="checkbox"
-                  checked={autoPopupLog}
-                  onChange={(e) => setAutoPopupLog(e.target.checked)}
-                  className="w-4 h-4 rounded border-input text-blue-600 focus:ring-blue-500"
-                />
-                <span>自动触发桌面系统提醒</span>
-              </label>
-            </div>
-
-            {autoPopupLog && (
-              <div className="grid grid-cols-4 items-center gap-3">
-                <label className="text-sm font-medium text-muted-foreground text-right">提醒时间</label>
-                <input
-                  type="time"
-                  step="1"
-                  value={checkInTime}
-                  onChange={(e) => setCheckInTime(e.target.value)}
-                  className="col-span-3 h-10 px-3 rounded-lg border border-input bg-background text-sm outline-none focus:border-blue-500 cursor-pointer"
-                />
+                <span className="text-sm text-muted-foreground">天</span>
               </div>
             )}
           </div>
+        </div>
 
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onCancel}
-              className="cursor-pointer"
-            >
-              取消
-            </Button>
-            <Button
-              type="submit"
-              className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
-            >
-              保存
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+        <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
+          <label className="text-sm font-medium text-muted-foreground text-right">所属分组</label>
+          <Select
+            value={category}
+            onChange={(val) => setCategory(val)}
+            options={GROUP_OPTIONS as unknown as { value: string; label: string }[]}
+            className="w-full"
+          />
+        </div>
+
+        <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3 pt-1">
+          <div />
+          <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-foreground">
+            <input
+              type="checkbox"
+              checked={autoPopupLog}
+              onChange={(e) => setAutoPopupLog(e.target.checked)}
+              className="w-4 h-4 rounded border-input text-blue-600 focus:ring-blue-500"
+            />
+            <span>自动触发桌面系统提醒</span>
+          </label>
+        </div>
+
+        {autoPopupLog && (
+          <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
+            <label className="text-sm font-medium text-muted-foreground text-right">提醒时间</label>
+            <Input
+              type="time"
+              step="1"
+              value={checkInTime}
+              onChange={(e) => setCheckInTime(e.target.value)}
+              className="w-full h-9"
+            />
+          </div>
+        )}
+      </div>
+    </Modal>
   );
 });
 CreateEditModal.displayName = "CreateEditModal";
@@ -778,11 +749,10 @@ const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelect
             key={day.dateStr}
             type="button"
             onClick={(e) => handleDotClick(e, day.dateStr, day.isActiveDate)}
-            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 transform active:scale-75 cursor-pointer outline-none ${
-              day.isCheckedIn
+            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 transform active:scale-75 cursor-pointer outline-none ${day.isCheckedIn
                 ? "bg-emerald-500 text-white shadow-xs shadow-emerald-500/40 scale-100"
                 : "bg-muted/60 hover:bg-muted text-transparent opacity-80 hover:opacity-100"
-            } ${day.isActiveDate ? "ring-2 ring-blue-500 ring-offset-1 scale-105" : ""}`}
+              } ${day.isActiveDate ? "ring-2 ring-blue-500 ring-offset-1 scale-105" : ""}`}
             title={
               day.isActiveDate
                 ? `${day.dateStr} (点击${day.isCheckedIn ? "取消打卡" : "完成打卡"})`
@@ -791,9 +761,8 @@ const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelect
           >
             <Check
               size={13}
-              className={`transition-all duration-300 transform stroke-[3] ${
-                day.isCheckedIn ? "scale-100 opacity-100 rotate-0" : "scale-0 opacity-0 -rotate-45"
-              }`}
+              className={`transition-all duration-300 transform stroke-[3] ${day.isCheckedIn ? "scale-100 opacity-100 rotate-0" : "scale-0 opacity-0 -rotate-45"
+                }`}
             />
           </button>
         ))}
@@ -829,39 +798,18 @@ export const HabitPanel: React.FC = () => {
     <div className="flex w-full h-full bg-transparent relative overflow-hidden select-none">
       {/* Main Content Area */}
       <div className="flex flex-col flex-1 w-full h-full transition-all duration-300">
-        {/* Top Header & Date Switcher */}
-        <div className="flex-shrink-0 bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800 flex flex-col pt-4">
-          <div className="flex items-center justify-between px-6 pb-2">
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <Sparkles className="text-amber-500 dark:text-amber-400" size={20} />
-                习惯追踪
-              </h1>
-            </div>
-            <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
-              <Button
-                type="button"
-                size="sm"
-                className="gap-1.5 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
-                onClick={() => setIsCreateModalVisible(true)}
-              >
-                <Plus size={16} />
-                <span>新建习惯</span>
-              </Button>
-            </div>
-          </div>
-          <DateSwitcher currentDate={currentDate} onChange={setCurrentDate} />
-        </div>
+        {/* Date Switcher */}
+        <DateSwitcher currentDate={currentDate} onChange={setCurrentDate} />
 
         {/* Habit List Area */}
-        <div className="flex-1 bg-transparent overflow-y-auto p-6 space-y-3">
+        <div className="flex-1 bg-transparent overflow-y-auto p-6 pb-24 space-y-3">
           {habits.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center p-8 border border-dashed border-border rounded-2xl">
               <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
                 <Smile size={28} />
               </div>
               <h3 className="text-base font-bold text-foreground mb-1">暂无习惯项目</h3>
-              <p className="text-xs text-muted-foreground max-w-xs mb-4">点击右上角的「新建习惯」按钮创建你的第一个打卡项目</p>
+              <p className="text-xs text-muted-foreground max-w-xs mb-4">点击右下角的「+」按钮创建你的第一个打卡项目</p>
               <Button
                 type="button"
                 size="sm"
@@ -884,6 +832,18 @@ export const HabitPanel: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Floating Action Button: Create Habit */}
+      <Button
+        type="button"
+        size="icon"
+        className="absolute bottom-6 right-6 z-20 h-12 w-12 rounded-full shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
+        onClick={() => setIsCreateModalVisible(true)}
+        title="新建习惯"
+        aria-label="新建习惯"
+      >
+        <Plus size={22} />
+      </Button>
 
       {/* Sidebar Drawer */}
       {selectedHabit && (

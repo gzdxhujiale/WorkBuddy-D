@@ -203,8 +203,8 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
           <Cloud
             size={16}
             className={`transition-all duration-300 ${saveStatus === "saved"
-                ? "text-blue-500 fill-blue-500/20"
-                : "text-muted-foreground animate-pulse"
+              ? "text-blue-500 fill-blue-500/20"
+              : "text-muted-foreground animate-pulse"
               }`}
           />
         </div>
@@ -367,10 +367,10 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
                   disabled={isDisabled}
                   onClick={() => !isDisabled && onSelectDate(dStr)}
                   className={`h-8 rounded-lg flex items-center justify-center text-xs font-medium transition-all border ${isDisabled
-                      ? "opacity-30 cursor-not-allowed border-transparent bg-muted/30"
-                      : isSelected
-                        ? "ring-2 ring-blue-500 ring-offset-1 border-blue-400 font-bold z-10 cursor-pointer"
-                        : "border-transparent cursor-pointer"
+                    ? "opacity-30 cursor-not-allowed border-transparent bg-muted/30"
+                    : isSelected
+                      ? "ring-2 ring-blue-500 ring-offset-1 border-blue-400 font-bold z-10 cursor-pointer"
+                      : "border-transparent cursor-pointer"
                     } ${levelClass}`}
                 >
                   {day.date()}
@@ -445,8 +445,8 @@ export const DailyReviewPanel: React.FC = () => {
   return (
     <section className="flex flex-col h-full w-full bg-transparent text-foreground overflow-hidden">
       {/* Top Bar: Date Navigation */}
-      <header className="flex items-center justify-center px-6 py-3 bg-white/90 dark:bg-slate-900/90 border-b border-slate-200/80 dark:border-slate-800 shrink-0">
-        <nav className="flex items-center gap-3">
+      <header className="flex h-12 items-center justify-center px-6 bg-card border-b border-border shrink-0 select-none">
+        <nav className="flex items-center gap-2">
           <button
             type="button"
             className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
@@ -456,7 +456,7 @@ export const DailyReviewPanel: React.FC = () => {
           >
             <ChevronLeft size={18} />
           </button>
-          <span className="text-base font-semibold tracking-tight text-foreground">
+          <span className="text-sm font-semibold tracking-tight text-foreground">
             {formatDateDisplay(selectedDate)}
           </span>
           {isCurrentToday ? (
