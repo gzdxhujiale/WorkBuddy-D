@@ -22,7 +22,14 @@ import {
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { supabase } from "@/lib/supabase";
 import { ProjectTemplateManager } from "@/components/projects/ProjectTemplateManager";
-import { PixelFlame, PixelSword } from "@/components/pixel/PixelIcons";
+import {
+  PixelFlame,
+  PixelSword,
+  PixelShield,
+  PixelSparkle,
+  PixelScroll,
+} from "@/components/pixel/PixelIcons";
+import { cn } from "@/lib/utils";
 
 type Tab = "account" | "general" | "templates";
 
@@ -36,7 +43,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const { session } = useAuth();
   const [tab, setTab] = useState<Tab>("general");
   const [openFocusAssistantOnStart, setOpenFocusAssistantOnStart] = useState(shouldOpenFocusAssistantOnStart);
-  const { themeStyle, setThemeStyle } = useAppThemeStyle();
+  const { themeStyle, setThemeStyle, isPixelTheme } = useAppThemeStyle();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const titleId = useId();
@@ -80,44 +87,210 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 backdrop-blur-xs" onMouseDown={onClose}>
-      <section role="dialog" aria-modal="true" aria-labelledby={titleId} className="flex h-[min(600px,calc(100vh-2rem))] w-[min(900px,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border bg-card text-card-foreground shadow-2xl" onMouseDown={(event) => event.stopPropagation()}>
-        <aside className="w-52 shrink-0 border-r border-border bg-muted/40 p-3">
-          <div className="mb-3 flex items-center gap-2 px-2 py-2 text-base font-semibold text-foreground"><Settings2 size={18} />设置</div>
-          <nav aria-label="设置分类" className="space-y-1">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
+      onMouseDown={onClose}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className={cn(
+          "flex h-[min(600px,calc(100vh-2rem))] w-[min(900px,calc(100vw-2rem))] overflow-hidden bg-card text-card-foreground transition-all",
+          isPixelTheme
+            ? "rounded-xs border-2 border-border/90 shadow-[6px_6px_0px_rgba(0,0,0,0.3)] font-mono"
+            : "rounded-xl border border-border shadow-2xl"
+        )}
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        {/* Left Sidebar */}
+        <aside
+          className={cn(
+            "w-52 shrink-0 p-3 select-none",
+            isPixelTheme
+              ? "border-r-2 border-border/90 bg-amber-50/50 dark:bg-amber-950/40 font-mono"
+              : "border-r border-border bg-muted/40"
+          )}
+        >
+          <div className="mb-3 flex items-center gap-2 px-2 py-2 text-base font-semibold text-foreground">
+            {isPixelTheme ? (
+              <PixelShield size={18} className="text-amber-600 dark:text-amber-400" />
+            ) : (
+              <Settings2 size={18} />
+            )}
+            <span className={cn(isPixelTheme && "font-mono font-bold")}>
+              {isPixelTheme ? "⚙️ 冒险配置" : "设置"}
+            </span>
+          </div>
+          <nav aria-label="设置分类" className="space-y-1.5">
             {tabs.map((item) => {
               const Icon = item.icon;
-              return <button key={item.id} type="button" onClick={() => setTab(item.id)} className={`flex w-full cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${tab === item.id ? "border border-border bg-card font-medium text-primary shadow-xs" : "text-muted-foreground hover:bg-card hover:text-foreground"}`}><Icon size={16} />{item.label}</button>;
+              const isActive = tab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setTab(item.id)}
+                  className={cn(
+                    "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm transition-all",
+                    isPixelTheme
+                      ? isActive
+                        ? "rounded-xs border-2 border-amber-900/60 bg-amber-200/90 dark:bg-amber-900/80 font-mono font-bold text-amber-950 dark:text-amber-100 shadow-[2px_2px_0px_#000] translate-x-0.5"
+                        : "rounded-xs border-2 border-transparent text-muted-foreground hover:bg-amber-100/50 dark:hover:bg-amber-950/50 hover:text-foreground font-mono"
+                      : isActive
+                      ? "rounded-md border border-border bg-card font-medium text-primary shadow-xs"
+                      : "rounded-md text-muted-foreground hover:bg-card hover:text-foreground"
+                  )}
+                >
+                  <Icon size={16} />
+                  {isPixelTheme
+                    ? item.id === "account"
+                      ? "⚔️ 冒险家账号"
+                      : item.id === "general"
+                      ? "🔮 核心设定"
+                      : "📜 战术模板"
+                    : item.label}
+                </button>
+              );
             })}
           </nav>
         </aside>
+
+        {/* Content Area */}
         <div className="flex min-w-0 flex-1 flex-col bg-card">
-          <header className="flex h-13 shrink-0 items-center justify-between border-b border-border px-8"><h2 id={titleId} className="font-semibold text-foreground">{current.label}</h2><button type="button" onClick={onClose} aria-label="关闭设置" className="cursor-pointer rounded p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"><X size={18} /></button></header>
+          {/* Header */}
+          <header
+            className={cn(
+              "flex h-13 shrink-0 items-center justify-between px-8 select-none",
+              isPixelTheme
+                ? "border-b-2 border-border/90 bg-card font-mono shadow-[0_2px_0px_rgba(0,0,0,0.03)]"
+                : "border-b border-border"
+            )}
+          >
+            <h2
+              id={titleId}
+              className={cn(
+                "text-foreground",
+                isPixelTheme ? "font-mono font-black text-base" : "font-semibold"
+              )}
+            >
+              {isPixelTheme
+                ? current.id === "account"
+                  ? "⚔️ 冒险家账号档案"
+                  : current.id === "general"
+                  ? "🔮 核心系统设定"
+                  : "📜 战术模板管理"
+                : current.label}
+            </h2>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="关闭设置"
+              className={cn(
+                "cursor-pointer text-muted-foreground transition-all",
+                isPixelTheme
+                  ? "p-1 rounded-xs border border-border bg-muted/40 hover:bg-muted shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                  : "rounded p-2 hover:bg-accent hover:text-foreground"
+              )}
+            >
+              <X size={18} />
+            </button>
+          </header>
+
+          {/* Body */}
           <div className="flex-1 overflow-y-auto p-8">
             {tab === "account" ? (
               <div className="space-y-6">
-                <div className="flex items-center gap-4 border-b border-border pb-6">
-                  <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary"><UserRound size={22} /></div>
-                  <div className="min-w-0"><h3 className="truncate font-semibold text-foreground">{username}</h3><p className="mt-1 text-sm text-muted-foreground">当前登录账号</p></div>
+                <div
+                  className={cn(
+                    "flex items-center gap-4 pb-6",
+                    isPixelTheme ? "border-b-2 border-border/90 font-mono" : "border-b border-border"
+                  )}
+                >
+                  <div
+                    className={cn(
+                      "flex size-12 items-center justify-center",
+                      isPixelTheme
+                        ? "rounded-xs border-2 border-amber-900/60 bg-amber-200/90 dark:bg-amber-950 text-amber-900 dark:text-amber-200 shadow-[2px_2px_0px_#000]"
+                        : "rounded-full bg-primary/10 text-primary"
+                    )}
+                  >
+                    <UserRound size={22} />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className={cn("truncate font-semibold text-foreground", isPixelTheme && "font-mono font-bold text-base")}>
+                      {username}
+                    </h3>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {isPixelTheme ? "🎖️ 当前登录冒险家" : "当前登录账号"}
+                    </p>
+                  </div>
                 </div>
 
                 <div className="space-y-4">
-                  <div className="flex items-center gap-3 rounded-lg border border-border p-4">
-                    <Mail size={18} className="shrink-0 text-primary" />
-                    <div className="min-w-0"><p className="text-sm text-muted-foreground">邮箱</p><p className="mt-1 truncate font-medium text-foreground">{email}</p></div>
+                  <div
+                    className={cn(
+                      "flex items-center gap-3 p-4",
+                      isPixelTheme
+                        ? "rounded-xs border-2 border-border/90 bg-card shadow-[2px_2px_0px_#000] font-mono"
+                        : "rounded-lg border border-border"
+                    )}
+                  >
+                    <Mail size={18} className={cn("shrink-0", isPixelTheme ? "text-amber-600 dark:text-amber-400" : "text-primary")} />
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">{isPixelTheme ? "信件信箱 (邮箱)" : "邮箱"}</p>
+                      <p className="mt-1 truncate font-medium text-foreground">{email}</p>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-3 rounded-lg border border-border p-4">
-                    <UserRound size={18} className="shrink-0 text-primary" />
-                    <div className="min-w-0"><p className="text-sm text-muted-foreground">用户名</p><p className="mt-1 truncate font-medium text-foreground">{username}</p></div>
+                  <div
+                    className={cn(
+                      "flex items-center gap-3 p-4",
+                      isPixelTheme
+                        ? "rounded-xs border-2 border-border/90 bg-card shadow-[2px_2px_0px_#000] font-mono"
+                        : "rounded-lg border border-border"
+                    )}
+                  >
+                    <UserRound size={18} className={cn("shrink-0", isPixelTheme ? "text-amber-600 dark:text-amber-400" : "text-primary")} />
+                    <div className="min-w-0">
+                      <p className="text-xs text-muted-foreground">{isPixelTheme ? "冒险家代号 (用户名)" : "用户名"}</p>
+                      <p className="mt-1 truncate font-medium text-foreground">{username}</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-                  <div><h3 className="font-medium text-foreground">退出登录</h3><p className="mt-1 text-sm text-muted-foreground">仅退出当前设备，其他设备的登录状态不会受影响。</p></div>
-                  <button type="button" onClick={signOut} disabled={signingOut} className="inline-flex cursor-pointer items-center gap-2 rounded-md bg-destructive px-3 py-2 text-sm font-medium text-destructive-foreground transition-colors hover:bg-destructive/90 disabled:cursor-not-allowed disabled:opacity-60">
-                    {signingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}{signingOut ? "退出中…" : "退出登录"}
+                <div
+                  className={cn(
+                    "flex flex-wrap items-center justify-between gap-4 p-4",
+                    isPixelTheme
+                      ? "rounded-xs border-2 border-red-900/60 bg-red-50/80 dark:bg-red-950/40 shadow-[2px_2px_0px_rgba(127,29,29,0.3)] font-mono"
+                      : "rounded-lg border border-destructive/30 bg-destructive/5"
+                  )}
+                >
+                  <div>
+                    <h3 className="font-medium text-foreground">
+                      {isPixelTheme ? "⚔️ 解除冒险者契约 (退出登录)" : "退出登录"}
+                    </h3>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {isPixelTheme
+                        ? "仅注销当前设备连接，云端存档与其他设备的冒险记录安全保留。"
+                        : "仅退出当前设备，其他设备的登录状态不会受影响。"}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={signOut}
+                    disabled={signingOut}
+                    className={cn(
+                      "inline-flex cursor-pointer items-center gap-2 px-3 py-2 text-sm font-medium transition-all disabled:cursor-not-allowed disabled:opacity-60",
+                      isPixelTheme
+                        ? "rounded-xs border-2 border-red-900 bg-red-600 hover:bg-red-700 text-white font-bold shadow-[2px_2px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                        : "rounded-md bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                    )}
+                  >
+                    {signingOut ? <Loader2 size={16} className="animate-spin" /> : <LogOut size={16} />}
+                    {signingOut ? "注销中…" : isPixelTheme ? "解除契约" : "退出登录"}
                   </button>
-                  {signOutError ? <p role="alert" className="w-full text-sm text-destructive">{signOutError}</p> : null}
+                  {signOutError ? <p role="alert" className="w-full text-sm text-destructive font-mono">{signOutError}</p> : null}
                 </div>
               </div>
             ) : tab === "general" ? (
@@ -125,10 +298,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 {/* 界面视觉风格选择器 */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2.5">
-                    <Palette size={18} className="text-primary" />
+                    {isPixelTheme ? <PixelSparkle size={18} /> : <Palette size={18} className="text-primary" />}
                     <div>
-                      <h3 className="font-semibold text-foreground">界面视觉风格</h3>
-                      <p className="text-xs text-muted-foreground mt-0.5">选择你喜爱的设计语言与交互风格</p>
+                      <h3 className={cn("text-foreground", isPixelTheme ? "font-mono font-bold text-sm" : "font-semibold")}>
+                        {isPixelTheme ? "🎨 界面视觉与交互风格" : "界面视觉风格"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {isPixelTheme ? "切换现代极简或 8-bit RPG 像素冒险模式" : "选择你喜爱的设计语言与交互风格"}
+                      </p>
                     </div>
                   </div>
 
@@ -136,21 +313,42 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                     {/* 选项 1: 初始风格 */}
                     <div
                       onClick={() => handleSelectThemeStyle("default")}
-                      className={`relative flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
-                        themeStyle === "default"
-                          ? "border-primary bg-primary/5 shadow-xs ring-1 ring-primary"
-                          : "border-border hover:border-muted-foreground/40 bg-card hover:bg-accent/40"
-                      }`}
+                      className={cn(
+                        "relative flex flex-col p-4 cursor-pointer transition-all duration-200",
+                        isPixelTheme
+                          ? themeStyle === "default"
+                            ? "rounded-xs border-2 border-primary bg-primary/10 shadow-[2px_2px_0px_#000] font-mono"
+                            : "rounded-xs border-2 border-border/80 bg-card hover:bg-accent/40 shadow-[1px_1px_0px_rgba(0,0,0,0.1)] font-mono"
+                          : themeStyle === "default"
+                          ? "rounded-xl border-2 border-primary bg-primary/5 shadow-xs ring-1 ring-primary"
+                          : "rounded-xl border-2 border-border hover:border-muted-foreground/40 bg-card hover:bg-accent/40"
+                      )}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                          <div
+                            className={cn(
+                              "w-8 h-8 flex items-center justify-center",
+                              isPixelTheme
+                                ? "rounded-xs bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-900/40"
+                                : "rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                            )}
+                          >
                             <Sparkles size={18} />
                           </div>
-                          <span className="font-bold text-sm text-foreground">初始风格</span>
+                          <span className={cn("text-sm font-bold text-foreground", isPixelTheme && "font-mono")}>
+                            初始风格
+                          </span>
                         </div>
                         {themeStyle === "default" && (
-                          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs">
+                          <span
+                            className={cn(
+                              "flex items-center justify-center w-5 h-5 text-xs",
+                              isPixelTheme
+                                ? "rounded-xs bg-primary text-primary-foreground border border-primary-foreground/40 shadow-[1px_1px_0px_#000]"
+                                : "rounded-full bg-primary text-primary-foreground"
+                            )}
+                          >
                             <Check size={13} className="stroke-[3]" />
                           </span>
                         )}
@@ -158,30 +356,65 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                       <p className="text-xs text-muted-foreground leading-relaxed mt-1">
                         现代简约矢量设计、柔和阴影与清爽的生产力办公界面。
                       </p>
-                      <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
-                        <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-muted-foreground">现代排版</span>
-                        <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-muted-foreground">简约清新</span>
+                      <div className="mt-3 flex items-center gap-1.5 text-[11px]">
+                        <span
+                          className={cn(
+                            "inline-block px-1.5 py-0.5 bg-muted text-muted-foreground",
+                            isPixelTheme ? "rounded-xs font-mono" : "rounded"
+                          )}
+                        >
+                          现代排版
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-block px-1.5 py-0.5 bg-muted text-muted-foreground",
+                            isPixelTheme ? "rounded-xs font-mono" : "rounded"
+                          )}
+                        >
+                          简约清新
+                        </span>
                       </div>
                     </div>
 
                     {/* 选项 2: 复古像素风 */}
                     <div
                       onClick={() => handleSelectThemeStyle("retro-pixel")}
-                      className={`relative flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
-                        themeStyle === "retro-pixel"
-                          ? "border-amber-700/80 bg-amber-100/50 dark:bg-amber-950/40 shadow-[2px_2px_0px_rgba(120,53,15,0.4)] ring-1 ring-amber-600"
-                          : "border-border hover:border-muted-foreground/40 bg-card hover:bg-accent/40"
-                      }`}
+                      className={cn(
+                        "relative flex flex-col p-4 cursor-pointer transition-all duration-200",
+                        isPixelTheme
+                          ? themeStyle === "retro-pixel"
+                            ? "rounded-xs border-2 border-amber-900 bg-amber-200/90 dark:bg-amber-950/90 shadow-[3px_3px_0px_#000] ring-2 ring-amber-500 font-mono"
+                            : "rounded-xs border-2 border-border/80 bg-card hover:bg-amber-100/40 dark:hover:bg-amber-950/40 shadow-[1px_1px_0px_rgba(0,0,0,0.1)] font-mono"
+                          : themeStyle === "retro-pixel"
+                          ? "rounded-xl border-2 border-amber-700/80 bg-amber-100/50 dark:bg-amber-950/40 shadow-[2px_2px_0px_rgba(120,53,15,0.4)] ring-1 ring-amber-600"
+                          : "rounded-xl border-2 border-border hover:border-muted-foreground/40 bg-card hover:bg-accent/40"
+                      )}
                     >
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center border border-amber-900/30">
+                          <div
+                            className={cn(
+                              "w-8 h-8 flex items-center justify-center",
+                              isPixelTheme
+                                ? "rounded-xs bg-amber-500/30 text-amber-900 dark:text-amber-200 border-2 border-amber-900/60 shadow-[1px_1px_0px_#000]"
+                                : "rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-900/30"
+                            )}
+                          >
                             <PixelFlame size={18} />
                           </div>
-                          <span className="font-bold text-sm text-foreground font-mono">复古像素风</span>
+                          <span className="font-bold text-sm text-foreground font-mono">
+                            复古像素风
+                          </span>
                         </div>
                         {themeStyle === "retro-pixel" && (
-                          <span className="flex items-center justify-center w-5 h-5 rounded-md bg-amber-600 text-white text-xs border border-amber-800 shadow-[1px_1px_0px_#000]">
+                          <span
+                            className={cn(
+                              "flex items-center justify-center w-5 h-5 text-xs text-white",
+                              isPixelTheme
+                                ? "rounded-xs bg-emerald-600 border-2 border-emerald-800 shadow-[1px_1px_0px_#064e3b]"
+                                : "rounded-md bg-amber-600 border border-amber-800 shadow-[1px_1px_0px_#000]"
+                            )}
+                          >
                             <Check size={13} className="stroke-[3]" />
                           </span>
                         )}
@@ -190,24 +423,38 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                         8-bit 点阵像素、RPG 冒险成就系统、草地打卡与 +10 EXP 跳字激励。
                       </p>
                       <div className="mt-3 flex items-center gap-1.5 text-[11px]">
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-200/70 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 font-mono font-bold">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 px-1.5 py-0.5 bg-amber-200/80 dark:bg-amber-900/60 text-amber-900 dark:text-amber-200 font-mono font-bold",
+                            isPixelTheme ? "rounded-xs border border-amber-900/30" : "rounded"
+                          )}
+                        >
                           <PixelSword size={11} /> 8-bit RPG
                         </span>
-                        <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-200/70 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-mono font-bold">
-                          草地热力图
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-1 px-1.5 py-0.5 bg-emerald-200/80 dark:bg-emerald-900/60 text-emerald-900 dark:text-emerald-200 font-mono font-bold",
+                            isPixelTheme ? "rounded-xs border border-emerald-900/30" : "rounded"
+                          )}
+                        >
+                          <PixelScroll size={11} /> 草地热力图
                         </span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="border-t border-border pt-6">
+                <div className={cn("pt-6", isPixelTheme ? "border-t-2 border-border/90 font-mono" : "border-t border-border")}>
                   <div className="flex items-center justify-between gap-5">
                     <div className="flex items-center gap-3">
-                      <Timer size={19} className="text-primary" />
+                      <Timer size={19} className={cn(isPixelTheme ? "text-amber-600 dark:text-amber-400" : "text-primary")} />
                       <div>
-                        <h3 className="font-medium text-foreground">启动时打开悬浮专注助手</h3>
-                        <p className="mt-1 text-sm text-muted-foreground">打开应用后自动显示专注助手</p>
+                        <h3 className={cn("text-foreground", isPixelTheme ? "font-mono font-bold text-sm" : "font-medium")}>
+                          {isPixelTheme ? "⏱️ 启动时自动召唤悬浮专注助手" : "启动时打开悬浮专注助手"}
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {isPixelTheme ? "启动冒险工坊时，自动召唤桌面精灵专注伙伴" : "打开应用后自动显示专注助手"}
+                        </p>
                       </div>
                     </div>
                     <button
@@ -215,24 +462,43 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                       role="switch"
                       aria-checked={openFocusAssistantOnStart}
                       onClick={toggleFocusAssistantOnStart}
-                      className={`relative h-6 w-11 cursor-pointer rounded-full transition-colors ${
-                        openFocusAssistantOnStart ? "bg-primary" : "bg-muted-foreground/30"
-                      }`}
+                      className={cn(
+                        "relative cursor-pointer transition-all",
+                        isPixelTheme
+                          ? cn(
+                              "h-6 w-11 rounded-xs border-2 border-amber-900 shadow-[1px_1px_0px_#000]",
+                              openFocusAssistantOnStart ? "bg-amber-500" : "bg-muted-foreground/30"
+                            )
+                          : cn(
+                              "h-6 w-11 rounded-full",
+                              openFocusAssistantOnStart ? "bg-primary" : "bg-muted-foreground/30"
+                            )
+                      )}
                     >
                       <span
-                        className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${
-                          openFocusAssistantOnStart ? "translate-x-5" : "translate-x-0.5"
-                        }`}
+                        className={cn(
+                          "absolute top-0.5 transition-transform",
+                          isPixelTheme
+                            ? cn(
+                                "size-4.5 rounded-xs bg-white border border-black/80 shadow-[1px_1px_0px_#000]",
+                                openFocusAssistantOnStart ? "translate-x-5" : "translate-x-0.5"
+                              )
+                            : cn(
+                                "size-5 rounded-full bg-white shadow",
+                                openFocusAssistantOnStart ? "translate-x-5" : "translate-x-0.5"
+                              )
+                        )}
                       />
                     </button>
                   </div>
                 </div>
               </div>
-            ) : <ProjectTemplateManager />}
+            ) : (
+              <ProjectTemplateManager />
+            )}
           </div>
         </div>
       </section>
     </div>
   );
 }
-
