@@ -162,6 +162,9 @@ export function FocusAssistant() {
     startWindowY: number;
     scaleFactor: number;
     lastScreenX: number;
+    rafId: number | null;
+    pendingX: number | null;
+    pendingY: number | null;
   }>({
     isDown: false,
     hasMoved: false,
@@ -171,11 +174,23 @@ export function FocusAssistant() {
     startWindowY: 0,
     scaleFactor: 1,
     lastScreenX: 0,
+    rafId: null,
+    pendingX: null,
+    pendingY: null,
   });
 
   const handleDragPointerDown = async (e: React.PointerEvent) => {
+    // Only primary left click triggers window dragging
+    if (e.button !== 0) return;
+
     const target = e.target as HTMLElement;
-    if (target.closest("button") || target.closest("input") || target.closest("[role='menu']")) {
+    if (
+      target.closest("button") ||
+      target.closest("input") ||
+      target.closest("textarea") ||
+      target.closest("[role='menu']") ||
+      target.closest("[data-no-drag='true']")
+    ) {
       return;
     }
 
@@ -195,6 +210,9 @@ export function FocusAssistant() {
         startWindowY: pos.y,
         scaleFactor: scale || 1,
         lastScreenX: e.screenX,
+        rafId: null,
+        pendingX: null,
+        pendingY: null,
       };
 
       (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -204,47 +222,95 @@ export function FocusAssistant() {
   };
 
   const handleDragPointerMove = (e: React.PointerEvent) => {
-    if (!dragSessionRef.current.isDown) return;
+    const session = dragSessionRef.current;
+    if (!session.isDown) return;
 
-    const { startScreenX, startScreenY, startWindowX, startWindowY, scaleFactor, lastScreenX } =
-      dragSessionRef.current;
+    const totalDx = e.screenX - session.startScreenX;
+    const totalDy = e.screenY - session.startScreenY;
+    const instantaneousDx = e.screenX - session.lastScreenX;
 
-    const totalDx = e.screenX - startScreenX;
-    const totalDy = e.screenY - startScreenY;
-    const instantaneousDx = e.screenX - lastScreenX;
-
-    if (Math.abs(totalDx) > 3 || Math.abs(totalDy) > 3) {
-      dragSessionRef.current.hasMoved = true;
-      setIsDragging(true);
-
-      if (Math.abs(instantaneousDx) > 0.5) {
-        setDragDirection(instantaneousDx > 0 ? "right" : "left");
-      }
-
-      const newPhysX = Math.round(startWindowX + totalDx * scaleFactor);
-      const newPhysY = Math.round(startWindowY + totalDy * scaleFactor);
-
-      try {
-        void getCurrentWindow().setPosition(new PhysicalPosition(newPhysX, newPhysY));
-      } catch {
-        // Ignore
-      }
+    // Deadzone threshold (6px) prevents accidental drags during clicks/poking
+    if (!session.hasMoved && Math.hypot(totalDx, totalDy) < 6) {
+      session.lastScreenX = e.screenX;
+      return;
     }
 
-    dragSessionRef.current.lastScreenX = e.screenX;
+    session.hasMoved = true;
+    setIsDragging(true);
+
+    if (Math.abs(instantaneousDx) > 0.5) {
+      setDragDirection(instantaneousDx > 0 ? "right" : "left");
+    }
+
+    session.lastScreenX = e.screenX;
+
+    const newPhysX = Math.round(session.startWindowX + totalDx * session.scaleFactor);
+    const newPhysY = Math.round(session.startWindowY + totalDy * session.scaleFactor);
+
+    session.pendingX = newPhysX;
+    session.pendingY = newPhysY;
+
+    // requestAnimationFrame throttling to match display refresh rate without IPC flooding
+    if (session.rafId === null) {
+      session.rafId = requestAnimationFrame(() => {
+        session.rafId = null;
+        if (!session.isDown || session.pendingX === null || session.pendingY === null) return;
+        void getCurrentWindow()
+          .setPosition(new PhysicalPosition(session.pendingX, session.pendingY))
+          .catch(() => {});
+      });
+    }
   };
 
-  const handleDragPointerUp = (e: React.PointerEvent) => {
-    if (dragSessionRef.current.isDown) {
-      dragSessionRef.current.isDown = false;
+  const handleDragPointerUp = (e?: React.PointerEvent) => {
+    const session = dragSessionRef.current;
+    if (session.isDown) {
+      session.isDown = false;
+      if (session.rafId !== null) {
+        cancelAnimationFrame(session.rafId);
+        session.rafId = null;
+      }
+      if (session.pendingX !== null && session.pendingY !== null) {
+        void getCurrentWindow()
+          .setPosition(new PhysicalPosition(session.pendingX, session.pendingY))
+          .catch(() => {});
+        session.pendingX = null;
+        session.pendingY = null;
+      }
       setIsDragging(false);
-      try {
-        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
-      } catch {
-        // Ignore
+      if (e) {
+        try {
+          (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+        } catch {
+          // Ignore
+        }
       }
     }
   };
+
+  // Global blur and pointerup safety to prevent stuck dragging state on Alt+Tab or mouse exit
+  useEffect(() => {
+    const handleGlobalPointerUp = () => {
+      if (dragSessionRef.current.isDown) {
+        handleDragPointerUp();
+      }
+    };
+    const handleBlur = () => {
+      if (dragSessionRef.current.isDown) {
+        handleDragPointerUp();
+      }
+    };
+
+    window.addEventListener("pointerup", handleGlobalPointerUp);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("pointerup", handleGlobalPointerUp);
+      window.removeEventListener("blur", handleBlur);
+      if (dragSessionRef.current.rafId !== null) {
+        cancelAnimationFrame(dragSessionRef.current.rafId);
+      }
+    };
+  }, []);
 
   const speak = (text: string, durationMs = 4000) => {
     if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
