@@ -19,6 +19,8 @@ import {
   Bot,
   FolderKanban,
   Layers,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
 import { useFocusTaskOptions } from "@/hooks/useTimeManagement";
@@ -26,6 +28,13 @@ import { useHabitData } from "@/hooks/useHabits";
 import { useProjectsData } from "@/hooks/useProjects";
 import { focusAssistantApi, FocusStats } from "@/services/focusAssistantService";
 import { sendDesktopNotification } from "@/services/notificationService";
+import {
+  playVictorySound,
+  playRestEndSound,
+  playPokeSound,
+  isSoundEnabled,
+  setSoundEnabled,
+} from "@/lib/soundFeedback";
 import { useAuth } from "@/lib/auth";
 import type { FocusSession, FocusSessionType } from "@/types/focusAssistant";
 import { cn } from "@/lib/utils";
@@ -165,6 +174,9 @@ export function FocusAssistant() {
   const [bubbleText, setBubbleText] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragDirection, setDragDirection] = useState<"left" | "right">("right");
+  const [petOverrideState, setPetOverrideState] = useState<PetState | null>(null);
+  const [isGlowActive, setIsGlowActive] = useState<boolean>(false);
+  const [soundOn, setSoundOn] = useState<boolean>(isSoundEnabled);
 
   // Modal Temp States
   const [editFocusInput, setEditFocusInput] = useState<string>(String(focusMinutes));
@@ -183,6 +195,14 @@ export function FocusAssistant() {
   const isPurePet = theme === "pixel-pure" || theme === "pixel-dog-pure" || theme === "vector-pure";
   const currentSpecies: "cat" | "dog" =
     theme.includes("dog") || theme.includes("vector") ? "dog" : "cat";
+  const currentPetType: "cat" | "dog" | "shiba" = useMemo(() => {
+    if (theme === "pixel-dog" || theme === "pixel-dog-pure") return "dog";
+    if (theme === "vector" || theme === "vector-pure") return "shiba";
+    return "cat";
+  }, [theme]);
+  const currentThemeStyle: "modern" | "pixel" = useMemo(() => {
+    return theme.startsWith("pixel") ? "pixel" : "modern";
+  }, [theme]);
   const notificationTitle = currentSpecies === "dog" ? "🐶 专注伴侣" : "🐱 专注伴侣";
 
   const getDialogue = (event: PetEvent, opts?: Partial<PetDialogueOptions>) => {
@@ -441,15 +461,17 @@ export function FocusAssistant() {
 
   // Pet state
   const petState: PetState = useMemo(() => {
+    if (petOverrideState) return petOverrideState;
     if (sessionType === "rest") {
       return status === "running" ? "resting" : "paused";
     }
     if (status === "running") return "working";
     if (status === "paused") return "paused";
     return "ready";
-  }, [sessionType, status]);
+  }, [petOverrideState, sessionType, status]);
 
   const handlePokePet = () => {
+    playPokeSound(currentThemeStyle === "pixel");
     const text = getDialogue("poke");
     speak(text);
   };
@@ -467,7 +489,11 @@ export function FocusAssistant() {
 
     const text = getDialogue("focus_start");
     speak(text);
-    void sendDesktopNotification(notificationTitle, text);
+    void sendDesktopNotification(notificationTitle, text, {
+      petType: currentPetType,
+      themeStyle: currentThemeStyle,
+      eventType: "general",
+    });
 
     try {
       const taskId =
@@ -569,9 +595,22 @@ export function FocusAssistant() {
       }
     }
 
+    // Audio & Action Celebrations
+    playVictorySound(currentThemeStyle === "pixel");
+    setPetOverrideState("celebrating");
+    setIsGlowActive(true);
+    setTimeout(() => {
+      setPetOverrideState(null);
+      setIsGlowActive(false);
+    }, 4500);
+
     const text = getDialogue("focus_stop", { restMinutes });
     speak(text);
-    void sendDesktopNotification(notificationTitle, text);
+    void sendDesktopNotification(notificationTitle, text, {
+      petType: currentPetType,
+      themeStyle: currentThemeStyle,
+      eventType: "focus_complete",
+    });
 
     refreshStats();
     void startRest(cycleId, taskId);
@@ -596,9 +635,22 @@ export function FocusAssistant() {
       }
     }
 
+    // Audio & Action Celebrations
+    playVictorySound(currentThemeStyle === "pixel");
+    setPetOverrideState("celebrating");
+    setIsGlowActive(true);
+    setTimeout(() => {
+      setPetOverrideState(null);
+      setIsGlowActive(false);
+    }, 4500);
+
     const text = getDialogue("focus_complete", { restMinutes });
     speak(text);
-    void sendDesktopNotification(notificationTitle, text);
+    void sendDesktopNotification(notificationTitle, text, {
+      petType: currentPetType,
+      themeStyle: currentThemeStyle,
+      eventType: "focus_complete",
+    });
 
     refreshStats();
     void startRest(cycleId, taskId);
@@ -621,9 +673,23 @@ export function FocusAssistant() {
       }
     }
 
+    // Audio & Action: Stretch (1.5s) -> Knocking table (2.5s)
+    void playRestEndSound(currentThemeStyle === "pixel");
+    setPetOverrideState("stretching");
+    setTimeout(() => {
+      setPetOverrideState("knocking");
+    }, 1500);
+    setTimeout(() => {
+      setPetOverrideState(null);
+    }, 4000);
+
     const text = getDialogue("rest_complete");
     speak(text);
-    void sendDesktopNotification(notificationTitle, text);
+    void sendDesktopNotification(notificationTitle, text, {
+      petType: currentPetType,
+      themeStyle: currentThemeStyle,
+      eventType: "rest_complete",
+    });
 
     setSession(null);
     setSessionType("focus");
@@ -651,9 +717,14 @@ export function FocusAssistant() {
       }
     }
 
+    void playRestEndSound(currentThemeStyle === "pixel");
     const text = getDialogue("rest_skip");
     speak(text);
-    void sendDesktopNotification(notificationTitle, text);
+    void sendDesktopNotification(notificationTitle, text, {
+      petType: currentPetType,
+      themeStyle: currentThemeStyle,
+      eventType: "general",
+    });
 
     setSession(null);
     setSessionType("focus");
@@ -1513,6 +1584,28 @@ export function FocusAssistant() {
               </span>
             </button>
 
+            {/* Toggle Sound Effects */}
+            <button
+              onClick={() => {
+                const next = !soundOn;
+                setSoundOn(next);
+                setSoundEnabled(next);
+              }}
+              className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left"
+            >
+              <div className="flex items-center gap-2">
+                {soundOn ? (
+                  <Volume2 size={13} className="text-emerald-500" />
+                ) : (
+                  <VolumeX size={13} className="text-slate-400" />
+                )}
+                <span>提示音效</span>
+              </div>
+              <span className="text-[11px] text-slate-400 font-medium">
+                {soundOn ? "已开启" : "已静音"}
+              </span>
+            </button>
+
             {/* Toggle Stats expansion (in card modes) */}
             {!isPurePet && (
               <button
@@ -1715,7 +1808,10 @@ export function FocusAssistant() {
 
         {/* Pet Display */}
         <div
-          className="relative flex items-center justify-center pointer-events-auto"
+          className={cn(
+            "relative flex items-center justify-center pointer-events-auto transition-all duration-300 rounded-full",
+            isGlowActive && "ring-8 ring-amber-400/50 shadow-[0_0_30px_rgba(245,158,11,0.6)] animate-pulse"
+          )}
           onContextMenu={(e) => {
             e.preventDefault();
             e.stopPropagation();
@@ -1805,8 +1901,13 @@ export function FocusAssistant() {
   return (
     <div
       className={cn(
-        "relative w-[200px] rounded-2xl select-none transition-all flex flex-col justify-between overflow-visible outline-none mx-auto cursor-grab active:cursor-grabbing",
+        "relative w-[200px] rounded-2xl select-none transition-all duration-300 flex flex-col justify-between overflow-visible outline-none mx-auto cursor-grab active:cursor-grabbing",
         showStats ? "h-[140px] p-2.5" : "h-[75px] px-3 py-2",
+        isGlowActive && (
+          theme.startsWith("pixel")
+            ? "shadow-[0px_0px_0px_3px_#F59E0B,0px_0px_16px_rgba(245,158,11,0.6)]"
+            : "ring-4 ring-amber-400/70 dark:ring-amber-500/70 shadow-[0_0_24px_rgba(245,158,11,0.55)] animate-pulse"
+        ),
         getThemeClasses()
       )}
       onContextMenu={(e) => {
