@@ -1,10 +1,21 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
-import { ChevronLeft, ChevronRight, Cloud } from "lucide-react";
+import { ChevronLeft, ChevronRight, Cloud, Zap, Award, BarChart3 } from "lucide-react";
 import dayjs from "dayjs";
 import { useDailyReviewData, useReviewActions, isReviewEmpty } from "@/hooks/useDailyReview";
 import { DailyReviewItem, CompoundStats as CompoundStatsType } from "@/types/dailyReview";
 import { formatDateYMD, todayYMD, daysBetween } from "@/lib/dateUtils";
 import { ReactjsTiptapEditor } from "@/components/ui/reactjs-tiptap-editor";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { cn } from "@/lib/utils";
+import {
+  PixelFlame,
+  PixelTrophy,
+  PixelSword,
+  PixelScroll,
+  PixelSparkle,
+  PixelHourglass,
+} from "@/components/pixel/PixelIcons";
+import { PixelAchievementHall } from "@/components/pixel/PixelBadge";
 
 // Hoisted constants outside component rendering path (Vercel Best Practice: rendering-hoist-jsx)
 const WEEK_DAYS = ["日", "一", "二", "三", "四", "五", "六"] as const;
@@ -181,6 +192,7 @@ interface ReviewEditorProps {
 }
 
 const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }) => {
+  const { isPixelTheme } = useAppThemeStyle();
   const { content, saveStatus, setContent } = useReviewAutoSave({
     initialContent: review?.content || "",
     date,
@@ -188,25 +200,57 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
   });
 
   return (
-    <article className="flex-1 flex flex-col bg-card border border-border rounded-t-2xl rounded-b-none shadow-2xs overflow-hidden transition-colors">
+    <article
+      className={cn(
+        "flex-1 flex flex-col bg-card overflow-hidden transition-colors",
+        isPixelTheme
+          ? "border-2 border-border/90 rounded-xs shadow-[3px_3px_0px_rgba(0,0,0,0.08)] font-mono"
+          : "border border-border rounded-t-2xl rounded-b-none shadow-2xs"
+      )}
+    >
       <ReactjsTiptapEditor
         key={date}
         content={content}
         onChange={setContent}
-        placeholder="输入 / 使用命令..."
+        placeholder={isPixelTheme ? "📜 撰写今日冒险日志... (输入 / 使用魔法指令)" : "输入 / 使用命令..."}
       />
 
       {/* Footer: Save Status */}
-      <footer className="flex items-center justify-between px-4 py-2.5 border-t border-border bg-muted/40 shrink-0">
+      <footer
+        className={cn(
+          "flex items-center justify-between px-4 py-2.5 border-t shrink-0 select-none",
+          isPixelTheme
+            ? "border-t-2 border-border/90 bg-amber-50/40 dark:bg-amber-950/40 font-mono"
+            : "border-border bg-muted/40"
+        )}
+      >
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <span>{saveStatus === "saving" ? "保存中..." : "已自动保存"}</span>
-          <Cloud
-            size={16}
-            className={`transition-all duration-300 ${saveStatus === "saved"
-              ? "text-blue-500 fill-blue-500/20"
-              : "text-muted-foreground animate-pulse"
-              }`}
-          />
+          {isPixelTheme ? (
+            saveStatus === "saving" ? (
+              <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-bold">
+                <PixelHourglass size={14} className="animate-spin" />
+                <span>⏳ 刻印中...</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-bold">
+                <PixelSparkle size={14} />
+                <span>✨ 冒险日志已刻印封存</span>
+              </div>
+            )
+          ) : (
+            <>
+              <span>{saveStatus === "saving" ? "保存中..." : "已自动保存"}</span>
+              <Cloud
+                size={16}
+                className={cn(
+                  "transition-all duration-300",
+                  saveStatus === "saved"
+                    ? "text-blue-500 fill-blue-500/20"
+                    : "text-muted-foreground animate-pulse"
+                )}
+              />
+            </>
+          )}
         </div>
       </footer>
     </article>
@@ -214,18 +258,6 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
 });
 
 ReviewEditor.displayName = "ReviewEditor";
-
-import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
-import { Zap, Award, BarChart3 } from "lucide-react";
-import {
-  PixelFlame,
-  PixelTrophy,
-  PixelSword,
-  PixelScroll,
-  PixelSparkle,
-  PixelHourglass,
-} from "@/components/pixel/PixelIcons";
-import { PixelAchievementHall } from "@/components/pixel/PixelBadge";
 
 // ==========================================
 // 2. CompoundStats Component (Adaptive: Modern vs 8-bit RPG)
@@ -264,31 +296,36 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
       <section className="shrink-0">
         <div className="flex items-center gap-1.5 mb-2.5">
           {isPixelTheme && <PixelSparkle size={14} />}
-          <h2 className={`text-xs font-semibold tracking-wider text-muted-foreground uppercase ${isPixelTheme ? "font-mono font-bold text-foreground" : ""}`}>
-            {isPixelTheme ? "复利冒险家属性" : "复利成长"}
+          <h2
+            className={cn(
+              "text-xs font-semibold tracking-wider text-muted-foreground uppercase",
+              isPixelTheme && "font-mono font-bold text-foreground"
+            )}
+          >
+            {isPixelTheme ? "📜 复利冒险家属性" : "复利成长"}
           </h2>
         </div>
 
         {isPixelTheme ? (
           /* 8-bit RPG Stats Grid */
-          <div className="grid grid-cols-2 gap-2.5">
-            <article className="p-3 rounded-xl bg-orange-50/90 dark:bg-orange-950/30 border-2 border-orange-900/40 dark:border-orange-700/50 shadow-[2px_2px_0px_rgba(194,65,12,0.3)] text-center transition-transform hover:-translate-y-0.5">
+          <div className="grid grid-cols-2 gap-2.5 font-mono">
+            <article className="p-3 rounded-xs bg-orange-50/90 dark:bg-orange-950/40 border-2 border-orange-900/60 dark:border-orange-700/60 shadow-[2px_2px_0px_#000] text-center transition-transform hover:-translate-y-0.5">
               <div className="text-lg font-black text-orange-700 dark:text-orange-300 tabular-nums font-mono flex items-center justify-center gap-1">
                 <PixelFlame size={16} />
                 {stats.currentStreak}
               </div>
-              <div className="text-[10px] text-orange-800/80 dark:text-orange-400/80 font-bold mt-0.5">连续复盘/天</div>
+              <div className="text-[10px] text-orange-800/90 dark:text-orange-300/90 font-bold mt-0.5">连续复盘/天</div>
             </article>
 
-            <article className="p-3 rounded-xl bg-amber-50/90 dark:bg-amber-950/30 border-2 border-amber-900/40 dark:border-amber-700/50 shadow-[2px_2px_0px_rgba(180,83,9,0.3)] text-center transition-transform hover:-translate-y-0.5">
+            <article className="p-3 rounded-xs bg-amber-50/90 dark:bg-amber-950/40 border-2 border-amber-900/60 dark:border-amber-700/60 shadow-[2px_2px_0px_#000] text-center transition-transform hover:-translate-y-0.5">
               <div className="text-lg font-black text-amber-700 dark:text-amber-300 tabular-nums font-mono flex items-center justify-center gap-1">
                 <PixelSword size={16} />
                 {stats.compoundValue.toFixed(2)}x
               </div>
-              <div className="text-[10px] text-amber-800/80 dark:text-amber-400/80 font-bold mt-0.5">复利系数</div>
+              <div className="text-[10px] text-amber-800/90 dark:text-amber-300/90 font-bold mt-0.5">复利系数</div>
             </article>
 
-            <article className="p-3 rounded-xl bg-card border-2 border-border/80 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] text-center transition-transform hover:-translate-y-0.5">
+            <article className="p-3 rounded-xs bg-card border-2 border-border/90 shadow-[2px_2px_0px_#000] text-center transition-transform hover:-translate-y-0.5">
               <div className="text-lg font-black text-foreground tabular-nums font-mono flex items-center justify-center gap-1">
                 <PixelScroll size={16} />
                 {stats.totalReviews}
@@ -296,7 +333,7 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
               <div className="text-[10px] text-muted-foreground font-semibold mt-0.5">累计复盘篇数</div>
             </article>
 
-            <article className="p-3 rounded-xl bg-card border-2 border-border/80 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] text-center transition-transform hover:-translate-y-0.5">
+            <article className="p-3 rounded-xs bg-card border-2 border-border/90 shadow-[2px_2px_0px_#000] text-center transition-transform hover:-translate-y-0.5">
               <div className="text-lg font-black text-foreground tabular-nums font-mono flex items-center justify-center gap-1">
                 <PixelTrophy size={16} />
                 {stats.longestStreak}
@@ -346,17 +383,11 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
         <header className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1 text-xs font-semibold text-foreground">
             {isPixelTheme && <PixelHourglass size={14} />}
-            <span>{currentMonth.format("YYYY年 M月")} {isPixelTheme ? "复盘日历" : "打卡记录"}</span>
+            <span className={isPixelTheme ? "font-mono font-bold" : ""}>
+              {currentMonth.format("YYYY年 M月")} {isPixelTheme ? "📜 复盘刻印月历" : "打卡记录"}
+            </span>
           </div>
           <nav className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => onSelectDate(todayStr)}
-              className="px-2 py-0.5 text-xs rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 hover:bg-blue-500/20 transition-colors font-medium cursor-pointer mr-1"
-              title="跳转到今日"
-            >
-              今天
-            </button>
             <button
               type="button"
               onClick={() => {
@@ -366,7 +397,12 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
                 }
               }}
               disabled={currentMonth.format("YYYY-MM") <= "2026-01"}
-              className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+              className={cn(
+                "p-1 transition-colors cursor-pointer text-muted-foreground disabled:opacity-30 disabled:pointer-events-none",
+                isPixelTheme
+                  ? "rounded-xs border border-border bg-muted/40 hover:bg-muted shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                  : "rounded hover:bg-accent"
+              )}
               title="上个月"
             >
               <ChevronLeft size={16} />
@@ -380,7 +416,12 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
                 }
               }}
               disabled={currentMonth.format("YYYY-MM") >= todayMonthStr}
-              className="p-1 rounded hover:bg-accent text-muted-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+              className={cn(
+                "p-1 transition-colors cursor-pointer text-muted-foreground disabled:opacity-30 disabled:pointer-events-none",
+                isPixelTheme
+                  ? "rounded-xs border border-border bg-muted/40 hover:bg-muted shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                  : "rounded hover:bg-accent"
+              )}
               title="下个月"
             >
               <ChevronRight size={16} />
@@ -388,10 +429,19 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
           </nav>
         </header>
 
-        <div className={`bg-card rounded-xl border p-3 ${isPixelTheme ? "border-2 border-border/80 shadow-[2px_2px_0px_rgba(0,0,0,0.06)]" : "border-border shadow-2xs"}`}>
+        <div
+          className={cn(
+            "bg-card p-3",
+            isPixelTheme
+              ? "border-2 border-border/90 rounded-xs shadow-[2px_2px_0px_#000] font-mono"
+              : "border border-border rounded-xl shadow-2xs"
+          )}
+        >
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground font-medium mb-1">
             {WEEK_DAYS.map((w) => (
-              <div key={w} className="py-0.5">{w}</div>
+              <div key={w} className={cn("py-0.5", isPixelTheme && "font-mono font-bold text-[11px]")}>
+                {w}
+              </div>
             ))}
           </div>
           <div className="grid grid-cols-7 gap-1 text-center">
@@ -414,7 +464,7 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
                     : "bg-emerald-500 text-white font-semibold dark:bg-emerald-500";
                 } else if (len > 30) {
                   levelClass = isPixelTheme
-                    ? "bg-emerald-400 text-emerald-950 font-bold border border-emerald-600"
+                    ? "bg-emerald-400 text-emerald-950 font-bold border border-emerald-600 shadow-[1px_1px_0px_#059669]"
                     : "bg-emerald-300 text-emerald-950 font-semibold dark:bg-emerald-700 dark:text-emerald-100";
                 } else {
                   levelClass = isPixelTheme
@@ -430,15 +480,20 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
                   type="button"
                   disabled={isDisabled}
                   onClick={() => !isDisabled && onSelectDate(dStr)}
-                  className={`${isPixelTheme ? "h-7 rounded-md text-[11px] font-mono font-bold" : "h-8 rounded-lg text-xs font-medium"} flex items-center justify-center transition-all border ${
+                  className={cn(
+                    "flex items-center justify-center transition-all border",
+                    isPixelTheme
+                      ? "h-7 rounded-xs text-[11px] font-mono font-bold"
+                      : "h-8 rounded-lg text-xs font-medium",
                     isDisabled
                       ? "opacity-30 cursor-not-allowed border-transparent bg-muted/20"
                       : isSelected
                       ? isPixelTheme
-                        ? "ring-2 ring-amber-400 ring-offset-1 border-amber-500 font-black z-10 cursor-pointer scale-105"
+                        ? "ring-2 ring-amber-400 ring-offset-1 border-2 border-amber-600 font-black z-10 cursor-pointer scale-105 shadow-[1px_1px_0px_#000]"
                         : "ring-2 ring-blue-500 ring-offset-1 border-blue-400 font-bold z-10 cursor-pointer"
-                      : "border-transparent cursor-pointer"
-                  } ${levelClass}`}
+                      : "border-transparent cursor-pointer",
+                    levelClass
+                  )}
                 >
                   {day.date()}
                 </button>
@@ -448,13 +503,13 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
         </div>
 
         {/* Legend */}
-        <footer className="flex items-center justify-end gap-1 mt-2 text-[10px] text-muted-foreground">
+        <footer className="flex items-center justify-end gap-1 mt-2 text-[10px] text-muted-foreground select-none">
           <span>{isPixelTheme ? "短记" : "少"}</span>
-          <div className="w-2.5 h-2.5 rounded-2xs bg-card border border-border"></div>
-          <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-100 dark:bg-emerald-950"></div>
-          <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-300 dark:bg-emerald-700"></div>
-          <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-500"></div>
-          <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-700 dark:bg-emerald-600"></div>
+          <div className={cn("w-2.5 h-2.5 bg-card border border-border", isPixelTheme ? "rounded-xs" : "rounded-2xs")}></div>
+          <div className={cn("w-2.5 h-2.5 bg-emerald-100 dark:bg-emerald-950", isPixelTheme ? "rounded-xs" : "rounded-2xs")}></div>
+          <div className={cn("w-2.5 h-2.5 bg-emerald-300 dark:bg-emerald-700", isPixelTheme ? "rounded-xs" : "rounded-2xs")}></div>
+          <div className={cn("w-2.5 h-2.5 bg-emerald-500", isPixelTheme ? "rounded-xs" : "rounded-2xs")}></div>
+          <div className={cn("w-2.5 h-2.5 bg-emerald-700 dark:bg-emerald-600", isPixelTheme ? "rounded-xs" : "rounded-2xs")}></div>
           <span>{isPixelTheme ? "长文" : "多"}</span>
         </footer>
       </section>
@@ -478,6 +533,7 @@ CompoundStats.displayName = "CompoundStats";
 // 3. DailyReviewPanel Main Component
 // ==========================================
 export const DailyReviewPanel: React.FC = () => {
+  const { isPixelTheme } = useAppThemeStyle();
   const [selectedDate, setSelectedDate] = useState<string>(todayYMD());
 
   const { data } = useDailyReviewData();
@@ -522,28 +578,60 @@ export const DailyReviewPanel: React.FC = () => {
   return (
     <section className="flex flex-col h-full w-full bg-transparent text-foreground overflow-hidden">
       {/* Top Bar: Date Navigation */}
-      <header className="flex h-12 items-center justify-center px-6 bg-card border-b border-border shrink-0 select-none">
-        <nav className="flex items-center gap-2">
+      <header
+        className={cn(
+          "flex h-12 items-center justify-center px-6 bg-card shrink-0 select-none",
+          isPixelTheme
+            ? "border-b-2 border-border/90 shadow-[0_2px_0px_rgba(0,0,0,0.04)] font-mono"
+            : "border-b border-border"
+        )}
+      >
+        <nav className="flex items-center gap-2.5">
           <button
             type="button"
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            className={cn(
+              "p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer",
+              isPixelTheme
+                ? "rounded-xs border border-border bg-muted/40 hover:bg-muted shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                : "rounded-md hover:bg-accent"
+            )}
             onClick={() => changeDate(-1)}
             title="前一天"
             disabled={selectedDate <= MIN_DATE}
           >
             <ChevronLeft size={18} />
           </button>
-          <span className="text-sm font-semibold tracking-tight text-foreground">
-            {formatDateDisplay(selectedDate)}
-          </span>
+          <div className="flex items-center gap-1.5">
+            {isPixelTheme && <PixelScroll size={16} className="text-amber-600 dark:text-amber-400" />}
+            <span
+              className={cn(
+                "text-sm tracking-tight text-foreground",
+                isPixelTheme ? "font-mono font-bold text-sm" : "font-semibold"
+              )}
+            >
+              {formatDateDisplay(selectedDate)}
+            </span>
+          </div>
           {isCurrentToday ? (
-            <span className="text-xs px-2 py-0.5 rounded-full bg-accent text-accent-foreground font-medium">
+            <span
+              className={cn(
+                "text-xs px-2.5 py-0.5 font-medium",
+                isPixelTheme
+                  ? "rounded-xs bg-amber-500 text-amber-950 font-bold border-2 border-amber-900 shadow-[1px_1px_0px_#000]"
+                  : "rounded-full bg-accent text-accent-foreground"
+              )}
+            >
               今天
             </span>
           ) : (
             <button
               type="button"
-              className="text-xs px-2 py-0.5 rounded-full bg-accent text-accent-foreground font-medium hover:bg-accent/80 transition-colors cursor-pointer"
+              className={cn(
+                "text-xs px-2.5 py-0.5 font-medium transition-colors cursor-pointer",
+                isPixelTheme
+                  ? "rounded-xs bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold border-2 border-amber-900 shadow-[2px_2px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                  : "rounded-full bg-accent text-accent-foreground hover:bg-accent/80"
+              )}
               onClick={() => setSelectedDate(todayYMD())}
               title="回到今天"
             >
@@ -552,7 +640,12 @@ export const DailyReviewPanel: React.FC = () => {
           )}
           <button
             type="button"
-            className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer"
+            className={cn(
+              "p-1 text-muted-foreground hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors cursor-pointer",
+              isPixelTheme
+                ? "rounded-xs border border-border bg-muted/40 hover:bg-muted shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                : "rounded-md hover:bg-accent"
+            )}
             onClick={() => changeDate(1)}
             title="后一天"
             disabled={isCurrentToday}
@@ -575,7 +668,14 @@ export const DailyReviewPanel: React.FC = () => {
         </section>
 
         {/* Right: Stats + Calendar */}
-        <aside className="w-72 md:w-80 min-h-0 shrink-0 overflow-hidden border-l border-border bg-card/40">
+        <aside
+          className={cn(
+            "w-72 md:w-80 min-h-0 shrink-0 overflow-hidden",
+            isPixelTheme
+              ? "border-l-2 border-border/90 bg-card/60 font-mono shadow-[-2px_0px_0px_rgba(0,0,0,0.03)]"
+              : "border-l border-border bg-card/40"
+          )}
+        >
           <CompoundStats
             stats={stats}
             reviews={reviews}

@@ -20,6 +20,7 @@ import { Drawer, DrawerHeader, DrawerTitle, DrawerContent } from "@/components/u
 import { Item, ItemAvatar, ItemContent, ItemTitle, ItemDescription, ItemActions } from "@/components/ui/item";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { cn } from "@/lib/utils";
 
 import {
   PixelFlame,
@@ -264,7 +265,7 @@ const HabitAvatar: React.FC<{
 
     return (
       <div
-        className={`${containerMap[size]} rounded-xl bg-amber-50/90 dark:bg-amber-950/40 flex items-center justify-center shrink-0 border-2 border-amber-900/60 dark:border-amber-700/60 shadow-[2px_2px_0px_rgba(120,53,15,0.4)] transition-transform hover:scale-105 duration-200 select-none`}
+        className={`${containerMap[size]} rounded-xs bg-amber-50/90 dark:bg-amber-950/40 flex items-center justify-center shrink-0 border-2 border-amber-900/60 dark:border-amber-700/60 shadow-[2px_2px_0px_rgba(120,53,15,0.4)] transition-transform hover:scale-105 duration-200 select-none`}
       >
         {renderPixelIcon()}
       </div>
@@ -304,11 +305,19 @@ interface DateSwitcherProps {
 }
 
 const DateSwitcher: React.FC<DateSwitcherProps> = memo(({ currentDate, onChange }) => {
+  const { isPixelTheme } = useAppThemeStyle();
   const days = useMemo(() => getDaysAround(), []);
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 bg-card border-b border-border select-none">
-      <div className="flex gap-4 md:gap-6 overflow-x-auto w-full hide-scrollbar pb-1 justify-between px-2">
+    <div
+      className={cn(
+        "flex items-center justify-between px-4 py-3 bg-card border-b select-none",
+        isPixelTheme
+          ? "border-b-2 border-border/90 font-mono shadow-[0_2px_0px_rgba(0,0,0,0.04)]"
+          : "border-border"
+      )}
+    >
+      <div className="flex gap-3 md:gap-5 overflow-x-auto w-full hide-scrollbar pb-1 justify-between px-2">
         {days.map((d) => {
           const isSelected = d.dateStr === currentDate;
 
@@ -316,15 +325,48 @@ const DateSwitcher: React.FC<DateSwitcherProps> = memo(({ currentDate, onChange 
             <div
               key={d.dateStr}
               onClick={() => onChange(d.dateStr)}
-              className="flex flex-col items-center justify-center w-12 cursor-pointer transition-all duration-200 shrink-0 gap-1 group"
+              className={cn(
+                "flex flex-col items-center justify-center w-12 cursor-pointer transition-all duration-200 shrink-0 gap-1 group py-1",
+                isPixelTheme && isSelected && "bg-amber-100/80 dark:bg-amber-950/60 border-2 border-amber-900/60 dark:border-amber-700/60 rounded-xs shadow-[2px_2px_0px_#000]"
+              )}
             >
-              <span className={`text-xs font-medium transition-colors ${isSelected ? "text-blue-600 dark:text-blue-400 font-semibold" : "text-muted-foreground group-hover:text-foreground"}`}>
+              <span
+                className={cn(
+                  "text-xs font-medium transition-colors",
+                  isPixelTheme ? "font-mono font-bold text-[11px]" : "",
+                  isSelected
+                    ? isPixelTheme
+                      ? "text-amber-950 dark:text-amber-200 font-bold"
+                      : "text-blue-600 dark:text-blue-400 font-semibold"
+                    : "text-muted-foreground group-hover:text-foreground"
+                )}
+              >
                 {WEEK_DAYS[d.dayOfWeek]}
               </span>
-              <span className={`text-lg font-bold transition-transform group-hover:scale-110 duration-200 ${isSelected ? "text-blue-600 dark:text-blue-400 scale-110" : "text-foreground"}`}>
+              <span
+                className={cn(
+                  "text-lg font-bold transition-transform group-hover:scale-110 duration-200",
+                  isPixelTheme ? "font-mono font-black" : "",
+                  isSelected
+                    ? isPixelTheme
+                      ? "text-amber-950 dark:text-amber-200 scale-105"
+                      : "text-blue-600 dark:text-blue-400 scale-110"
+                    : "text-foreground"
+                )}
+              >
                 {d.dayNum}
               </span>
-              <div className={`w-4 h-4 rounded-full border-2 mt-1 transition-all duration-200 ${isSelected ? "border-blue-500 bg-blue-500/20" : "border-border group-hover:border-muted-foreground"}`} />
+              <div
+                className={cn(
+                  "w-4 h-4 border-2 mt-0.5 transition-all duration-200 flex items-center justify-center",
+                  isPixelTheme ? "rounded-xs" : "rounded-full",
+                  isSelected
+                    ? isPixelTheme
+                      ? "border-amber-700 bg-amber-500 shadow-[1px_1px_0px_#78350f]"
+                      : "border-blue-500 bg-blue-500/20"
+                    : "border-border group-hover:border-muted-foreground"
+                )}
+              />
             </div>
           );
         })}
@@ -393,12 +435,12 @@ const OverviewCards: React.FC<{ habit: Habit; currentDate: string }> = memo(({ h
 
   // 8-bit Pixel RPG Adventure Style
   return (
-    <div className="flex flex-col gap-3 w-full">
+    <div className="flex flex-col gap-3 w-full font-mono">
       {/* Adventurer Level & EXP Bar */}
-      <div className="bg-amber-50/90 dark:bg-amber-950/30 border-2 border-amber-900/60 dark:border-amber-700/60 rounded-xl p-3 shadow-[2px_2px_0px_rgba(120,53,15,0.4)] select-none">
+      <div className="bg-amber-50/90 dark:bg-amber-950/40 border-2 border-amber-900/60 dark:border-amber-700/60 rounded-xs p-3 shadow-[2px_2px_0px_#000] select-none">
         <div className="flex items-center justify-between mb-1.5">
           <div className="flex items-center gap-2">
-            <span className="px-2 py-0.5 rounded bg-amber-200 dark:bg-amber-900 text-amber-950 dark:text-amber-100 font-mono text-xs font-black border border-amber-900/40">
+            <span className="px-2 py-0.5 rounded-xs bg-amber-200 dark:bg-amber-900 text-amber-950 dark:text-amber-100 font-mono text-xs font-black border border-amber-900/60 shadow-[1px_1px_0px_#000]">
               Lv.{levelInfo.level}
             </span>
             <span className="text-xs font-bold text-amber-950 dark:text-amber-200">
@@ -411,9 +453,9 @@ const OverviewCards: React.FC<{ habit: Habit; currentDate: string }> = memo(({ h
         </div>
 
         {/* 8-bit Segmented Progress Bar */}
-        <div className="w-full h-3 bg-amber-200/80 dark:bg-amber-900/60 border border-amber-900/60 rounded-[3px] overflow-hidden p-[1px]">
+        <div className="w-full h-3 bg-amber-200/80 dark:bg-amber-900/60 border-2 border-amber-900/60 rounded-xs overflow-hidden p-[1px]">
           <div
-            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500"
+            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500 rounded-xs"
             style={{ width: `${Math.max(5, levelInfo.currentLevelExp)}%` }}
           />
         </div>
@@ -424,9 +466,9 @@ const OverviewCards: React.FC<{ habit: Habit; currentDate: string }> = memo(({ h
         {STAT_CARDS.map(({ icon: Icon, bgClass, textClass, key, label, suffix }) => (
           <div
             key={key}
-            className="bg-card rounded-xl p-3 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] border-2 border-border/80 flex items-center gap-2.5 transition-transform hover:-translate-y-0.5 duration-200"
+            className="bg-card rounded-xs p-3 shadow-[2px_2px_0px_#000] border-2 border-border/90 flex items-center gap-2.5 transition-transform hover:-translate-y-0.5 duration-200"
           >
-            <div className={`w-9 h-9 rounded-lg ${bgClass} flex items-center justify-center ${textClass} shrink-0`}>
+            <div className={`w-9 h-9 rounded-xs ${bgClass} flex items-center justify-center ${textClass} shrink-0 shadow-[1px_1px_0px_#000]`}>
               <Icon size={18} />
             </div>
             <div className="min-w-0">
@@ -517,20 +559,30 @@ const CalendarHeatmapComponent: React.FC<{ habit: Habit }> = memo(({ habit }) =>
         <button
           type="button"
           onClick={handlePrevMonth}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer"
+          className={cn(
+            "p-1.5 transition-colors cursor-pointer text-muted-foreground hover:text-foreground",
+            isPixelTheme
+              ? "rounded-xs border border-border bg-muted/40 hover:bg-muted shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+              : "rounded-lg hover:bg-accent"
+          )}
         >
           <ChevronLeft size={16} />
         </button>
         <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
           {isPixelTheme && <PixelSparkle size={14} />}
-          <span>
-            {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月 {isPixelTheme ? "草地打卡图" : "打卡日历"}
+          <span className={isPixelTheme ? "font-mono font-bold" : ""}>
+            {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月 {isPixelTheme ? "📜 修炼打卡月历" : "打卡日历"}
           </span>
         </div>
         <button
           type="button"
           onClick={handleNextMonth}
-          className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer"
+          className={cn(
+            "p-1.5 transition-colors cursor-pointer text-muted-foreground hover:text-foreground",
+            isPixelTheme
+              ? "rounded-xs border border-border bg-muted/40 hover:bg-muted shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+              : "rounded-lg hover:bg-accent"
+          )}
         >
           <ChevronRight size={16} />
         </button>
@@ -538,7 +590,7 @@ const CalendarHeatmapComponent: React.FC<{ habit: Habit }> = memo(({ habit }) =>
 
       <div className="grid grid-cols-7 w-full text-center gap-1.5">
         {SHORT_WEEK_DAYS.map((day) => (
-          <div key={day} className="text-[11px] text-muted-foreground font-medium mb-1">{day}</div>
+          <div key={day} className={cn("text-[11px] text-muted-foreground font-medium mb-1", isPixelTheme && "font-mono font-bold")}>{day}</div>
         ))}
 
         {daysInMonth.map((dayInfo, idx) => {
@@ -586,10 +638,10 @@ const CalendarHeatmapComponent: React.FC<{ habit: Habit }> = memo(({ habit }) =>
                 {dayInfo.date.getDate()}
               </span>
               <div
-                className={`w-6 h-6 rounded-md transition-all duration-200 flex items-center justify-center ${
+                className={`w-6 h-6 rounded-xs transition-all duration-200 flex items-center justify-center ${
                   checkedIn
                     ? "bg-emerald-500 text-white font-bold border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b] scale-105"
-                    : "bg-muted/40 border border-border/80"
+                    : "bg-muted/40 border border-border/80 rounded-xs"
                 } ${today ? "ring-2 ring-amber-400 ring-offset-1" : ""}`}
                 title={checkedIn ? `${formatDateYMD(dayInfo.date)}: 打卡成功 ✨` : formatDateYMD(dayInfo.date)}
               >
@@ -871,15 +923,32 @@ const HabitSidebar: React.FC<HabitSidebarProps> = memo(({ habit, currentDate, on
               <button
                 type="button"
                 onClick={() => setIsMenuOpen(!isMenuOpen)}
-                className="p-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer rounded-lg hover:bg-accent outline-none"
+                className={cn(
+                  "p-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer outline-none",
+                  isPixelTheme
+                    ? "rounded-xs hover:bg-amber-100/60 dark:hover:bg-amber-950/60"
+                    : "rounded-lg hover:bg-accent"
+                )}
               >
                 <MoreHorizontal size={20} />
               </button>
               {isMenuOpen && (
-                <div className="absolute right-0 top-10 w-36 bg-card rounded-xl shadow-lg border border-border p-1 z-50">
+                <div
+                  className={cn(
+                    "absolute right-0 top-10 w-36 bg-card border p-1 z-50",
+                    isPixelTheme
+                      ? "rounded-xs shadow-[3px_3px_0px_#000] border-2 border-border font-mono"
+                      : "rounded-xl shadow-lg border-border"
+                  )}
+                >
                   <button
                     type="button"
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-accent rounded-lg cursor-pointer text-left"
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 text-xs text-foreground cursor-pointer text-left",
+                      isPixelTheme
+                        ? "rounded-xs hover:bg-amber-100 dark:hover:bg-amber-950/80 font-mono font-bold"
+                        : "rounded-lg hover:bg-accent"
+                    )}
                     onClick={() => {
                       setIsMenuOpen(false);
                       setIsEditModalVisible(true);
@@ -889,7 +958,12 @@ const HabitSidebar: React.FC<HabitSidebarProps> = memo(({ habit, currentDate, on
                   </button>
                   <button
                     type="button"
-                    className="w-full flex items-center gap-2 px-3 py-2 text-xs text-destructive hover:bg-destructive/10 rounded-lg cursor-pointer text-left"
+                    className={cn(
+                      "w-full flex items-center gap-2 px-3 py-2 text-xs text-destructive cursor-pointer text-left",
+                      isPixelTheme
+                        ? "rounded-xs hover:bg-destructive/20 font-mono font-bold"
+                        : "rounded-lg hover:bg-destructive/10"
+                    )}
                     onClick={() => {
                       setIsMenuOpen(false);
                       setIsConfirmDeleteOpen(true);
@@ -903,12 +977,19 @@ const HabitSidebar: React.FC<HabitSidebarProps> = memo(({ habit, currentDate, on
           </div>
         </DrawerHeader>
 
-        <DrawerContent className="space-y-4">
+        <DrawerContent className={cn("space-y-4", isPixelTheme && "font-mono")}>
           <div className="flex-shrink-0">
             <OverviewCards habit={habit} currentDate={currentDate} />
           </div>
 
-          <div className="bg-card rounded-xl shadow-2xs border border-border p-4 flex-shrink-0">
+          <div
+            className={cn(
+              "bg-card p-4 flex-shrink-0",
+              isPixelTheme
+                ? "rounded-xs shadow-[2px_2px_0px_#000] border-2 border-border/90"
+                : "rounded-xl shadow-2xs border border-border"
+            )}
+          >
             <CalendarHeatmapComponent habit={habit} />
           </div>
 
@@ -996,9 +1077,12 @@ const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelect
   return (
     <Item
       onClick={onClick}
-      className={`cursor-pointer group transition-colors ${
-        isPixelTheme ? "hover:border-amber-900/40 dark:hover:border-amber-700/40" : ""
-      }`}
+      className={cn(
+        "cursor-pointer group transition-colors",
+        isPixelTheme
+          ? "rounded-xs border-2 border-border/90 bg-card shadow-[3px_3px_0px_rgba(0,0,0,0.08)] hover:shadow-[4px_4px_0px_rgba(0,0,0,0.14)] hover:border-amber-700/60 font-mono"
+          : ""
+      )}
     >
       <div className="flex items-center gap-4 min-w-0">
         <ItemAvatar>
@@ -1006,18 +1090,24 @@ const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelect
         </ItemAvatar>
 
         <ItemContent>
-          <ItemTitle className="group-hover:text-blue-500 transition-colors flex items-center gap-2">
+          <ItemTitle
+            className={cn(
+              "group-hover:text-blue-500 transition-colors flex items-center gap-2",
+              isPixelTheme && "font-mono font-bold"
+            )}
+          >
             <span>{habit.name}</span>
             {stats.currentStreak >= 3 && (
               <span
-                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                className={cn(
+                  "inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[10px] font-bold",
                   isPixelTheme
-                    ? "bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 font-mono border border-orange-500/30"
-                    : "bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400"
-                }`}
+                    ? "bg-orange-100 dark:bg-orange-950/80 text-orange-700 dark:text-orange-300 font-mono border border-orange-600/40 rounded-xs shadow-[1px_1px_0px_#000]"
+                    : "bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400 rounded"
+                )}
               >
                 {isPixelTheme ? <PixelFlame size={12} /> : <Flame size={12} />}
-                {stats.currentStreak}{isPixelTheme ? "连击" : "天连胜"}
+                {stats.currentStreak}{isPixelTheme ? " 连击" : "天连胜"}
               </span>
             )}
           </ItemTitle>
@@ -1035,15 +1125,20 @@ const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelect
             key={day.dateStr}
             type="button"
             onClick={(e) => handleDotClick(e, day.dateStr, day.isActiveDate)}
-            className={`w-6 h-6 flex items-center justify-center transition-all duration-200 transform active:scale-75 cursor-pointer outline-none ${
-              isPixelTheme ? "rounded-md" : "rounded-full"
-            } ${
+            className={cn(
+              "w-6 h-6 flex items-center justify-center transition-all duration-200 transform active:scale-75 cursor-pointer outline-none",
+              isPixelTheme ? "rounded-xs" : "rounded-full",
               day.isCheckedIn
                 ? isPixelTheme
                   ? "bg-emerald-500 text-white font-bold border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b] scale-100"
                   : "bg-emerald-500 text-white shadow-xs shadow-emerald-500/40 scale-100"
-                : "bg-muted/60 hover:bg-muted text-transparent opacity-80 hover:opacity-100 border border-border/60"
-            } ${day.isActiveDate ? (isPixelTheme ? "ring-2 ring-amber-400 ring-offset-1 scale-105" : "ring-2 ring-blue-500 ring-offset-1 scale-105") : ""}`}
+                : "bg-muted/60 hover:bg-muted text-transparent opacity-80 hover:opacity-100 border border-border/60",
+              day.isActiveDate
+                ? isPixelTheme
+                  ? "ring-2 ring-amber-400 ring-offset-1 scale-105"
+                  : "ring-2 ring-blue-500 ring-offset-1 scale-105"
+                : ""
+            )}
             title={
               day.isActiveDate
                 ? `${day.dateStr} (点击${day.isCheckedIn ? "取消打卡" : "完成打卡"})`
@@ -1110,9 +1205,16 @@ export const HabitPanel: React.FC = () => {
         {/* Habit List Area */}
         <div className="flex-1 bg-transparent overflow-y-auto p-6 pb-24 space-y-3">
           {habits.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64 text-center p-8 border border-dashed border-border rounded-2xl">
+            <div
+              className={cn(
+                "flex flex-col items-center justify-center h-64 text-center p-8 border-dashed",
+                isPixelTheme
+                  ? "border-2 border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20 rounded-xs font-mono shadow-[2px_2px_0px_rgba(120,53,15,0.2)]"
+                  : "border border-border rounded-2xl"
+              )}
+            >
               {isPixelTheme ? (
-                <div className="w-14 h-14 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-900/60 flex items-center justify-center text-muted-foreground mb-3 shadow-[2px_2px_0px_rgba(120,53,15,0.4)]">
+                <div className="w-14 h-14 rounded-xs bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-900/60 flex items-center justify-center text-muted-foreground mb-3 shadow-[2px_2px_0px_#000]">
                   <PixelSlime size={28} />
                 </div>
               ) : (
@@ -1121,20 +1223,25 @@ export const HabitPanel: React.FC = () => {
                 </div>
               )}
               <h3 className="text-base font-bold text-foreground mb-1">
-                {isPixelTheme ? "暂无打卡任务" : "暂无习惯项目"}
+                {isPixelTheme ? "暂无修行契约" : "暂无习惯项目"}
               </h3>
               <p className="text-xs text-muted-foreground max-w-xs mb-4">
                 {isPixelTheme
-                  ? "点击右下角的「+」按钮开启你的第一个自律冒险"
+                  ? "点击右下角的「+」按钮开启你的自律冒险"
                   : "点击右下角的「+」按钮创建你的第一个打卡项目"}
               </p>
               <Button
                 type="button"
                 size="sm"
                 onClick={() => setIsCreateModalVisible(true)}
-                className="cursor-pointer bg-blue-600 hover:bg-blue-700 text-white"
+                className={cn(
+                  "cursor-pointer",
+                  isPixelTheme
+                    ? "bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold border-2 border-amber-900 shadow-[2px_2px_0px_#000] rounded-xs active:translate-x-[1px] active:translate-y-[1px]"
+                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                )}
               >
-                新建习惯
+                {isPixelTheme ? "✨ 订立契约" : "新建习惯"}
               </Button>
             </div>
           ) : (
@@ -1156,12 +1263,17 @@ export const HabitPanel: React.FC = () => {
       <Button
         type="button"
         size="icon"
-        className="absolute bottom-6 right-6 z-20 h-12 w-12 rounded-full shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 cursor-pointer"
+        className={cn(
+          "absolute bottom-6 right-6 z-20 h-12 w-12 transition-all duration-200 cursor-pointer flex items-center justify-center",
+          isPixelTheme
+            ? "rounded-xs border-2 border-amber-900 bg-amber-500 hover:bg-amber-600 text-amber-950 shadow-[3px_3px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+            : "rounded-full shadow-lg hover:shadow-xl hover:scale-105 active:scale-95"
+        )}
         onClick={() => setIsCreateModalVisible(true)}
-        title="新建习惯"
-        aria-label="新建习惯"
+        title={isPixelTheme ? "订立修行契约" : "新建习惯"}
+        aria-label={isPixelTheme ? "订立修行契约" : "新建习惯"}
       >
-        <Plus size={22} />
+        <Plus size={22} className={isPixelTheme ? "stroke-[3]" : ""} />
       </Button>
 
       {/* Sidebar Drawer */}
