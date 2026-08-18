@@ -48,6 +48,7 @@ WorkBuddy-D 支持在「设置 - 通用设置」中全局切换视觉风格体�
 | Today Panel | 2-tier daily workspace: Top (Tasks + Habits & Review) and Bottom (Full-width Project Gantt Timeline with default all-projects view, single-line stage names, and active window date range filtering) | `src/components/today/TodayPanel.tsx`, `ProjectTimeline.tsx` |
 | Task Center | 4 Quadrants (`🔥 紧急讨伐`, `🌿 核心修炼`, `⚡ 突发委托`, `💧 支线见闻`) and period grouping | `src/components/time-management/DailyQuadrants.tsx`, `TimeManagementPanel.tsx` |
 | Project Center | Priority- and progress-sorted projects list, vertical stage quadrant cards with schedule grouping, and full quick-edit integration | `src/pages/ProjectsPage.tsx`, `ProjectStageBoard.tsx` |
+| Knowledge Base | 3-pane knowledge workspace: Sidebar (Folder/List tree + `📜 知识宝典`), Note List (Grouped scroll cards + Quick add feather), and Resizable Rich-Text Drawer (`ReactjsTiptapEditor` with debounced auto-seal status) | `src/pages/KnowledgePage.tsx`, `KnowledgePanel.tsx` |
 | Cards and panels | Group related information and actions | `src/components/ui/card.tsx`, feature panels |
 | Dialogs, modals, and drawers | Focused editing, settings, and standard dialogs | `src/components/ui/modal.tsx` (Arco Modal), `dialog.tsx`, `popconfirm.tsx` |
 | Floating menus and toasts | Transient actions and global feedback | `src/components/ui/dropdown-menu.tsx`, `src/components/ui/toast.tsx` |

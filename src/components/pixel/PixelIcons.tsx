@@ -329,3 +329,162 @@ export const PixelSlime: React.FC<PixelIconProps> = ({ size = 24, className = ""
     <rect x="11" y="9" width="1" height="1" fill="#F472B6" />
   </svg>
 );
+
+/**
+ * 8-bit Pixel Feather / Quill Pen (羽毛笔)
+ */
+export const PixelFeather: React.FC<PixelIconProps> = ({ size = 20, className = "" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    className={className}
+    shapeRendering="crispEdges"
+  >
+    {/* Feather Quill Top */}
+    <rect x="12" y="1" width="3" height="2" fill="#F59E0B" />
+    <rect x="10" y="2" width="4" height="3" fill="#FBBF24" />
+    <rect x="8" y="4" width="4" height="3" fill="#FEF3C7" />
+    <rect x="7" y="6" width="3" height="3" fill="#FDE68A" />
+    <rect x="5" y="8" width="3" height="3" fill="#F59E0B" />
+    <rect x="4" y="10" width="2" height="2" fill="#D97706" />
+    {/* Pen Tip */}
+    <rect x="3" y="12" width="2" height="2" fill="#78350F" />
+    <rect x="2" y="14" width="1" height="1" fill="#451A03" />
+    {/* Feather vane slit */}
+    <rect x="10" y="5" width="2" height="1" fill="#B45309" />
+  </svg>
+);
+
+/**
+ * 8-bit Pixel Open Spellbook (展开的魔法宝典)
+ */
+export const PixelBookOpen: React.FC<PixelIconProps> = ({ size = 20, className = "" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    className={className}
+    shapeRendering="crispEdges"
+  >
+    {/* Spine */}
+    <rect x="7" y="3" width="2" height="11" fill="#78350F" />
+    {/* Left Page */}
+    <rect x="2" y="4" width="5" height="9" fill="#FEF3C7" />
+    <rect x="1" y="5" width="1" height="8" fill="#D97706" />
+    <rect x="3" y="6" width="3" height="1" fill="#92400E" />
+    <rect x="3" y="8" width="3" height="1" fill="#92400E" />
+    <rect x="3" y="10" width="2" height="1" fill="#92400E" />
+    {/* Right Page */}
+    <rect x="9" y="4" width="5" height="9" fill="#FEF3C7" />
+    <rect x="14" y="5" width="1" height="8" fill="#D97706" />
+    <rect x="10" y="6" width="3" height="1" fill="#92400E" />
+    <rect x="10" y="8" width="3" height="1" fill="#92400E" />
+    <rect x="11" y="10" width="2" height="1" fill="#92400E" />
+  </svg>
+);
+
+/**
+ * 8-bit Pixel Library / Grimoire Shelf (魔导书库)
+ */
+export const PixelLibrary: React.FC<PixelIconProps> = ({ size = 20, className = "" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    className={className}
+    shapeRendering="crispEdges"
+  >
+    {/* Shelf Frame */}
+    <rect x="1" y="1" width="14" height="2" fill="#78350F" />
+    <rect x="1" y="7" width="14" height="2" fill="#78350F" />
+    <rect x="1" y="13" width="14" height="2" fill="#78350F" />
+    <rect x="1" y="1" width="2" height="14" fill="#5A2609" />
+    <rect x="13" y="1" width="2" height="14" fill="#5A2609" />
+    {/* Top Books */}
+    <rect x="4" y="3" width="2" height="4" fill="#DC2626" />
+    <rect x="7" y="3" width="2" height="4" fill="#2563EB" />
+    <rect x="10" y="3" width="2" height="4" fill="#16A34A" />
+    {/* Bottom Books */}
+    <rect x="4" y="9" width="2" height="4" fill="#D97706" />
+    <rect x="7" y="9" width="2" height="4" fill="#9333EA" />
+    <rect x="10" y="9" width="2" height="4" fill="#0284C7" />
+  </svg>
+);
+
+/**
+ * 8-bit Pixel Folder / Chest (羊皮纸公文袋/宝箱)
+ */
+export const PixelFolder: React.FC<PixelIconProps> = ({ size = 20, className = "" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    className={className}
+    shapeRendering="crispEdges"
+  >
+    {/* Tab */}
+    <rect x="2" y="3" width="5" height="2" fill="#D97706" />
+    {/* Back */}
+    <rect x="2" y="5" width="12" height="8" fill="#B45309" />
+    {/* Front Flap */}
+    <rect x="2" y="7" width="12" height="6" fill="#F59E0B" />
+    <rect x="3" y="8" width="10" height="4" fill="#FDE68A" />
+    {/* Border */}
+    <rect x="1" y="4" width="1" height="9" fill="#78350F" />
+    <rect x="14" y="6" width="1" height="7" fill="#78350F" />
+    <rect x="2" y="13" width="12" height="1" fill="#78350F" />
+  </svg>
+);
+
+/**
+ * 8-bit Pixel Shield (公会神盾)
+ */
+export const PixelShield: React.FC<PixelIconProps> = ({ size = 20, className = "" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    className={className}
+    shapeRendering="crispEdges"
+  >
+    {/* Top Rim */}
+    <rect x="2" y="2" width="12" height="2" fill="#2563EB" />
+    {/* Body */}
+    <rect x="2" y="4" width="12" height="5" fill="#3B82F6" />
+    <rect x="3" y="9" width="10" height="2" fill="#3B82F6" />
+    <rect x="4" y="11" width="8" height="2" fill="#2563EB" />
+    <rect x="6" y="13" width="4" height="2" fill="#1D4ED8" />
+    <rect x="7" y="15" width="2" height="1" fill="#1E40AF" />
+    {/* Gold Cross */}
+    <rect x="7" y="4" width="2" height="8" fill="#FBBF24" />
+    <rect x="4" y="6" width="8" height="2" fill="#FBBF24" />
+    {/* Border */}
+    <rect x="1" y="2" width="1" height="7" fill="#1E3A8A" />
+    <rect x="14" y="2" width="1" height="7" fill="#1E3A8A" />
+  </svg>
+);
+
+/**
+ * 8-bit Pixel Flag (战术旗帜)
+ */
+export const PixelFlag: React.FC<PixelIconProps> = ({ size = 20, className = "" }) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 16 16"
+    className={className}
+    shapeRendering="crispEdges"
+  >
+    {/* Flag Pole */}
+    <rect x="3" y="1" width="2" height="14" fill="#78350F" />
+    <rect x="2" y="14" width="4" height="2" fill="#451A03" />
+    <rect x="3" y="0" width="2" height="1" fill="#F59E0B" />
+    {/* Banner */}
+    <rect x="5" y="2" width="8" height="6" fill="#DC2626" />
+    <rect x="13" y="3" width="2" height="4" fill="#EF4444" />
+    <rect x="6" y="4" width="3" height="2" fill="#FEF08A" />
+  </svg>
+);
+
+

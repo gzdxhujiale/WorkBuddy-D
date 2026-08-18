@@ -38,6 +38,16 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth';
 import { useUiStore } from '@/stores/uiStore';
 import { queryKeys } from '@/lib/syncEngine';
+import { useAppThemeStyle } from '@/hooks/useAppThemeStyle';
+import {
+  PixelScroll,
+  PixelFeather,
+  PixelBookOpen,
+  PixelLibrary,
+  PixelFolder,
+  PixelSparkle,
+  PixelHourglass,
+} from '@/components/pixel/PixelIcons';
 
 // ============================================================================
 // 1. SortableItem & Droppable Helper Components
@@ -83,10 +93,11 @@ interface SidebarListItemDroppableProps {
   dragOverListId?: string | null;
   onSelectList: (id: string) => void;
   isNested: boolean;
+  isPixelTheme?: boolean;
   children: ReactNode;
 }
 
-const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo(({ list, activeListId, dragOverListId, onSelectList, isNested, children }) => {
+const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo(({ list, activeListId, dragOverListId, onSelectList, isNested, isPixelTheme, children }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `sidebar-list-${list.id}`,
     data: { type: 'sidebar-list', folderId: list.id }
@@ -98,12 +109,16 @@ const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo((
     <div
       ref={setNodeRef}
       className={cn(
-        'group relative flex cursor-pointer select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-all duration-150',
-        isNested ? 'pl-10' : 'pl-8',
+        'group relative flex cursor-pointer select-none items-center gap-2 px-2 py-1.5 text-sm transition-all duration-150',
+        isNested ? 'pl-9' : 'pl-7',
         isActive
-          ? 'bg-sidebar-primary/15 font-medium text-sidebar-primary'
-          : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-        isTarget && 'bg-sidebar-primary/10 ring-2 ring-sidebar-ring'
+          ? (isPixelTheme
+              ? 'bg-amber-200/90 text-amber-950 dark:bg-amber-900/60 dark:text-amber-100 font-mono font-bold shadow-[2px_2px_0px_rgba(0,0,0,0.15)] border border-amber-900/40 dark:border-amber-600/40 rounded-xs'
+              : 'bg-sidebar-primary/15 font-medium text-sidebar-primary rounded-md')
+          : (isPixelTheme
+              ? 'text-sidebar-foreground hover:bg-amber-100/60 dark:hover:bg-amber-950/40 hover:text-amber-900 dark:hover:text-amber-100 font-mono rounded-xs'
+              : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md'),
+        isTarget && (isPixelTheme ? 'bg-amber-200/30 ring-2 ring-amber-500' : 'bg-sidebar-primary/10 ring-2 ring-sidebar-ring')
       )}
       onClick={() => onSelectList(list.id)}
     >
@@ -130,6 +145,7 @@ interface ListsSidebarProps {
   onDuplicateList: (list: KnowledgeFolder) => void;
   onDeleteList: (list: KnowledgeFolder) => void;
   isCollapsed?: boolean;
+  isPixelTheme?: boolean;
 }
 
 function ListsSidebar({
@@ -146,7 +162,8 @@ function ListsSidebar({
   onEditList,
   onDuplicateList,
   onDeleteList,
-  isCollapsed
+  isCollapsed,
+  isPixelTheme,
 }: ListsSidebarProps) {
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
 
@@ -174,7 +191,13 @@ function ListsSidebar({
         dragOverListId={dragOverListId}
         onSelectList={onSelectList}
         isNested={isNested}
+        isPixelTheme={isPixelTheme}
       >
+        {isPixelTheme ? (
+          <PixelFolder size={14} className="shrink-0 text-amber-700 dark:text-amber-400" />
+        ) : (
+          <FolderIcon size={14} className="shrink-0 text-muted-foreground" />
+        )}
         <span className="truncate flex-1">{list.name}</span>
 
         <div className="ml-auto flex items-center gap-1">
@@ -187,7 +210,7 @@ function ListsSidebar({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="rounded-md opacity-0 group-hover:opacity-100 transition-opacity"
+                  className={cn("opacity-0 group-hover:opacity-100 transition-opacity", isPixelTheme ? "rounded-xs" : "rounded-md")}
                 >
                   <MoreHorizontal size={15} />
                 </Button>
@@ -225,18 +248,25 @@ function ListsSidebar({
   return (
       <aside
         className={cn(
-          'flex w-[206px] flex-none flex-col overflow-hidden border-r border-border bg-sidebar text-sidebar-foreground transition-all duration-[250ms] ease-in-out',
+          'flex w-[210px] flex-none flex-col overflow-hidden border-r bg-sidebar text-sidebar-foreground transition-all duration-[250ms] ease-in-out',
+          isPixelTheme ? 'border-r-2 border-border font-mono' : 'border-border',
           isCollapsed && 'pointer-events-none !w-0 border-r-transparent opacity-0'
         )}
       >
-        <div className="group/header flex h-12 shrink-0 items-center justify-between border-b border-border px-3 text-sm font-semibold select-none">
+        <div className={cn(
+          "group/header flex h-12 shrink-0 items-center justify-between border-b px-3 text-sm font-semibold select-none",
+          isPixelTheme ? "border-b-2 border-border" : "border-border"
+        )}>
           <div className="flex items-center text-base font-bold text-sidebar-foreground">
-            <span>知识库</span>
+            <span>{isPixelTheme ? "📜 知识宝典" : "知识库"}</span>
           </div>
         <Button
           variant="ghost"
           size="icon"
-          className="rounded-md text-sidebar-foreground opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover/header:opacity-100"
+          className={cn(
+            "text-sidebar-foreground opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover/header:opacity-100",
+            isPixelTheme ? "rounded-xs" : "rounded-md"
+          )}
           onClick={() => onAddClick()}
           title="新建文件夹"
         >
@@ -344,17 +374,27 @@ interface NoteItemProps {
   onClick: () => void;
   onDuplicate: (note: Note) => void;
   onDelete: (note: Note) => void;
+  isPixelTheme?: boolean;
 }
 
-function NoteItem({ note, onClick, onDuplicate, onDelete }: NoteItemProps) {
+function NoteItem({ note, onClick, onDuplicate, onDelete, isPixelTheme }: NoteItemProps) {
   return (
     <div
-      className="group relative flex items-center gap-3 bg-card border border-border hover:border-muted-foreground/30 rounded-lg px-4 py-3 cursor-pointer hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all duration-200 mb-3 text-card-foreground"
+      className={cn(
+        "group relative flex items-center gap-3 border transition-all duration-200 mb-2.5 cursor-pointer text-card-foreground select-none",
+        isPixelTheme
+          ? "bg-card border-2 border-border/90 hover:bg-amber-50/70 dark:hover:bg-amber-950/40 rounded-xs px-4 py-2.5 shadow-[3px_3px_0px_rgba(0,0,0,0.1)] hover:shadow-[4px_4px_0px_rgba(217,119,6,0.3)] hover:-translate-x-0.5 hover:-translate-y-0.5 font-mono"
+          : "bg-card border-border hover:border-muted-foreground/30 rounded-lg px-4 py-3 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)]"
+      )}
       onClick={onClick}
     >
-      <FileText size={16} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
-      <div className="flex-1 text-sm font-medium text-foreground truncate">
-        {note.title || '无标题笔记'}
+      {isPixelTheme ? (
+        <PixelScroll size={16} className="shrink-0" />
+      ) : (
+        <FileText size={16} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
+      )}
+      <div className={cn("flex-1 truncate", isPixelTheme ? "font-mono font-bold text-sm text-foreground" : "text-sm font-medium text-foreground")}>
+        {note.title || (isPixelTheme ? '📜 无标题卷轴' : '无标题笔记')}
       </div>
 
       <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
@@ -363,7 +403,7 @@ function NoteItem({ note, onClick, onDuplicate, onDelete }: NoteItemProps) {
             <Button
               variant="ghost"
               size="icon"
-              className="rounded-lg"
+              className={isPixelTheme ? "rounded-xs" : "rounded-lg"}
             >
               <MoreHorizontal size={16} />
             </Button>
@@ -390,6 +430,7 @@ interface NoteGroupViewProps {
   notes: Note[];
   isUngrouped?: boolean;
   isDragOverTarget?: boolean;
+  isPixelTheme?: boolean;
   onRenameGroup: (id: string, newName: string) => void;
   onDeleteGroup: (id: string) => void;
   onNoteClick: (note: Note) => void;
@@ -397,7 +438,7 @@ interface NoteGroupViewProps {
   onDeleteNote: (note: Note) => void;
 }
 
-function NoteGroupView({ group, notes, isUngrouped, isDragOverTarget, onRenameGroup, onDeleteGroup, onNoteClick, onDuplicateNote, onDeleteNote }: NoteGroupViewProps) {
+function NoteGroupView({ group, notes, isUngrouped, isDragOverTarget, isPixelTheme, onRenameGroup, onDeleteGroup, onNoteClick, onDuplicateNote, onDeleteNote }: NoteGroupViewProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(group.name);
@@ -427,17 +468,24 @@ function NoteGroupView({ group, notes, isUngrouped, isDragOverTarget, onRenameGr
   return (
     <div
       ref={setNodeRef}
-      className={`mb-6 rounded-lg border border-border/60 bg-muted/30 p-3 transition-all ${
-        isDragOverTarget ? 'ring-2 ring-ring bg-accent/30' : ''
-      }`}
+      className={cn(
+        "mb-5 border p-3 transition-all",
+        isPixelTheme
+          ? "rounded-xs border-2 border-border/80 bg-amber-50/30 dark:bg-amber-950/20 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] font-mono"
+          : "rounded-lg border-border/60 bg-muted/30",
+        isDragOverTarget && (isPixelTheme ? "ring-2 ring-amber-500 bg-amber-100/40" : "ring-2 ring-ring bg-accent/30")
+      )}
     >
       <div
-        className="group/gh flex items-center gap-2 px-3 py-2 rounded-md cursor-pointer hover:bg-muted transition-colors select-none"
+        className={cn(
+          "group/gh flex items-center gap-2 px-3 py-1.5 cursor-pointer transition-colors select-none",
+          isPixelTheme ? "rounded-xs hover:bg-amber-100/60 dark:hover:bg-amber-900/30 font-mono" : "rounded-md hover:bg-muted"
+        )}
         onClick={() => setIsCollapsed(!isCollapsed)}
       >
         <ChevronDown
           size={14}
-          className={`text-muted-foreground transition-transform duration-200 ${isCollapsed ? '-rotate-90' : ''}`}
+          className={cn('text-muted-foreground transition-transform duration-200', isCollapsed && '-rotate-90')}
         />
 
         {isEditing ? (
@@ -455,14 +503,22 @@ function NoteGroupView({ group, notes, isUngrouped, isDragOverTarget, onRenameGr
               }
             }}
             onClick={e => e.stopPropagation()}
-            className="text-sm font-semibold border border-primary bg-card outline-none rounded-md px-2 py-0.5 text-foreground"
+            className={cn(
+              "text-sm font-semibold border bg-card outline-none px-2 py-0.5 text-foreground",
+              isPixelTheme ? "border-2 border-amber-600 rounded-xs font-mono" : "border-primary rounded-md"
+            )}
           />
         ) : (
-          <span className="text-sm font-semibold text-foreground">{group.name}</span>
+          <span className={cn("text-sm font-semibold text-foreground", isPixelTheme && "font-mono font-bold")}>{group.name}</span>
         )}
 
         <div className="ml-auto flex items-center gap-2 relative" onClick={e => e.stopPropagation()}>
-          <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+          <span className={cn(
+            "text-xs font-medium px-2 py-0.5",
+            isPixelTheme
+              ? "font-mono font-bold rounded-xs bg-amber-200/80 text-amber-900 dark:bg-amber-900/60 dark:text-amber-100 border border-amber-900/30 shadow-[1px_1px_0px_rgba(0,0,0,0.1)]"
+              : "rounded-full text-muted-foreground bg-muted"
+          )}>
             {notes.length}
           </span>
           {!isUngrouped && (
@@ -471,7 +527,7 @@ function NoteGroupView({ group, notes, isUngrouped, isDragOverTarget, onRenameGr
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="rounded-md"
+                  className={isPixelTheme ? "rounded-xs" : "rounded-md"}
                 >
                   <MoreHorizontal size={15} />
                 </Button>
@@ -509,6 +565,7 @@ function NoteGroupView({ group, notes, isUngrouped, isDragOverTarget, onRenameGr
                 <SortableItem key={note.id} id={note.id}>
                   <NoteItem
                     note={note}
+                    isPixelTheme={isPixelTheme}
                     onClick={() => onNoteClick(note)}
                     onDuplicate={onDuplicateNote}
                     onDelete={onDeleteNote}
@@ -535,6 +592,7 @@ interface NoteDrawerProps {
   onSaveAsTemplate: (note: Note) => void;
   onDelete: (note: Note) => void;
   onOpenTemplate?: () => void;
+  isPixelTheme?: boolean;
 }
 
 function NoteDrawerContent({
@@ -545,6 +603,7 @@ function NoteDrawerContent({
   onDuplicate,
   onSaveAsTemplate,
   onDelete,
+  isPixelTheme,
 }: {
   note: Note;
   isOpen: boolean;
@@ -553,6 +612,7 @@ function NoteDrawerContent({
   onDuplicate: (note: Note) => void;
   onSaveAsTemplate: (note: Note) => void;
   onDelete: (note: Note) => void;
+  isPixelTheme?: boolean;
 }) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || '');
@@ -615,7 +675,7 @@ function NoteDrawerContent({
   const handleExport = async () => {
     try {
       const exportText = convertTipTapJsonToMarkdown(content);
-      await knowledgeService.saveMarkdownFile(`${title || '未命名笔记'}.md`, exportText);
+      await knowledgeService.saveMarkdownFile(`${title || (isPixelTheme ? '未命名卷轴' : '未命名笔记')}.md`, exportText);
       toast.success('导出成功！');
     } catch (err) {
     }
@@ -623,25 +683,46 @@ function NoteDrawerContent({
 
   return (
     <>
-      <div className="flex h-12 items-center justify-between border-b border-border px-4 shrink-0">
+      <div className={cn(
+        "flex h-12 items-center justify-between border-b px-4 shrink-0",
+        isPixelTheme ? "border-b-2 border-border/90 bg-card font-mono" : "border-border"
+      )}>
         <Input
           type="text"
           value={title}
           onChange={e => setTitle(e.target.value)}
-          placeholder="笔记标题"
-          className="flex-1 mr-4 text-xl font-bold border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto"
+          placeholder={isPixelTheme ? "卷轴标题..." : "笔记标题"}
+          className={cn(
+            "flex-1 mr-4 text-xl font-bold border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto",
+            isPixelTheme && "font-mono font-bold text-amber-950 dark:text-amber-100"
+          )}
         />
         <div className="flex items-center gap-2 shrink-0">
           <span
             title={saveStatus === 'saving' ? '保存中...' : '已自动保存'}
             aria-live="polite"
-            className="flex items-center gap-1.5 rounded-lg bg-primary/10 px-2 py-1.5 text-xs text-primary"
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 text-xs transition-all",
+              isPixelTheme
+                ? (saveStatus === 'saving'
+                    ? 'bg-amber-100 text-amber-900 border border-amber-900/40 rounded-xs font-mono font-bold'
+                    : 'bg-amber-200/90 text-amber-950 dark:bg-amber-900/60 dark:text-amber-100 border border-amber-900/40 rounded-xs font-mono font-bold')
+                : 'rounded-lg bg-primary/10 text-primary'
+            )}
           >
-            <Cloud
-              size={18}
-              className={cn('transition-all duration-300', saveStatus === 'saving' ? 'opacity-50 animate-pulse' : 'opacity-100')}
-            />
-            <span>{saveStatus === 'saving' ? '保存中' : '已保存'}</span>
+            {isPixelTheme ? (
+              saveStatus === 'saving' ? <PixelHourglass size={14} className="animate-spin" /> : <PixelSparkle size={14} />
+            ) : (
+              <Cloud
+                size={18}
+                className={cn('transition-all duration-300', saveStatus === 'saving' ? 'opacity-50 animate-pulse' : 'opacity-100')}
+              />
+            )}
+            <span>
+              {isPixelTheme
+                ? (saveStatus === 'saving' ? '刻印中' : '已封印')
+                : (saveStatus === 'saving' ? '保存中' : '已保存')}
+            </span>
           </span>
           <div className="relative">
             <DropdownMenu>
@@ -649,7 +730,7 @@ function NoteDrawerContent({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="rounded-lg"
+                  className={isPixelTheme ? "rounded-xs" : "rounded-lg"}
                 >
                   <MoreHorizontal size={20} />
                 </Button>
@@ -695,7 +776,7 @@ function NoteDrawerContent({
         <ReactjsTiptapEditor
           content={content}
           onChange={setContent}
-          placeholder="开始撰写笔记，或输入 / 使用命令..."
+          placeholder={isPixelTheme ? "📜 展开羊皮纸卷轴，开始书写魔法笔记..." : "开始撰写笔记，或输入 / 使用命令..."}
         />
       </div>
     </>
@@ -711,7 +792,8 @@ function NoteDrawer({
   onDuplicate,
   onSaveAsTemplate,
   onDelete,
-}: NoteDrawerProps & { isLoading?: boolean }) {
+  isPixelTheme,
+}: NoteDrawerProps & { isLoading?: boolean; isPixelTheme?: boolean }) {
   const [drawerWidth, setDrawerWidth] = useState(600);
   const isResizing = useRef(false);
 
@@ -749,7 +831,8 @@ function NoteDrawer({
       )}
       <div
         className={cn(
-          'fixed top-[38px] bottom-0 z-[60] bg-card text-card-foreground border-l border-border shadow-2xl flex flex-col transition-all duration-300 ease-out',
+          'fixed top-[38px] bottom-0 z-[60] bg-card text-card-foreground border-l shadow-2xl flex flex-col transition-all duration-300 ease-out',
+          isPixelTheme ? 'border-l-2 border-border shadow-[-6px_0px_0px_rgba(0,0,0,0.12)] font-mono' : 'border-border',
           isOpen ? 'right-0' : '-right-full'
         )}
         style={{ width: drawerWidth }}
@@ -768,11 +851,12 @@ function NoteDrawer({
             onDuplicate={onDuplicate}
             onSaveAsTemplate={onSaveAsTemplate}
             onDelete={onDelete}
+            isPixelTheme={isPixelTheme}
           />
         ) : (
-          <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
+          <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground font-mono">
             <LoaderCircle size={18} className="animate-spin" />
-            正在加载笔记正文…
+            正在加载卷轴正文…
           </div>
         )}
       </div>
@@ -1051,6 +1135,7 @@ const EMPTY_NOTES: Note[] = [];
 const EMPTY_NOTE_GROUPS: NoteGroup[] = [];
 
 export function KnowledgePanel() {
+  const { isPixelTheme } = useAppThemeStyle();
   const { userId } = useAuth();
   // Query-backed data + write actions (connected to knowledgeService Supabase backend)
   const { data } = useKnowledgeData();
@@ -1585,22 +1670,27 @@ export function KnowledgePanel() {
           onDuplicateList={handleDuplicateList}
           onDeleteList={handleDeleteList}
           isCollapsed={isSidebarCollapsed}
+          isPixelTheme={isPixelTheme}
         />
 
         <main className="flex-1 flex flex-col bg-transparent relative overflow-hidden">
           {activeList ? (
             <>
-              <div className="flex h-12 items-center justify-between border-b border-border bg-card px-6 shrink-0 z-30 relative">
+              <div className={cn(
+                "flex h-12 items-center justify-between border-b bg-card px-6 shrink-0 z-30 relative",
+                isPixelTheme ? "border-b-2 border-border font-mono" : "border-border"
+              )}>
                 <div className="flex items-center gap-2 text-base font-bold text-foreground">
-                  <Button variant="ghost" size="icon" className="rounded-lg" onClick={toggleSidebar} title={isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}>
+                  <Button variant="ghost" size="icon" className={isPixelTheme ? "rounded-xs" : "rounded-lg"} onClick={toggleSidebar} title={isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}>
                     <MenuIcon isCollapsed={isSidebarCollapsed} />
                   </Button>
+                  {isPixelTheme && <PixelBookOpen size={18} className="shrink-0" />}
                   <span>{activeList.name}</span>
                 </div>
                 <div className="flex items-center gap-4 text-muted-foreground">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="rounded-lg">
+                      <Button variant="ghost" size="icon" className={isPixelTheme ? "rounded-xs" : "rounded-lg"}>
                         <MoreHorizontal size={18} />
                       </Button>
                     </DropdownMenuTrigger>
@@ -1614,20 +1704,43 @@ export function KnowledgePanel() {
               </div>
 
               <div className="px-8 flex-1 overflow-y-auto flex flex-col py-6">
-                <div className="flex items-center gap-3 bg-muted border border-input rounded-lg px-3 py-2 mb-6 focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20 transition-all">
-                  <Plus size={18} className="text-muted-foreground shrink-0" />
+                <div className={cn(
+                  "flex items-center gap-3 border px-3 py-2 mb-6 transition-all",
+                  isPixelTheme
+                    ? "bg-amber-50/60 dark:bg-amber-950/30 border-2 border-border/90 rounded-xs shadow-[2px_2px_0px_rgba(0,0,0,0.08)] focus-within:border-amber-600 focus-within:shadow-[3px_3px_0px_rgba(217,119,6,0.3)] font-mono"
+                    : "bg-muted border-input rounded-lg focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20"
+                )}>
+                  {isPixelTheme ? (
+                    <PixelFeather size={18} className="shrink-0" />
+                  ) : (
+                    <Plus size={18} className="text-muted-foreground shrink-0" />
+                  )}
                   <Input
                     type="text"
-                    placeholder="添加笔记..."
+                    placeholder={isPixelTheme ? "📜 撰写新的魔法卷轴 / 笔记... (按 Enter 保存)" : "添加笔记..."}
                     value={newNoteTitle}
                     onChange={e => setNewNoteTitle(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter') handleAddNote(); }}
-                    className="border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto"
+                    className={cn(
+                      "border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto",
+                      isPixelTheme && "font-mono text-sm"
+                    )}
                   />
                 </div>
 
                 {notes.length === 0 && !isAddingGroup ? (
-                  <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">暂无笔记</div>
+                  <div className="flex-1 flex flex-col items-center justify-center text-sm text-muted-foreground py-16">
+                    {isPixelTheme ? (
+                      <>
+                        <PixelScroll size={36} className="mb-2 opacity-60" />
+                        <span className="font-mono text-sm text-amber-900/70 dark:text-amber-300/70">
+                          📜 当前宝典暂无卷轴笔记，点击上方开始撰写
+                        </span>
+                      </>
+                    ) : (
+                      <span>暂无笔记</span>
+                    )}
+                  </div>
                 ) : (
                   <div className="flex flex-col pb-8">
                     {isAddingGroup && (
@@ -1643,7 +1756,10 @@ export function KnowledgePanel() {
                             if (e.key === 'Enter') handleConfirmAddGroup();
                             if (e.key === 'Escape') setIsAddingGroup(false);
                           }}
-                          className="text-sm font-semibold border-primary bg-card shadow-xs max-w-xs"
+                          className={cn(
+                            "text-sm font-semibold bg-card shadow-xs max-w-xs",
+                            isPixelTheme ? "border-2 border-amber-600 rounded-xs font-mono" : "border-primary"
+                          )}
                         />
                       </div>
                     )}
@@ -1654,6 +1770,7 @@ export function KnowledgePanel() {
                             <NoteItem
                               key={note.id}
                               note={note}
+                              isPixelTheme={isPixelTheme}
                               onClick={() => handleOpenNote(note.id, note.title)}
                               onDuplicate={handleDuplicateNote}
                               onDelete={handleDeleteNote}
@@ -1672,6 +1789,7 @@ export function KnowledgePanel() {
                               group={group}
                               notes={groupNotes}
                               isDragOverTarget={!!isDragOverTarget}
+                              isPixelTheme={isPixelTheme}
                               onRenameGroup={handleRenameGroup}
                               onDeleteGroup={handleDeleteGroup}
                               onNoteClick={(note) => handleOpenNote(note.id, note.title)}
@@ -1687,6 +1805,7 @@ export function KnowledgePanel() {
                             notes={ungroupedNotes}
                             isUngrouped={true}
                             isDragOverTarget={!!isUngroupedDragOverTarget}
+                            isPixelTheme={isPixelTheme}
                             onRenameGroup={() => { }}
                             onDeleteGroup={() => { }}
                             onNoteClick={(note) => handleOpenNote(note.id, note.title)}
@@ -1704,6 +1823,7 @@ export function KnowledgePanel() {
                 note={drawerNote}
                 isLoading={isDrawerOpen && Boolean(activeNoteId) && !drawerNote}
                 isOpen={isDrawerOpen}
+                isPixelTheme={isPixelTheme}
                 onClose={() => setIsDrawerOpen(false)}
                 onUpdate={handleNoteUpdate}
                 onDuplicate={handleDuplicateNote}
@@ -1712,8 +1832,15 @@ export function KnowledgePanel() {
               />
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
-              请在左侧选择或创建一个文件夹
+            <div className="flex-1 flex flex-col items-center justify-center text-sm text-muted-foreground py-16 font-mono">
+              {isPixelTheme ? (
+                <>
+                  <PixelLibrary size={42} className="mb-2 opacity-50" />
+                  <span>📜 请在左侧选择或创建一个知识卷轴文件夹</span>
+                </>
+              ) : (
+                <span>请在左侧选择或创建一个文件夹</span>
+              )}
             </div>
           )}
         </main>

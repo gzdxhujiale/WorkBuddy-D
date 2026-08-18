@@ -16,6 +16,7 @@ import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { openQuickEditWindow } from "@/services/quickEditWindow";
 import { createTaskId } from "@/lib/entityIds";
+import { PixelScroll } from "@/components/pixel/PixelIcons";
 import type { ProjectStage, ProjectTask } from "@/types/projects";
 import type { Task } from "@/types/timeManagement";
 
@@ -289,7 +290,7 @@ const StageQuadrantBox: React.FC<StageQuadrantBoxProps> = ({
           onClick={(e) => handleOpenEditTask(task, e)}
           className={`group flex items-center justify-between transition-all cursor-pointer select-none ${
             isPixelTheme
-              ? "px-3 py-2 rounded-xs border border-border/80 bg-card hover:bg-amber-100/60 dark:hover:bg-amber-950/40 shadow-[1px_1px_0px_rgba(0,0,0,0.06)] font-mono text-foreground"
+              ? "px-3 py-2 rounded-xs border-2 border-border/80 bg-card hover:bg-amber-100/60 dark:hover:bg-amber-950/40 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] hover:shadow-[3px_3px_0px_rgba(217,119,6,0.25)] hover:-translate-x-0.5 hover:-translate-y-0.5 font-mono text-foreground"
               : "px-2.5 py-1.5 rounded-lg border-b border-slate-200/50 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/60 hover:bg-slate-100/80 dark:hover:bg-slate-800/80"
           } ${
             task.completed
@@ -330,7 +331,7 @@ const StageQuadrantBox: React.FC<StageQuadrantBoxProps> = ({
               className={`text-xs font-medium truncate ${
                 task.completed ? "line-through text-muted-foreground" : ""
               } ${
-                isPixelTheme ? "font-mono text-foreground" : "text-slate-800 dark:text-slate-200"
+                isPixelTheme ? "font-mono text-foreground font-bold" : "text-slate-800 dark:text-slate-200"
               }`}
             >
               {task.title}
@@ -387,7 +388,7 @@ const StageQuadrantBox: React.FC<StageQuadrantBoxProps> = ({
               }}
               className={`hidden group-hover:flex h-6 w-6 cursor-pointer ${
                 isPixelTheme
-                  ? "rounded-xs border border-border/80 bg-muted hover:bg-red-600 hover:text-white text-muted-foreground shadow-[1px_1px_0px_#000]"
+                  ? "rounded-xs border-2 border-border/80 bg-muted hover:bg-red-600 hover:text-white text-muted-foreground shadow-[1px_1px_0px_#000]"
                   : "text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
               }`}
               title="删除任务"
@@ -404,12 +405,12 @@ const StageQuadrantBox: React.FC<StageQuadrantBoxProps> = ({
     <div
       className={`flex flex-col w-full ${
         isPixelTheme
-          ? "rounded-xl border-2 border-border/90 bg-card shadow-[4px_4px_0px_rgba(0,0,0,0.12)] font-mono"
+          ? "rounded-xs border-2 border-border/90 bg-card shadow-[4px_4px_0px_rgba(0,0,0,0.12)] font-mono"
           : "rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs"
       } ${theme.accentBorder} ${theme.bgGradient} overflow-hidden select-none`}
     >
       {/* Stage Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 border-b border-border/60">
+      <div className={`flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 border-b ${isPixelTheme ? "border-b-2 border-border/70" : "border-border/60"}`}>
         <div className="flex items-center gap-2 min-w-0">
           <button
             type="button"
@@ -530,11 +531,17 @@ const StageQuadrantBox: React.FC<StageQuadrantBoxProps> = ({
             {sortedTasks.length === 0 ? (
               <div
                 onClick={(e) => handleCreateTask(e.currentTarget)}
-                className="py-6 flex flex-col items-center justify-center text-muted-foreground/50 hover:text-muted-foreground text-xs gap-1.5 cursor-pointer select-none transition-colors"
+                className={`py-6 flex flex-col items-center justify-center text-muted-foreground/60 hover:text-muted-foreground text-xs gap-1.5 cursor-pointer select-none transition-colors ${
+                  isPixelTheme ? "font-mono" : ""
+                }`}
                 title="点击新建任务"
               >
-                <span className="text-lg">{isPixelTheme ? "📜" : "✨"}</span>
-                <span className={isPixelTheme ? "font-mono" : ""}>
+                {isPixelTheme ? (
+                  <PixelScroll size={24} className="opacity-60 mb-0.5" />
+                ) : (
+                  <span className="text-lg">✨</span>
+                )}
+                <span className={isPixelTheme ? "font-mono font-bold text-muted-foreground" : ""}>
                   {isPixelTheme ? "暂无阶段任务 · 点击添加" : "暂无阶段任务 · 点击添加"}
                 </span>
               </div>
@@ -614,7 +621,7 @@ export function ProjectStageBoard({
           onClick={() => void onCreateStage(`阶段 ${stages.length + 1}`)}
           className={`h-8 text-xs gap-1 cursor-pointer shrink-0 ${
             isPixelTheme
-              ? "rounded-xs border-2 shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+              ? "rounded-xs border-2 border-border shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] font-mono font-bold"
               : "rounded-lg hover:bg-accent"
           }`}
         >
@@ -645,13 +652,15 @@ export function ProjectStageBoard({
           onClick={() => {
             if (!disabled) void onCreateStage(`阶段 1`);
           }}
-          className={`border border-dashed border-border p-8 text-center text-sm text-muted-foreground cursor-pointer hover:border-foreground/40 transition-colors ${
+          className={`p-8 text-center text-sm text-muted-foreground cursor-pointer hover:border-foreground/40 transition-colors ${
             isPixelTheme
-              ? "rounded-xs font-mono border-2"
-              : "rounded-2xl"
+              ? "rounded-xs font-mono border-2 border-dashed border-border/80 bg-amber-50/20 dark:bg-amber-950/10 shadow-[2px_2px_0px_rgba(0,0,0,0.06)]"
+              : "rounded-2xl border border-dashed border-border"
           }`}
         >
-          暂无流程阶段，点击此处或右上角「添加阶段」新建。
+          {isPixelTheme
+            ? "⚔️ 暂无流程阶段，点击此处或右上角「添加阶段」开启征途。"
+            : "暂无流程阶段，点击此处或右上角「添加阶段」新建。"}
         </div>
       )}
     </section>
