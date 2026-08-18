@@ -37,6 +37,8 @@ import {
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { ReactjsTiptapEditor } from "@/components/ui/reactjs-tiptap-editor";
 import { DateRangePicker } from "@/components/ui/date-picker";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { PixelScroll } from "@/components/pixel/PixelIcons";
 
 // ==========================================
 // TaskQuickEdit — Tailwind v4 规范精简 3-Layer 快捷编辑浮层
@@ -113,6 +115,7 @@ export interface TaskQuickEditHandle {
 export const TaskQuickEditPopover = memo(
   forwardRef<TaskQuickEditHandle, TaskQuickEditPopoverProps>(
     ({ task, quadrant, anchorRect, onCommit, onCreate, onClose }, handleRef) => {
+      const { isPixelTheme } = useAppThemeStyle();
       const isCreate = !task;
       const meta = QUADRANT_META[task?.quadrant ?? quadrant ?? "Q2"];
 
@@ -542,29 +545,41 @@ export const TaskQuickEditPopover = memo(
             role="dialog"
             aria-label="编辑任务"
             style={popoverStyle}
-            className="fixed z-[1050] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none overflow-hidden"
+            className={
+              isPixelTheme
+                ? "fixed z-[1050] bg-card border-2 border-border shadow-[4px_4px_0px_#000] rounded-xl text-foreground font-mono animate-in fade-in duration-100 select-none overflow-hidden"
+                : "fixed z-[1050] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none overflow-hidden"
+            }
           >
             {/* 顶栏：日期与提醒入口 + 象限 Flag */}
-            <div className="flex items-center gap-2.5 px-3.5 py-3 border-b border-slate-200/60 dark:border-slate-800/80">
+            <div className={`flex items-center gap-2.5 px-3.5 py-3 border-b ${isPixelTheme ? "border-border bg-muted/30" : "border-slate-200/60 dark:border-slate-800/80"}`}>
               <button
                 ref={dateFieldRef}
                 type="button"
-                className={`flex-1 inline-flex items-center gap-2 text-[13.5px] px-2 py-1 rounded-lg transition-colors cursor-pointer min-w-0 ${
+                className={`flex-1 inline-flex items-center gap-2 text-[13.5px] px-2 py-1 transition-colors cursor-pointer min-w-0 ${
+                  isPixelTheme ? "rounded-xs border border-border/80" : "rounded-lg"
+                } ${
                   (scheduleMode === "range" ? rangeEndDate : dateSel)
-                    ? "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/50 dark:bg-blue-950/30"
-                    : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    ? isPixelTheme
+                      ? "text-amber-700 dark:text-amber-300 font-bold bg-amber-100/80 dark:bg-amber-950/60 shadow-[1px_1px_0px_#000]"
+                      : "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/50 dark:bg-blue-950/30"
+                    : isPixelTheme
+                      ? "text-muted-foreground hover:bg-muted"
+                      : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
                 onClick={() => {
                   setThird(null);
                   setDateOpen((v) => !v);
                 }}
               >
-                <CalendarDays size={17} className="flex-shrink-0" />
+                {isPixelTheme ? <PixelScroll size={16} className="flex-shrink-0" /> : <CalendarDays size={17} className="flex-shrink-0" />}
                 <span className="truncate">{fieldText}</span>
               </button>
               <button
                 type="button"
-                className="p-1 rounded-lg flex-shrink-0 grid place-items-center cursor-default"
+                className={`p-1 flex-shrink-0 grid place-items-center cursor-default ${
+                  isPixelTheme ? "rounded-xs border border-border/60 bg-muted/40 shadow-[1px_1px_0px_#000]" : "rounded-lg"
+                }`}
                 title={`所属象限：${meta.name}`}
                 aria-label={`所属象限：${meta.name}`}
                 style={{ color: meta.color }}
@@ -578,10 +593,14 @@ export const TaskQuickEditPopover = memo(
               <div className="flex items-center gap-2.5">
                 <input
                   type="text"
-                  placeholder="准备做什么？"
+                  placeholder={isPixelTheme ? "👾 委托任务内容..." : "准备做什么？"}
                   value={title}
                   autoFocus
-                  className="flex-1 bg-transparent border-0 outline-none text-base font-semibold text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500 min-w-0"
+                  className={`flex-1 bg-transparent border-0 outline-none text-base font-semibold min-w-0 ${
+                    isPixelTheme
+                      ? "font-mono font-bold text-foreground placeholder:text-muted-foreground"
+                      : "text-slate-900 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                  }`}
                   onChange={(e) => {
                     latestTitle.current = e.target.value;
                     setTitle(e.target.value);
@@ -597,7 +616,11 @@ export const TaskQuickEditPopover = memo(
                 />
                 <button
                   type="button"
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 transition-colors cursor-pointer flex-shrink-0"
+                  className={`p-1 transition-colors cursor-pointer flex-shrink-0 ${
+                    isPixelTheme
+                      ? "rounded-xs border border-border bg-muted hover:bg-card text-foreground shadow-[1px_1px_0px_#000]"
+                      : "rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                  }`}
                   title="任务描述"
                   aria-label="任务描述"
                   onClick={focusDesc}
@@ -608,10 +631,14 @@ export const TaskQuickEditPopover = memo(
 
               <div className="h-[260px] min-h-[148px] overflow-hidden">
                 <ReactjsTiptapEditor
-                  placeholder="添加任务备注描述..."
+                  placeholder={isPixelTheme ? "添加委托任务详细备忘..." : "添加任务备注描述..."}
                   content={description}
                   showToolbar={false}
-                  className="tqe-description-editor rounded-b-none border border-slate-200/80 dark:border-slate-800"
+                  className={
+                    isPixelTheme
+                      ? "tqe-description-editor rounded-xs border-2 border-border bg-background/50 font-mono"
+                      : "tqe-description-editor rounded-b-none border border-slate-200/80 dark:border-slate-800"
+                  }
                   onChange={(nextDescription) => {
                     latestDescription.current = nextDescription;
                     setDescription(nextDescription);
@@ -632,22 +659,32 @@ export const TaskQuickEditPopover = memo(
                 left: l2Pos?.left ?? ((l1Pos?.left ?? MARGIN) - L2_WIDTH - 12),
                 width: L2_WIDTH,
               }}
-              className="fixed z-[1060] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl p-3.5 text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none"
+              className={
+                isPixelTheme
+                  ? "fixed z-[1060] bg-card border-2 border-border shadow-[4px_4px_0px_#000] rounded-xl p-3.5 text-foreground font-mono animate-in fade-in duration-100 select-none"
+                  : "fixed z-[1060] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl p-3.5 text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none"
+              }
             >
-              <div className="grid grid-cols-2 gap-1 p-1 mb-3 rounded-xl bg-slate-100 dark:bg-slate-800/80">
+              <div className={`grid grid-cols-2 gap-1 p-1 mb-3 ${isPixelTheme ? "rounded-xs bg-muted/60 border border-border" : "rounded-xl bg-slate-100 dark:bg-slate-800/80"}`}>
                 {(["point", "range"] as const).map((mode) => (
                   <button
                     key={mode}
                     type="button"
                     aria-pressed={scheduleMode === mode}
-                    className={`py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    className={`py-1.5 text-xs font-semibold transition-all cursor-pointer ${
+                      isPixelTheme ? "rounded-xs" : "rounded-lg"
+                    } ${
                       scheduleMode === mode
-                        ? "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs"
-                        : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
+                        ? isPixelTheme
+                          ? "bg-amber-600 text-white font-bold shadow-[1px_1px_0px_#000]"
+                          : "bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs"
+                        : isPixelTheme
+                          ? "text-muted-foreground hover:text-foreground"
+                          : "text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300"
                     }`}
                     onClick={() => switchScheduleMode(mode)}
                   >
-                    {mode === "point" ? "时间" : "时间段"}
+                    {mode === "point" ? (isPixelTheme ? "精准时刻" : "时间") : (isPixelTheme ? "时间区间" : "时间段")}
                   </button>
                 ))}
               </div>
@@ -660,7 +697,11 @@ export const TaskQuickEditPopover = memo(
                       type="button"
                       title="今天"
                       aria-label="今天"
-                      className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
+                      className={`p-2 transition-colors cursor-pointer grid place-items-center ${
+                        isPixelTheme
+                          ? "rounded-xs border border-border bg-muted hover:bg-card text-foreground shadow-[1px_1px_0px_#000]"
+                          : "rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
                       onClick={() => quickPick(0)}
                     >
                       <Sun size={20} />
@@ -669,7 +710,11 @@ export const TaskQuickEditPopover = memo(
                       type="button"
                       title="明天"
                       aria-label="明天"
-                      className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
+                      className={`p-2 transition-colors cursor-pointer grid place-items-center ${
+                        isPixelTheme
+                          ? "rounded-xs border border-border bg-muted hover:bg-card text-foreground shadow-[1px_1px_0px_#000]"
+                          : "rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
                       onClick={() => quickPick(1)}
                     >
                       <Sunrise size={20} />
@@ -678,7 +723,11 @@ export const TaskQuickEditPopover = memo(
                       type="button"
                       title="下周（+7 天）"
                       aria-label="下周，加 7 天"
-                      className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
+                      className={`p-2 transition-colors cursor-pointer grid place-items-center ${
+                        isPixelTheme
+                          ? "rounded-xs border border-border bg-muted hover:bg-card text-foreground shadow-[1px_1px_0px_#000]"
+                          : "rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
                       onClick={() => quickPick(7)}
                     >
                       <CalendarPlus size={20} />
@@ -687,7 +736,11 @@ export const TaskQuickEditPopover = memo(
                       type="button"
                       title="今晚 20:00"
                       aria-label="今晚"
-                      className="p-2 rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer grid place-items-center"
+                      className={`p-2 transition-colors cursor-pointer grid place-items-center ${
+                        isPixelTheme
+                          ? "rounded-xs border border-border bg-muted hover:bg-card text-foreground shadow-[1px_1px_0px_#000]"
+                          : "rounded-xl text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100"
+                      }`}
                       onClick={() => quickPick(0, "20:00")}
                     >
                       <Moon size={20} />
@@ -695,13 +748,15 @@ export const TaskQuickEditPopover = memo(
                   </div>
 
                   {/* 年月导航 */}
-                  <div className="flex items-center text-sm font-bold text-slate-900 dark:text-slate-100 px-1 py-1 mb-1">
+                  <div className="flex items-center text-sm font-bold text-foreground px-1 py-1 mb-1">
                     {viewYM.y}年{viewYM.m + 1}月
                     <span className="ml-auto flex items-center gap-0.5">
                       <button
                         type="button"
                         aria-label="上个月"
-                        className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                        className={`w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer ${
+                          isPixelTheme ? "rounded-xs hover:bg-muted" : "rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
                         onClick={() => shiftMonth(-1)}
                       >
                         <ChevronLeft size={14} />
@@ -709,7 +764,9 @@ export const TaskQuickEditPopover = memo(
                       <button
                         type="button"
                         aria-label="回到今天"
-                        className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                        className={`w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer ${
+                          isPixelTheme ? "rounded-xs hover:bg-muted" : "rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
                         onClick={() => setViewYM({ y: dayjs().year(), m: dayjs().month() })}
                       >
                         <Circle size={7} />
@@ -717,7 +774,9 @@ export const TaskQuickEditPopover = memo(
                       <button
                         type="button"
                         aria-label="下个月"
-                        className="w-6 h-6 rounded-md flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                        className={`w-6 h-6 flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors cursor-pointer ${
+                          isPixelTheme ? "rounded-xs hover:bg-muted" : "rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                        }`}
                         onClick={() => shiftMonth(1)}
                       >
                         <ChevronRight size={14} />
@@ -728,7 +787,7 @@ export const TaskQuickEditPopover = memo(
                   {/* 日历网格 */}
                   <div className="grid grid-cols-7 gap-y-0.5 text-center">
                     {["一", "二", "三", "四", "五", "六", "日"].map((w) => (
-                      <span key={w} className="text-xs text-slate-400 dark:text-slate-500 py-1">
+                      <span key={w} className="text-xs text-muted-foreground py-1">
                         {w}
                       </span>
                     ))}
@@ -736,14 +795,22 @@ export const TaskQuickEditPopover = memo(
                       <button
                         key={cell.ymd}
                         type="button"
-                        className={`w-8 h-8 mx-auto rounded-full flex items-center justify-center text-xs tabular-nums transition-colors cursor-pointer ${
+                        className={`w-8 h-8 mx-auto flex items-center justify-center text-xs tabular-nums transition-colors cursor-pointer ${
+                          isPixelTheme ? "rounded-xs" : "rounded-full"
+                        } ${
                           cell.dim
-                            ? "text-slate-300 dark:text-slate-600 opacity-60"
+                            ? "text-muted-foreground/40 opacity-60"
                             : cell.ymd === dateSel
-                            ? "bg-blue-600 text-white font-bold"
+                            ? isPixelTheme
+                              ? "bg-amber-600 text-white font-bold shadow-[1px_1px_0px_#000]"
+                              : "bg-blue-600 text-white font-bold"
                             : cell.ymd === todayStr
-                            ? "ring-1 ring-blue-500/50 text-slate-900 dark:text-slate-100 font-semibold"
-                            : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                            ? isPixelTheme
+                              ? "border border-amber-600 text-foreground font-semibold"
+                              : "ring-1 ring-blue-500/50 text-slate-900 dark:text-slate-100 font-semibold"
+                            : isPixelTheme
+                              ? "text-foreground hover:bg-muted"
+                              : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                         }`}
                         onClick={() => {
                           if (cell.dim) {
@@ -760,7 +827,7 @@ export const TaskQuickEditPopover = memo(
               ) : (
                 <div className="flex flex-col gap-2.5 mb-3">
                   <div>
-                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5 block">
+                    <span className="text-[11px] font-semibold text-muted-foreground mb-1.5 block">
                       起止时间
                     </span>
                     <DateRangePicker
@@ -794,14 +861,16 @@ export const TaskQuickEditPopover = memo(
                     />
                   </div>
 
-                  <div className="flex items-center justify-between px-1 py-1 text-xs text-slate-600 dark:text-slate-300">
+                  <div className="flex items-center justify-between px-1 py-1 text-xs text-foreground">
                     <span>全天任务</span>
                     <button
                       type="button"
                       role="switch"
                       aria-checked={rangeAllDay}
-                      className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
-                        rangeAllDay ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"
+                      className={`w-9 h-5 ${isPixelTheme ? "rounded-xs" : "rounded-full"} relative transition-colors cursor-pointer ${
+                        rangeAllDay
+                          ? isPixelTheme ? "bg-amber-600 shadow-[1px_1px_0px_#000]" : "bg-blue-600"
+                          : isPixelTheme ? "bg-muted border border-border" : "bg-slate-200 dark:bg-slate-700"
                       }`}
                       onClick={() => {
                         const next = !rangeAllDay;
@@ -809,53 +878,61 @@ export const TaskQuickEditPopover = memo(
                         commitRange(rangeStartDate, rangeStartTime, rangeEndDate, rangeEndTime, next);
                       }}
                     >
-                      <span className={`absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow-xs transition-transform ${rangeAllDay ? "translate-x-4" : "translate-x-0"}`} />
+                      <span className={`absolute top-0.5 left-0.5 size-4 ${isPixelTheme ? "rounded-xs" : "rounded-full"} bg-white shadow-xs transition-transform ${rangeAllDay ? "translate-x-4" : "translate-x-0"}`} />
                     </button>
                   </div>
                 </div>
               )}
 
               {/* 时间 & 提醒 入口 */}
-              <div className="border-t border-slate-200/60 dark:border-slate-800 mt-2.5 pt-1.5 flex flex-col gap-0.5">
+              <div className={`border-t ${isPixelTheme ? "border-border" : "border-slate-200/60 dark:border-slate-800"} mt-2.5 pt-1.5 flex flex-col gap-0.5`}>
                 {scheduleMode === "point" && (
                 <button
                   ref={timeRowRef}
                   type="button"
-                  className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition-colors cursor-pointer"
+                  className={`w-full flex items-center gap-2.5 px-2 py-2 text-xs text-foreground text-left transition-colors cursor-pointer ${
+                    isPixelTheme ? "rounded-xs hover:bg-muted" : "rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
                   onClick={() => setThird((t) => (t === "time" ? null : "time"))}
                 >
-                  <Clock size={16} className="text-slate-400 flex-shrink-0" />
+                  <Clock size={16} className="text-muted-foreground flex-shrink-0" />
                   <span>时间</span>
                   <span
                     className={`ml-auto text-xs ${
                       timeSel
-                        ? "text-blue-600 dark:text-blue-400 font-semibold"
-                        : "text-slate-400 dark:text-slate-500"
+                        ? isPixelTheme
+                          ? "text-amber-600 dark:text-amber-400 font-bold"
+                          : "text-blue-600 dark:text-blue-400 font-semibold"
+                        : "text-muted-foreground"
                     }`}
                   >
                     {timeSel}
                   </span>
-                  <span className="text-slate-400 text-xs ml-0.5">›</span>
+                  <span className="text-muted-foreground text-xs ml-0.5">›</span>
                 </button>
                 )}
                 <button
                   ref={remindRowRef}
                   type="button"
-                  className="w-full flex items-center gap-2.5 px-2 py-2 rounded-xl text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 text-left transition-colors cursor-pointer"
+                  className={`w-full flex items-center gap-2.5 px-2 py-2 text-xs text-foreground text-left transition-colors cursor-pointer ${
+                    isPixelTheme ? "rounded-xs hover:bg-muted" : "rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
                   onClick={() => (third === "remind" ? setThird(null) : openRemind())}
                 >
-                  <Bell size={16} className="text-slate-400 flex-shrink-0" />
+                  <Bell size={16} className="text-muted-foreground flex-shrink-0" />
                   <span>提醒</span>
                   <span
                     className={`ml-auto text-xs ${
                       appliedReminder
-                        ? "text-blue-600 dark:text-blue-400 font-semibold"
-                        : "text-slate-400 dark:text-slate-500"
+                        ? isPixelTheme
+                          ? "text-amber-600 dark:text-amber-400 font-bold"
+                          : "text-blue-600 dark:text-blue-400 font-semibold"
+                        : "text-muted-foreground"
                     }`}
                   >
                     {appliedReminder ? reminderLabel(appliedReminder) : ""}
                   </span>
-                  <span className="text-slate-400 text-xs ml-0.5">›</span>
+                  <span className="text-muted-foreground text-xs ml-0.5">›</span>
                 </button>
               </div>
             </div>
@@ -872,17 +949,27 @@ export const TaskQuickEditPopover = memo(
                 left: l3Pos?.left ?? MARGIN,
                 width: L3_WIDTH,
               }}
-              className="fixed z-[1070] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl overflow-hidden animate-in fade-in duration-100 select-none"
+              className={
+                isPixelTheme
+                  ? "fixed z-[1070] bg-card border-2 border-border shadow-[4px_4px_0px_#000] rounded-xl overflow-hidden font-mono text-foreground animate-in fade-in duration-100 select-none"
+                  : "fixed z-[1070] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl overflow-hidden animate-in fade-in duration-100 select-none"
+              }
             >
               <div className="max-h-[252px] overflow-y-auto p-1.5 flex flex-col gap-0.5" ref={timeListRef}>
                 {timeOptions.map((t) => (
                   <button
                     key={t}
                     type="button"
-                    className={`w-full flex items-center justify-between px-3 py-2 text-xs tabular-nums rounded-lg text-left transition-colors cursor-pointer ${
+                    className={`w-full flex items-center justify-between px-3 py-2 text-xs tabular-nums text-left transition-colors cursor-pointer ${
+                      isPixelTheme ? "rounded-xs" : "rounded-lg"
+                    } ${
                       t === timeSel
-                        ? "sel text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/60 dark:bg-blue-950/40"
-                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                        ? isPixelTheme
+                          ? "sel bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-800 font-bold shadow-[1px_1px_0px_#000]"
+                          : "sel text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/60 dark:bg-blue-950/40"
+                        : isPixelTheme
+                          ? "text-foreground hover:bg-muted"
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                     }`}
                     onClick={() => {
                       commitDeadline(dateSel || todayStr, t);
@@ -890,18 +977,20 @@ export const TaskQuickEditPopover = memo(
                     }}
                   >
                     <span>{t}</span>
-                    {t === timeSel && <span className="text-blue-600 dark:text-blue-400 font-bold">✓</span>}
+                    {t === timeSel && <span className={isPixelTheme ? "text-amber-600 dark:text-amber-400 font-bold" : "text-blue-600 dark:text-blue-400 font-bold"}>✓</span>}
                   </button>
                 ))}
               </div>
-              <div className="flex items-center gap-2 border-t border-slate-200/60 dark:border-slate-800 px-3 py-2 bg-slate-50 dark:bg-slate-950">
-                <Clock size={15} className="text-slate-400 flex-shrink-0" />
+              <div className={`flex items-center gap-2 border-t px-3 py-2 ${isPixelTheme ? "border-border bg-muted/40" : "border-slate-200/60 dark:border-slate-800 bg-slate-50 dark:bg-slate-950"}`}>
+                <Clock size={15} className="text-muted-foreground flex-shrink-0" />
                 <input
                   type="text"
                   value={timeInput}
                   placeholder="HH:mm"
                   aria-label="输入时间"
-                  className="flex-1 bg-transparent border-0 outline-none text-xs tabular-nums text-blue-600 dark:text-blue-400 font-semibold min-w-0"
+                  className={`flex-1 bg-transparent border-0 outline-none text-xs tabular-nums font-semibold min-w-0 ${
+                    isPixelTheme ? "text-amber-700 dark:text-amber-300" : "text-blue-600 dark:text-blue-400"
+                  }`}
                   onChange={(e) => setTimeInput(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && commitTimeInput()}
                   onBlur={commitTimeInput}
@@ -909,7 +998,7 @@ export const TaskQuickEditPopover = memo(
                 <button
                   type="button"
                   aria-label="清除时间"
-                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 text-sm px-1.5 py-0.5 rounded-md cursor-pointer"
+                  className="text-muted-foreground hover:text-foreground text-sm px-1.5 py-0.5 rounded-md cursor-pointer"
                   onClick={() => {
                     setTimeInput("");
                     if (dateSel) commitDeadline(dateSel, "");
@@ -933,16 +1022,26 @@ export const TaskQuickEditPopover = memo(
                 left: l3Pos?.left ?? MARGIN,
                 width: L3_WIDTH,
               }}
-              className="fixed z-[1070] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl p-2 animate-in fade-in duration-100 select-none flex flex-col gap-0.5 text-slate-900 dark:text-slate-100"
+              className={
+                isPixelTheme
+                  ? "fixed z-[1070] bg-card border-2 border-border shadow-[4px_4px_0px_#000] rounded-xl p-2 animate-in fade-in duration-100 select-none flex flex-col gap-0.5 text-foreground font-mono"
+                  : "fixed z-[1070] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl p-2 animate-in fade-in duration-100 select-none flex flex-col gap-0.5 text-slate-900 dark:text-slate-100"
+              }
             >
               {[0, 1, 2, 3, 7].map((off) => (
                 <button
                   key={off}
                   type="button"
-                  className={`w-full flex items-baseline gap-1.5 px-3 py-2 text-xs rounded-xl text-left transition-colors cursor-pointer ${
+                  className={`w-full flex items-baseline justify-between px-3 py-2 text-xs text-left transition-colors cursor-pointer ${
+                    isPixelTheme ? "rounded-xs" : "rounded-xl"
+                  } ${
                     !customMode && draftOffset === off
-                      ? "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/60 dark:bg-blue-950/40"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? isPixelTheme
+                        ? "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-800 font-bold shadow-[1px_1px_0px_#000]"
+                        : "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/60 dark:bg-blue-950/40"
+                      : isPixelTheme
+                        ? "text-foreground hover:bg-muted"
+                        : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   }`}
                   onClick={() => {
                     setCustomMode(false);
@@ -950,15 +1049,21 @@ export const TaskQuickEditPopover = memo(
                   }}
                 >
                   <span>{off === 0 ? "当天" : `提前 ${off} 天`}</span>
-                  <span className="text-[11px] text-slate-400 dark:text-slate-500">({draftTime})</span>
+                  <span className="text-[11px] text-muted-foreground">({draftTime})</span>
                 </button>
               ))}
               <button
                 type="button"
-                className={`w-full flex items-baseline gap-1.5 px-3 py-2 text-xs rounded-xl text-left transition-colors cursor-pointer ${
+                className={`w-full flex items-baseline gap-1.5 px-3 py-2 text-xs text-left transition-colors cursor-pointer ${
+                  isPixelTheme ? "rounded-xs" : "rounded-xl"
+                } ${
                   customMode
-                    ? "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/60 dark:bg-blue-950/40"
-                    : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    ? isPixelTheme
+                      ? "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-800 font-bold shadow-[1px_1px_0px_#000]"
+                      : "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/60 dark:bg-blue-950/40"
+                    : isPixelTheme
+                      ? "text-foreground hover:bg-muted"
+                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                 }`}
                 onClick={() => {
                   setCustomMode((v) => !v);
@@ -968,7 +1073,7 @@ export const TaskQuickEditPopover = memo(
                 <span>自定义</span>
               </button>
               {customMode && (
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-slate-700 dark:text-slate-300">
+                <div className="flex items-center gap-2 px-3 py-2 text-xs text-foreground">
                   <label className="inline-flex items-center gap-1.5">
                     提前
                     <input
@@ -976,54 +1081,48 @@ export const TaskQuickEditPopover = memo(
                       min={0}
                       max={30}
                       value={draftOffset ?? 0}
-                      className="w-12 px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs outline-none bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
+                      className={`w-12 px-2 py-1 text-xs outline-none bg-background text-foreground ${
+                        isPixelTheme ? "rounded-xs border border-border font-mono" : "border border-slate-200 dark:border-slate-700 rounded-lg"
+                      }`}
                       onChange={(e) =>
                         setDraftOffset(Math.max(0, Math.min(30, Number(e.target.value) || 0)))
                       }
                     />
                     天
                   </label>
-                  <input
-                    type="time"
-                    value={draftTime}
-                    className="px-2 py-1 border border-slate-200 dark:border-slate-700 rounded-lg text-xs outline-none bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100"
-                    onChange={(e) => setDraftTime(e.target.value || "09:00")}
-                  />
+                  <label className="inline-flex items-center gap-1.5 ml-auto cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={draftRepeat}
+                      className="rounded border-input text-amber-600 focus:ring-amber-500"
+                      onChange={(e) => setDraftRepeat(e.target.checked)}
+                    />
+                    每天提醒
+                  </label>
                 </div>
               )}
-              <div className="flex items-center justify-between border-t border-slate-200/60 dark:border-slate-800 mt-1 pt-2 px-3 py-1.5 text-xs text-slate-700 dark:text-slate-300">
-                <span>持续提醒</span>
+              <div className={`flex items-center justify-end gap-2 px-3 py-2 border-t mt-1 ${isPixelTheme ? "border-border" : "border-slate-200/60 dark:border-slate-800"}`}>
                 <button
                   type="button"
-                  role="switch"
-                  aria-checked={draftRepeat}
-                  aria-label="持续提醒"
-                  className={`w-9 h-5 rounded-full relative transition-colors cursor-pointer ${
-                    draftRepeat ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"
+                  className={`px-2.5 py-1 text-xs transition-colors cursor-pointer ${
+                    isPixelTheme
+                      ? "rounded-xs border border-border bg-muted hover:bg-accent text-foreground shadow-[1px_1px_0px_#000]"
+                      : "rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
                   }`}
-                  onClick={() => setDraftRepeat((v) => !v)}
-                >
-                  <span
-                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow-xs transition-transform ${
-                      draftRepeat ? "translate-x-4" : "translate-x-0"
-                    }`}
-                  />
-                </button>
-              </div>
-              <div className="flex gap-2 p-1.5 pt-2">
-                <button
-                  type="button"
-                  className="flex-1 text-xs font-semibold py-1.5 rounded-xl bg-blue-600 text-white hover:bg-blue-700 transition-colors cursor-pointer"
-                  onClick={saveRemind}
-                >
-                  保存
-                </button>
-                <button
-                  type="button"
-                  className="flex-1 text-xs font-semibold py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                   onClick={() => setThird(null)}
                 >
                   取消
+                </button>
+                <button
+                  type="button"
+                  className={`px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                    isPixelTheme
+                      ? "rounded-xs bg-amber-600 hover:bg-amber-700 text-white shadow-[1px_1px_0px_#000]"
+                      : "rounded-lg bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                  onClick={saveRemind}
+                >
+                  保存
                 </button>
               </div>
             </div>

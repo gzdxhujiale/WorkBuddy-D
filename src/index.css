@@ -119,6 +119,83 @@
   --color-sidebar-ring: oklch(75% 0.04 264);
 }
 
+/* ========================================================= */
+/* Level 3: Full-App Retro Pixel 8-bit Global Design System  */
+/* ========================================================= */
+html.theme-retro-pixel,
+.theme-retro-pixel {
+  /* Warm Parchment Retro Paper Palette (Light) */
+  --color-background: oklch(96.5% 0.022 85);
+  --color-foreground: oklch(22% 0.045 55);
+
+  --color-card: oklch(98.5% 0.015 85);
+  --color-card-foreground: oklch(20% 0.045 55);
+
+  --color-popover: oklch(98.5% 0.015 85);
+  --color-popover-foreground: oklch(20% 0.045 55);
+
+  --color-primary: oklch(60% 0.18 55);
+  --color-primary-foreground: oklch(99% 0.01 85);
+
+  --color-secondary: oklch(92% 0.035 85);
+  --color-secondary-foreground: oklch(22% 0.045 55);
+
+  --color-muted: oklch(93% 0.025 85);
+  --color-muted-foreground: oklch(48% 0.055 55);
+
+  --color-accent: oklch(90% 0.045 85);
+  --color-accent-foreground: oklch(20% 0.045 55);
+
+  --color-border: oklch(78% 0.06 60);
+  --color-input: oklch(88% 0.035 85);
+  --color-ring: oklch(62% 0.18 55);
+
+  --color-sidebar: oklch(92% 0.03 85);
+  --color-sidebar-foreground: oklch(22% 0.045 55);
+  --color-sidebar-primary: oklch(60% 0.18 55);
+  --color-sidebar-accent: oklch(87% 0.05 85);
+  --color-sidebar-accent-foreground: oklch(18% 0.05 55);
+  --color-sidebar-border: oklch(75% 0.06 60);
+}
+
+html.theme-retro-pixel.dark,
+.dark html.theme-retro-pixel,
+.dark.theme-retro-pixel,
+.dark .theme-retro-pixel {
+  /* Retro Dungeon Gold / Charcoal Palette (Dark) */
+  --color-background: oklch(16% 0.028 55);
+  --color-foreground: oklch(94% 0.025 85);
+
+  --color-card: oklch(21% 0.035 55);
+  --color-card-foreground: oklch(95% 0.025 85);
+
+  --color-popover: oklch(21% 0.035 55);
+  --color-popover-foreground: oklch(95% 0.025 85);
+
+  --color-primary: oklch(75% 0.18 65);
+  --color-primary-foreground: oklch(15% 0.03 55);
+
+  --color-secondary: oklch(27% 0.035 55);
+  --color-secondary-foreground: oklch(94% 0.025 85);
+
+  --color-muted: oklch(25% 0.03 55);
+  --color-muted-foreground: oklch(70% 0.04 75);
+
+  --color-accent: oklch(30% 0.045 55);
+  --color-accent-foreground: oklch(98% 0.02 85);
+
+  --color-border: oklch(36% 0.045 55);
+  --color-input: oklch(26% 0.035 55);
+  --color-ring: oklch(75% 0.18 65);
+
+  --color-sidebar: oklch(14% 0.025 55);
+  --color-sidebar-foreground: oklch(92% 0.025 85);
+  --color-sidebar-primary: oklch(75% 0.18 65);
+  --color-sidebar-accent: oklch(24% 0.035 55);
+  --color-sidebar-accent-foreground: oklch(96% 0.02 85);
+  --color-sidebar-border: oklch(32% 0.045 55);
+}
+
 body {
   background-color: var(--color-background);
   color: var(--color-foreground);
@@ -126,6 +203,11 @@ body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
+}
+
+html.theme-retro-pixel body {
+  font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  letter-spacing: -0.01em;
 }
 
 /* Tauri Sub-Window Mode: Transparent root window & background */
@@ -168,3 +250,162 @@ html.tqe-window body > div:has(> [class*="richtext-max-h-"]) {
     display: none;
   }
 }
+
+/* Level 3: Retro Pixel Global Theme Styling */
+.theme-retro-pixel ::selection {
+  background: #d97706;
+  color: #ffffff;
+}
+
+.theme-retro-pixel ::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+
+.theme-retro-pixel ::-webkit-scrollbar-track {
+  background: rgba(180, 83, 9, 0.08);
+}
+
+.theme-retro-pixel ::-webkit-scrollbar-thumb {
+  background: #d97706;
+  border-radius: 0px;
+  border: 1px solid #78350f;
+}
+
+.theme-retro-pixel ::-webkit-scrollbar-thumb:hover {
+  background: #b45309;
+}
+
+/* 8-bit Tactile Feedback for Interactive Elements in Pixel Mode */
+.theme-retro-pixel button:not([disabled]):active {
+  transform: translate(1px, 1px);
+}
+
+/* ============================================================
+   Arco Design Retro Pixel Component Overrides
+   ============================================================ */
+.theme-retro-pixel .arco-modal {
+  border-radius: 8px !important;
+  border: 2px solid #8c6239 !important;
+  box-shadow: 4px 4px 0px #000 !important;
+  background-color: var(--color-card) !important;
+  color: var(--color-card-foreground) !important;
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+  overflow: hidden;
+}
+
+.theme-retro-pixel .arco-modal-header {
+  border-bottom: 2px solid #8c6239 !important;
+  background-color: var(--color-muted) !important;
+  padding: 12px 18px !important;
+  height: auto !important;
+}
+
+.theme-retro-pixel .arco-modal-title {
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+  font-weight: 800 !important;
+  color: var(--color-foreground) !important;
+  font-size: 14px !important;
+}
+
+.theme-retro-pixel .arco-modal-content {
+  background-color: var(--color-card) !important;
+  color: var(--color-card-foreground) !important;
+  padding: 18px !important;
+}
+
+.theme-retro-pixel .arco-modal-footer {
+  border-top: 2px solid #8c6239 !important;
+  background-color: var(--color-muted) !important;
+  padding: 12px 18px !important;
+}
+
+.theme-retro-pixel .arco-modal-close-icon {
+  color: var(--color-muted-foreground) !important;
+  border-radius: 4px !important;
+}
+
+.theme-retro-pixel .arco-modal-close-icon:hover {
+  background-color: var(--color-accent) !important;
+  color: var(--color-foreground) !important;
+}
+
+.theme-retro-pixel .arco-btn {
+  border-radius: 4px !important;
+  border: 1px solid #8c6239 !important;
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+  font-weight: 700 !important;
+  box-shadow: 2px 2px 0px #000 !important;
+  transition: all 0.1s ease !important;
+}
+
+.theme-retro-pixel .arco-btn:active {
+  transform: translate(1px, 1px) !important;
+  box-shadow: 1px 1px 0px #000 !important;
+}
+
+.theme-retro-pixel .arco-btn-primary {
+  background-color: #d97706 !important;
+  border-color: #78350f !important;
+  color: #ffffff !important;
+}
+
+.theme-retro-pixel .arco-btn-primary:hover {
+  background-color: #b45309 !important;
+  border-color: #78350f !important;
+}
+
+.theme-retro-pixel .arco-btn-secondary {
+  background-color: var(--color-muted) !important;
+  border-color: #8c6239 !important;
+  color: var(--color-foreground) !important;
+}
+
+.theme-retro-pixel .arco-btn-secondary:hover {
+  background-color: var(--color-accent) !important;
+}
+
+.theme-retro-pixel .arco-select-view,
+.theme-retro-pixel .arco-picker,
+.theme-retro-pixel .arco-input-inner {
+  border-radius: 4px !important;
+  border: 1.5px solid #8c6239 !important;
+  background-color: var(--color-background) !important;
+  color: var(--color-foreground) !important;
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+}
+
+.theme-retro-pixel .arco-select-popup,
+.theme-retro-pixel .arco-picker-popup {
+  border-radius: 6px !important;
+  border: 2px solid #8c6239 !important;
+  box-shadow: 3px 3px 0px #000 !important;
+  background-color: var(--color-card) !important;
+  color: var(--color-card-foreground) !important;
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+}
+
+.theme-retro-pixel .arco-select-option:hover,
+.theme-retro-pixel .arco-select-option-hover {
+  background-color: var(--color-accent) !important;
+}
+
+.theme-retro-pixel .arco-select-option-selected {
+  background-color: rgba(217, 119, 6, 0.15) !important;
+  color: #d97706 !important;
+  font-weight: 700 !important;
+}
+
+.theme-retro-pixel .arco-picker-header {
+  border-bottom: 1px solid #8c6239 !important;
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+}
+
+.theme-retro-pixel .arco-picker-cell-selected .arco-picker-date-value {
+  background-color: #d97706 !important;
+  border-radius: 2px !important;
+  color: #ffffff !important;
+}
+
+
+

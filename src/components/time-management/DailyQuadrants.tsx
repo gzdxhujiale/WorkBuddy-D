@@ -3,6 +3,7 @@ import { Plus, CheckCircle2, Circle, AlignLeft, X, ChevronDown, ChevronRight } f
 import { Task, QuadrantType } from "@/types/timeManagement";
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { Button } from "@/components/ui/button";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 
 interface CollapsibleGroupProps {
   title: string;
@@ -14,6 +15,7 @@ interface CollapsibleGroupProps {
 
 const CollapsibleGroup: React.FC<CollapsibleGroupProps> = memo(
   ({ title, count, children, defaultExpanded = true, isExpired = false }) => {
+    const { isPixelTheme } = useAppThemeStyle();
     const [isExpanded, setIsExpanded] = useState(defaultExpanded);
 
     if (count === 0) return null;
@@ -34,21 +36,23 @@ const CollapsibleGroup: React.FC<CollapsibleGroupProps> = memo(
           aria-label={`${title}分组`}
           className="flex items-center gap-1.5 py-1 text-xs transition-colors w-full text-left font-medium cursor-pointer"
         >
-          {isExpanded ? <ChevronDown size={14} className="text-slate-400" /> : <ChevronRight size={14} className="text-slate-400" />}
+          {isExpanded ? <ChevronDown size={14} className="text-muted-foreground" /> : <ChevronRight size={14} className="text-muted-foreground" />}
           <span
             className={
               isExpired
                 ? "text-red-600 dark:text-red-400 font-semibold"
-                : "text-slate-600 dark:text-slate-300 font-medium hover:text-slate-900 dark:hover:text-slate-100"
+                : "text-muted-foreground hover:text-foreground font-medium"
             }
           >
             {title}
           </span>
           <span
-            className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
+            className={`px-1.5 py-0.5 text-[10px] font-semibold ${
+              isPixelTheme ? "rounded-xs font-mono border border-border" : "rounded-full"
+            } ${
               isExpired
                 ? "bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400"
-                : "bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                : "bg-muted text-muted-foreground"
             }`}
           >
             {count}
@@ -79,6 +83,7 @@ const QUADRANT_CONFIG: Record<
   QuadrantType,
   {
     title: string;
+    pixelTitle: string;
     desc: string;
     textClass: string;
     badgeBgClass: string;
@@ -89,6 +94,7 @@ const QUADRANT_CONFIG: Record<
 > = {
   Q1: {
     title: "重要且紧急",
+    pixelTitle: "🔥 炎魔领域 (重要且紧急)",
     desc: "危机、急迫的问题",
     textClass: "text-red-600 dark:text-red-400",
     badgeBgClass: "bg-red-500",
@@ -98,6 +104,7 @@ const QUADRANT_CONFIG: Record<
   },
   Q2: {
     title: "重要不紧急",
+    pixelTitle: "🌿 智慧圣殿 (重要不紧急)",
     desc: "计划、预防、要事",
     textClass: "text-blue-600 dark:text-blue-400",
     badgeBgClass: "bg-blue-600",
@@ -107,6 +114,7 @@ const QUADRANT_CONFIG: Record<
   },
   Q3: {
     title: "紧急不重要",
+    pixelTitle: "⚡ 迅雷荒原 (紧急不重要)",
     desc: "干扰、某些会议",
     textClass: "text-amber-600 dark:text-amber-400",
     badgeBgClass: "bg-amber-500",
@@ -116,6 +124,7 @@ const QUADRANT_CONFIG: Record<
   },
   Q4: {
     title: "不重要不紧急",
+    pixelTitle: "💧 宁静之海 (不重要不紧急)",
     desc: "琐事、消遣",
     textClass: "text-slate-600 dark:text-slate-400",
     badgeBgClass: "bg-slate-500",
@@ -172,6 +181,7 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
     onEditTask,
     onUpdateTask,
   }) => {
+    const { isPixelTheme } = useAppThemeStyle();
     const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
     const [dragOverTaskId, setDragOverTaskId] = useState<string | null>(null);
     const [dropPosition, setDropPosition] = useState<"top" | "bottom" | null>(null);
@@ -447,19 +457,23 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
           key={type}
           onDragOver={handleDragOver}
           onDrop={(e) => handleDropOnQuadrant(e, type)}
-          className={`flex flex-col h-full rounded-t-2xl rounded-b-none border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 ${config.accentBorder} ${config.bgGradient} shadow-xs overflow-hidden select-none`}
+          className={`flex flex-col h-full ${
+            isPixelTheme
+              ? "rounded-xl border-2 border-border/90 bg-card shadow-[3px_3px_0px_rgba(0,0,0,0.1)]"
+              : "rounded-t-2xl rounded-b-none border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs"
+          } ${config.accentBorder} ${config.bgGradient} overflow-hidden select-none`}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-slate-800/80" onDragOver={handleDragOver}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/60" onDragOver={handleDragOver}>
             <div className="flex items-center gap-2">
               <span
-                className={`w-5 h-5 rounded-full text-white font-bold text-xs flex items-center justify-center shadow-xs ${config.badgeBgClass}`}
+                className={`w-5 h-5 ${isPixelTheme ? "rounded-xs font-mono font-black" : "rounded-full font-bold"} text-white text-xs flex items-center justify-center shadow-xs ${config.badgeBgClass}`}
               >
                 {type[1]}
               </span>
               <div>
-                <h3 className={`text-sm font-bold ${config.textClass}`}>
-                  {config.title}
+                <h3 className={`text-sm font-bold ${config.textClass} ${isPixelTheme ? "font-mono" : ""}`}>
+                  {isPixelTheme ? config.pixelTitle : config.title}
                 </h3>
               </div>
             </div>
@@ -468,10 +482,14 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
               variant="ghost"
               size="icon"
               onClick={(e) => onCreateTask(type, e.currentTarget)}
-              className="h-7 w-7 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+              className={
+                isPixelTheme
+                  ? "h-7 w-7 rounded-xs border border-border bg-muted/60 hover:bg-muted text-foreground shadow-[1px_1px_0px_#000] cursor-pointer"
+                  : "h-7 w-7 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 cursor-pointer"
+              }
               title="新建任务"
             >
-              <Plus size={18} />
+              <Plus size={16} strokeWidth={isPixelTheme ? 2.5 : 2} />
             </Button>
           </div>
 

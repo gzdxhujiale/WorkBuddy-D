@@ -2,17 +2,11 @@ import React, { useState, useEffect, useMemo, useCallback, memo } from "react";
 import {
   Plus,
   MoreHorizontal,
-  Smile,
-  CheckCircle2,
-  Calendar,
-  Flame,
-  Award,
   ChevronLeft,
   ChevronRight,
   Edit2,
   Trash2,
   Check,
-  Sparkles,
 } from "lucide-react";
 import { useHabitData, useHabitActions } from "@/hooks/useHabits";
 import { Habit, HabitCheckIn, HabitStats } from "@/types/habit";
@@ -25,6 +19,26 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Drawer, DrawerHeader, DrawerTitle, DrawerContent } from "@/components/ui/drawer";
 import { Item, ItemAvatar, ItemContent, ItemTitle, ItemDescription, ItemActions } from "@/components/ui/item";
 import { DatePicker } from "@/components/ui/date-picker";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+
+import {
+  PixelFlame,
+  PixelTrophy,
+  PixelPotion,
+  PixelSparkle,
+  PixelDumbbell,
+  PixelBook,
+  PixelLotus,
+  PixelSlime,
+} from "@/components/pixel/PixelIcons";
+import {
+  ExpParticleContainer,
+  ExpParticleItem,
+} from "@/components/pixel/ExpParticle";
+import {
+  PixelAchievementHall,
+  getLevelInfo,
+} from "@/components/pixel/PixelBadge";
 
 // ============================================================
 // Constants & Pure Selectors
@@ -67,11 +81,36 @@ const STAT_CARDS: {
   label: string;
   suffix?: string;
 }[] = [
-    { icon: Calendar, bgClass: "bg-blue-50 dark:bg-blue-950/40", textClass: "text-blue-500 dark:text-blue-400", key: "monthCheckIns", label: "本月完成/天" },
-    { icon: CheckCircle2, bgClass: "bg-emerald-50 dark:bg-emerald-950/40", textClass: "text-emerald-500 dark:text-emerald-400", key: "totalCheckIns", label: "累计完成/天" },
-    { icon: Flame, bgClass: "bg-orange-50 dark:bg-orange-950/40", textClass: "text-orange-500 dark:text-orange-400", key: "currentStreak", label: "当前连续/天" },
-    { icon: Award, bgClass: "bg-indigo-50 dark:bg-indigo-950/40", textClass: "text-indigo-500 dark:text-indigo-400", key: "monthlyCompletionRate", label: "本月完成率", suffix: "%" },
-  ];
+  {
+    icon: PixelPotion,
+    bgClass: "bg-emerald-100/90 dark:bg-emerald-950/40 border border-emerald-600/30",
+    textClass: "text-emerald-700 dark:text-emerald-300",
+    key: "monthCheckIns",
+    label: "本月完成/天",
+  },
+  {
+    icon: PixelTrophy,
+    bgClass: "bg-amber-100/90 dark:bg-amber-950/40 border border-amber-600/30",
+    textClass: "text-amber-700 dark:text-amber-300",
+    key: "totalCheckIns",
+    label: "累计经验/次",
+  },
+  {
+    icon: PixelFlame,
+    bgClass: "bg-orange-100/90 dark:bg-orange-950/40 border border-orange-600/30",
+    textClass: "text-orange-700 dark:text-orange-300",
+    key: "currentStreak",
+    label: "连续天数/连击",
+  },
+  {
+    icon: PixelSparkle,
+    bgClass: "bg-indigo-100/90 dark:bg-indigo-950/40 border border-indigo-600/30",
+    textClass: "text-indigo-700 dark:text-indigo-300",
+    key: "monthlyCompletionRate",
+    label: "本月达成率",
+    suffix: "%",
+  },
+];
 
 const getDaysAround = () => {
   const base = new Date();
@@ -186,15 +225,72 @@ function getStats(checkIns: HabitCheckIn[], habitId: string, dateStr: string): H
   };
 }
 
+import {
+  Activity,
+  BookOpen,
+  Heart,
+  Smile,
+  Calendar,
+  CheckCircle2,
+  Flame,
+  Award,
+} from "lucide-react";
+
 // ============================================================
-// Shared UI Components
+// Shared UI Components: Adaptive Avatar (Modern vs Pixel)
 // ============================================================
-const HabitAvatar: React.FC<{ size?: "sm" | "md" | "lg" }> = ({ size = "md" }) => {
-  const sizeMap = { sm: 20, md: 24, lg: 28 };
+const HabitAvatar: React.FC<{
+  category?: string;
+  size?: "sm" | "md" | "lg";
+}> = ({ category = "emotion", size = "md" }) => {
+  const { isPixelTheme } = useAppThemeStyle();
+  const sizeMap = { sm: 18, md: 22, lg: 26 };
   const containerMap = { sm: "w-9 h-9", md: "w-11 h-11", lg: "w-13 h-13" };
+
+  if (isPixelTheme) {
+    const renderPixelIcon = () => {
+      switch (category) {
+        case "body":
+          return <PixelDumbbell size={sizeMap[size]} />;
+        case "intellect":
+          return <PixelBook size={sizeMap[size]} />;
+        case "spirit":
+          return <PixelLotus size={sizeMap[size]} />;
+        case "emotion":
+        default:
+          return <PixelSlime size={sizeMap[size]} />;
+      }
+    };
+
+    return (
+      <div
+        className={`${containerMap[size]} rounded-xl bg-amber-50/90 dark:bg-amber-950/40 flex items-center justify-center shrink-0 border-2 border-amber-900/60 dark:border-amber-700/60 shadow-[2px_2px_0px_rgba(120,53,15,0.4)] transition-transform hover:scale-105 duration-200 select-none`}
+      >
+        {renderPixelIcon()}
+      </div>
+    );
+  }
+
+  // Modern Default Style
+  const renderModernIcon = () => {
+    switch (category) {
+      case "body":
+        return <Activity size={sizeMap[size]} className="text-rose-500" />;
+      case "intellect":
+        return <BookOpen size={sizeMap[size]} className="text-blue-500" />;
+      case "spirit":
+        return <Heart size={sizeMap[size]} className="text-purple-500" />;
+      case "emotion":
+      default:
+        return <Smile size={sizeMap[size]} className="text-emerald-500" />;
+    }
+  };
+
   return (
-    <div className={`${containerMap[size]} rounded-full bg-emerald-500/20 dark:bg-emerald-500/30 flex items-center justify-center shadow-xs shrink-0 transition-transform hover:scale-105 duration-200 border border-emerald-500/30`}>
-      <Smile className="text-emerald-600 dark:text-emerald-400" size={sizeMap[size]} />
+    <div
+      className={`${containerMap[size]} rounded-full bg-muted/60 dark:bg-muted/30 flex items-center justify-center shrink-0 border border-border transition-transform hover:scale-105 duration-200 select-none shadow-xs`}
+    >
+      {renderModernIcon()}
     </div>
   );
 };
@@ -239,35 +335,119 @@ const DateSwitcher: React.FC<DateSwitcherProps> = memo(({ currentDate, onChange 
 DateSwitcher.displayName = "DateSwitcher";
 
 // ============================================================
-// Sub-component: OverviewCards
+// Sub-component: OverviewCards (Modern / 8-bit Adaptive)
 // ============================================================
 const OverviewCards: React.FC<{ habit: Habit; currentDate: string }> = memo(({ habit, currentDate }) => {
+  const { isPixelTheme } = useAppThemeStyle();
   const { data } = useHabitData();
   const checkIns = data?.checkIns ?? EMPTY_CHECKINS;
   const stats = useMemo(() => getStats(checkIns, habit.id, currentDate), [checkIns, habit.id, currentDate]);
+  const levelInfo = useMemo(() => getLevelInfo(stats.totalCheckIns), [stats.totalCheckIns]);
 
-  return (
-    <div className="grid grid-cols-2 gap-3 w-full">
-      {STAT_CARDS.map(({ icon: Icon, bgClass, textClass, key, label, suffix }) => (
-        <div key={key} className="bg-card rounded-xl p-3.5 shadow-2xs border border-border flex items-center gap-3 transition-transform hover:-translate-y-0.5 duration-200">
-          <div className={`w-10 h-10 rounded-full ${bgClass} flex items-center justify-center ${textClass} shrink-0`}>
-            <Icon size={20} />
+  if (!isPixelTheme) {
+    // Modern Default Style
+    return (
+      <div className="grid grid-cols-2 gap-3 w-full">
+        <div className="bg-card rounded-xl p-3.5 shadow-2xs border border-border flex items-center gap-3 transition-transform hover:-translate-y-0.5 duration-200">
+          <div className="w-10 h-10 rounded-full bg-blue-50 dark:bg-blue-950/40 flex items-center justify-center text-blue-500 dark:text-blue-400 shrink-0">
+            <Calendar size={20} />
           </div>
           <div>
-            <div className="text-xl font-bold text-foreground tabular-nums">{stats[key]}{suffix}</div>
-            <div className="text-xs text-muted-foreground font-medium">{label}</div>
+            <div className="text-xl font-bold text-foreground tabular-nums">{stats.monthCheckIns}</div>
+            <div className="text-xs text-muted-foreground font-medium">本月完成/天</div>
           </div>
         </div>
-      ))}
+
+        <div className="bg-card rounded-xl p-3.5 shadow-2xs border border-border flex items-center gap-3 transition-transform hover:-translate-y-0.5 duration-200">
+          <div className="w-10 h-10 rounded-full bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center text-emerald-500 dark:text-emerald-400 shrink-0">
+            <CheckCircle2 size={20} />
+          </div>
+          <div>
+            <div className="text-xl font-bold text-foreground tabular-nums">{stats.totalCheckIns}</div>
+            <div className="text-xs text-muted-foreground font-medium">累计完成/天</div>
+          </div>
+        </div>
+
+        <div className="bg-card rounded-xl p-3.5 shadow-2xs border border-border flex items-center gap-3 transition-transform hover:-translate-y-0.5 duration-200">
+          <div className="w-10 h-10 rounded-full bg-orange-50 dark:bg-orange-950/40 flex items-center justify-center text-orange-500 dark:text-orange-400 shrink-0">
+            <Flame size={20} />
+          </div>
+          <div>
+            <div className="text-xl font-bold text-foreground tabular-nums">{stats.currentStreak}</div>
+            <div className="text-xs text-muted-foreground font-medium">当前连续/天</div>
+          </div>
+        </div>
+
+        <div className="bg-card rounded-xl p-3.5 shadow-2xs border border-border flex items-center gap-3 transition-transform hover:-translate-y-0.5 duration-200">
+          <div className="w-10 h-10 rounded-full bg-indigo-50 dark:bg-indigo-950/40 flex items-center justify-center text-indigo-500 dark:text-indigo-400 shrink-0">
+            <Award size={20} />
+          </div>
+          <div>
+            <div className="text-xl font-bold text-foreground tabular-nums">{stats.monthlyCompletionRate}%</div>
+            <div className="text-xs text-muted-foreground font-medium">本月完成率</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 8-bit Pixel RPG Adventure Style
+  return (
+    <div className="flex flex-col gap-3 w-full">
+      {/* Adventurer Level & EXP Bar */}
+      <div className="bg-amber-50/90 dark:bg-amber-950/30 border-2 border-amber-900/60 dark:border-amber-700/60 rounded-xl p-3 shadow-[2px_2px_0px_rgba(120,53,15,0.4)] select-none">
+        <div className="flex items-center justify-between mb-1.5">
+          <div className="flex items-center gap-2">
+            <span className="px-2 py-0.5 rounded bg-amber-200 dark:bg-amber-900 text-amber-950 dark:text-amber-100 font-mono text-xs font-black border border-amber-900/40">
+              Lv.{levelInfo.level}
+            </span>
+            <span className="text-xs font-bold text-amber-950 dark:text-amber-200">
+              {levelInfo.title}
+            </span>
+          </div>
+          <span className="text-[11px] font-mono font-bold text-amber-800 dark:text-amber-400">
+            EXP: {levelInfo.currentLevelExp}%
+          </span>
+        </div>
+
+        {/* 8-bit Segmented Progress Bar */}
+        <div className="w-full h-3 bg-amber-200/80 dark:bg-amber-900/60 border border-amber-900/60 rounded-[3px] overflow-hidden p-[1px]">
+          <div
+            className="h-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-500"
+            style={{ width: `${Math.max(5, levelInfo.currentLevelExp)}%` }}
+          />
+        </div>
+      </div>
+
+      {/* 4 RPG Stats Grid */}
+      <div className="grid grid-cols-2 gap-2.5 w-full">
+        {STAT_CARDS.map(({ icon: Icon, bgClass, textClass, key, label, suffix }) => (
+          <div
+            key={key}
+            className="bg-card rounded-xl p-3 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] border-2 border-border/80 flex items-center gap-2.5 transition-transform hover:-translate-y-0.5 duration-200"
+          >
+            <div className={`w-9 h-9 rounded-lg ${bgClass} flex items-center justify-center ${textClass} shrink-0`}>
+              <Icon size={18} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-lg font-black text-foreground tabular-nums font-mono leading-tight">
+                {stats[key]}{suffix}
+              </div>
+              <div className="text-[10px] text-muted-foreground font-semibold truncate">{label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 });
 OverviewCards.displayName = "OverviewCards";
 
 // ============================================================
-// Sub-component: CalendarHeatmapComponent
+// Sub-component: CalendarHeatmapComponent (Adaptive)
 // ============================================================
 const CalendarHeatmapComponent: React.FC<{ habit: Habit }> = memo(({ habit }) => {
+  const { isPixelTheme } = useAppThemeStyle();
   const { data } = useHabitData();
   const checkIns = data?.checkIns ?? EMPTY_CHECKINS;
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -333,7 +513,7 @@ const CalendarHeatmapComponent: React.FC<{ habit: Habit }> = memo(({ habit }) =>
 
   return (
     <div className="w-full flex flex-col items-center select-none">
-      <div className="flex items-center justify-between w-full mb-4 px-1">
+      <div className="flex items-center justify-between w-full mb-3 px-1">
         <button
           type="button"
           onClick={handlePrevMonth}
@@ -341,9 +521,12 @@ const CalendarHeatmapComponent: React.FC<{ habit: Habit }> = memo(({ habit }) =>
         >
           <ChevronLeft size={16} />
         </button>
-        <span className="text-sm font-semibold text-foreground">
-          {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月
-        </span>
+        <div className="flex items-center gap-1.5 font-semibold text-xs text-foreground">
+          {isPixelTheme && <PixelSparkle size={14} />}
+          <span>
+            {currentMonth.getFullYear()}年{currentMonth.getMonth() + 1}月 {isPixelTheme ? "草地打卡图" : "打卡日历"}
+          </span>
+        </div>
         <button
           type="button"
           onClick={handleNextMonth}
@@ -353,22 +536,64 @@ const CalendarHeatmapComponent: React.FC<{ habit: Habit }> = memo(({ habit }) =>
         </button>
       </div>
 
-      <div className="grid grid-cols-7 w-full text-center gap-y-3">
+      <div className="grid grid-cols-7 w-full text-center gap-1.5">
         {SHORT_WEEK_DAYS.map((day) => (
-          <div key={day} className="text-xs text-muted-foreground font-medium mb-1">{day}</div>
+          <div key={day} className="text-[11px] text-muted-foreground font-medium mb-1">{day}</div>
         ))}
 
         {daysInMonth.map((dayInfo, idx) => {
           const checkedIn = checkedInDates.has(formatDateYMD(dayInfo.date));
           const today = isToday(dayInfo.date);
 
+          if (!isPixelTheme) {
+            // Modern Style
+            return (
+              <div key={idx} className="flex flex-col items-center justify-center gap-1 group">
+                <span
+                  className={`text-xs font-medium transition-colors ${
+                    !dayInfo.isCurrentMonth
+                      ? "text-muted-foreground/30"
+                      : today
+                      ? "text-blue-500 font-bold"
+                      : "text-foreground"
+                  }`}
+                >
+                  {dayInfo.date.getDate()}
+                </span>
+                <div
+                  className={`w-5 h-5 rounded-full transition-all duration-300 flex items-center justify-center ${
+                    checkedIn ? "bg-emerald-500 text-white shadow-xs shadow-emerald-500/50" : "bg-muted/50"
+                  } ${today ? "ring-2 ring-blue-500 ring-offset-1" : ""}`}
+                >
+                  {checkedIn && <Check size={12} className="stroke-[3]" />}
+                </div>
+              </div>
+            );
+          }
+
+          // Pixel Grass Style
           return (
-            <div key={idx} className="flex flex-col items-center justify-center gap-1 group">
-              <span className={`text-xs font-medium transition-colors ${!dayInfo.isCurrentMonth ? "text-muted-foreground/30" : today ? "text-blue-500 font-bold" : "text-foreground"}`}>
+            <div key={idx} className="flex flex-col items-center justify-center gap-0.5 group">
+              <span
+                className={`text-[10px] font-mono font-medium transition-colors ${
+                  !dayInfo.isCurrentMonth
+                    ? "text-muted-foreground/30"
+                    : today
+                    ? "text-amber-500 font-black"
+                    : "text-muted-foreground"
+                }`}
+              >
                 {dayInfo.date.getDate()}
               </span>
-              <div className={`w-5 h-5 rounded-full transition-all duration-300 flex items-center justify-center ${checkedIn ? "bg-emerald-500 text-white shadow-xs shadow-emerald-500/50" : "bg-muted/50"}`}>
-                {checkedIn && <Check size={12} className="stroke-[3]" />}
+              <div
+                className={`w-6 h-6 rounded-md transition-all duration-200 flex items-center justify-center ${
+                  checkedIn
+                    ? "bg-emerald-500 text-white font-bold border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b] scale-105"
+                    : "bg-muted/40 border border-border/80"
+                } ${today ? "ring-2 ring-amber-400 ring-offset-1" : ""}`}
+                title={checkedIn ? `${formatDateYMD(dayInfo.date)}: 打卡成功 ✨` : formatDateYMD(dayInfo.date)}
+              >
+                {checkedIn && <Check size={13} className="stroke-[3]" />}
               </div>
             </div>
           );
@@ -395,6 +620,7 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
   onSubmit,
   initialData,
 }) => {
+  const { isPixelTheme } = useAppThemeStyle();
   const [name, setName] = useState("");
   const [frequencyType, setFrequencyType] = useState<"daily" | "weekly_days" | "custom">("daily");
   const [goal, setGoal] = useState("today");
@@ -435,7 +661,7 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
 
   const handleSubmit = async () => {
     if (!name.trim()) {
-      setErrorMsg("请输入习惯名称");
+      setErrorMsg(isPixelTheme ? "请填写修行契约名称" : "请输入习惯名称");
       return;
     }
 
@@ -459,19 +685,29 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
       visible={visible}
       title={
         <div className="flex items-center gap-2">
-          <Sparkles className="text-amber-500" size={18} />
-          <span>{initialData ? "编辑习惯" : "添加新习惯"}</span>
+          <PixelSparkle size={18} />
+          <span className={isPixelTheme ? "font-mono font-bold" : ""}>
+            {isPixelTheme
+              ? initialData
+                ? "📜 冒险修行契约编辑"
+                : "✨ 订立新自律修行"
+              : initialData
+              ? "编辑习惯"
+              : "添加新习惯"}
+          </span>
         </div>
       }
       onCancel={onCancel}
       onOk={handleSubmit}
-      okText="保存"
-      cancelText="取消"
+      okText={isPixelTheme ? "刻印契约" : "保存"}
+      cancelText={isPixelTheme ? "放弃" : "取消"}
       width={480}
     >
-      <div className="space-y-4 py-2 text-foreground">
+      <div className={`space-y-4 py-2 text-foreground ${isPixelTheme ? "font-mono" : ""}`}>
         <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
-          <label className="text-sm font-medium text-muted-foreground text-right">习惯名称</label>
+          <label className="text-sm font-medium text-muted-foreground text-right">
+            {isPixelTheme ? "修行科目" : "习惯名称"}
+          </label>
           <div className="w-full">
             <Input
               type="text"
@@ -480,7 +716,7 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
                 setName(e.target.value);
                 if (errorMsg) setErrorMsg("");
               }}
-              placeholder="习惯名称（例：每天阅读30分钟）"
+              placeholder={isPixelTheme ? "例：每日研读魔法典籍30分钟" : "习惯名称（例：每天阅读30分钟）"}
               className={`h-9 ${errorMsg ? "border-destructive bg-destructive/10" : ""}`}
             />
             {errorMsg && <p className="text-xs text-destructive mt-1 pl-1">{errorMsg}</p>}
@@ -488,7 +724,9 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
         </div>
 
         <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
-          <label className="text-sm font-medium text-muted-foreground text-right">频率</label>
+          <label className="text-sm font-medium text-muted-foreground text-right">
+            {isPixelTheme ? "修炼周期" : "频率"}
+          </label>
           <Select
             value={frequencyType}
             onChange={(val) => setFrequencyType(val as "daily" | "weekly_days" | "custom")}
@@ -498,7 +736,9 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
         </div>
 
         <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
-          <label className="text-sm font-medium text-muted-foreground text-right">目标</label>
+          <label className="text-sm font-medium text-muted-foreground text-right">
+            {isPixelTheme ? "今日指标" : "目标"}
+          </label>
           <Select
             value={goal}
             onChange={(val) => setGoal(val)}
@@ -508,18 +748,22 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
         </div>
 
         <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
-          <label className="text-sm font-medium text-muted-foreground text-right">开始日期</label>
+          <label className="text-sm font-medium text-muted-foreground text-right">
+            {isPixelTheme ? "启程之日" : "开始日期"}
+          </label>
           <div className="w-full">
             <DatePicker
               value={startDate}
               onChange={setStartDate}
-              placeholder="选择开始日期"
+              placeholder={isPixelTheme ? "选择启程之日" : "选择开始日期"}
             />
           </div>
         </div>
 
         <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
-          <label className="text-sm font-medium text-muted-foreground text-right">坚持时间</label>
+          <label className="text-sm font-medium text-muted-foreground text-right">
+            {isPixelTheme ? "誓约历程" : "坚持时间"}
+          </label>
           <div className="flex items-center gap-2">
             <Select
               value={duration}
@@ -544,7 +788,9 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
         </div>
 
         <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
-          <label className="text-sm font-medium text-muted-foreground text-right">所属分组</label>
+          <label className="text-sm font-medium text-muted-foreground text-right">
+            {isPixelTheme ? "所属派系" : "所属分组"}
+          </label>
           <Select
             value={category}
             onChange={(val) => setCategory(val)}
@@ -560,15 +806,17 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
               type="checkbox"
               checked={autoPopupLog}
               onChange={(e) => setAutoPopupLog(e.target.checked)}
-              className="w-4 h-4 rounded border-input text-blue-600 focus:ring-blue-500"
+              className="w-4 h-4 rounded border-input text-amber-600 focus:ring-amber-500"
             />
-            <span>自动触发桌面系统提醒</span>
+            <span>{isPixelTheme ? "开启冒险助手系统传讯" : "自动触发桌面系统提醒"}</span>
           </label>
         </div>
 
         {autoPopupLog && (
           <div className="grid grid-cols-[80px_minmax(0,1fr)] items-center gap-3">
-            <label className="text-sm font-medium text-muted-foreground text-right">提醒时间</label>
+            <label className="text-sm font-medium text-muted-foreground text-right">
+              {isPixelTheme ? "传讯时刻" : "提醒时间"}
+            </label>
             <Input
               type="time"
               step="1"
@@ -594,7 +842,12 @@ interface HabitSidebarProps {
 }
 
 const HabitSidebar: React.FC<HabitSidebarProps> = memo(({ habit, currentDate, onClose }) => {
+  const { isPixelTheme } = useAppThemeStyle();
+  const { data } = useHabitData();
+  const checkIns = data?.checkIns ?? EMPTY_CHECKINS;
   const { deleteHabit, updateHabit } = useHabitActions();
+  const stats = useMemo(() => getStats(checkIns, habit.id, currentDate), [checkIns, habit.id, currentDate]);
+
   const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
@@ -611,7 +864,7 @@ const HabitSidebar: React.FC<HabitSidebarProps> = memo(({ habit, currentDate, on
         <DrawerHeader onClose={onClose}>
           <div className="flex items-center justify-between w-full pr-6">
             <div className="flex items-center gap-3 min-w-0">
-              <HabitAvatar size="sm" />
+              <HabitAvatar category={habit.category} size="sm" />
               <DrawerTitle>{habit.name}</DrawerTitle>
             </div>
             <div className="flex items-center gap-2 relative">
@@ -650,14 +903,24 @@ const HabitSidebar: React.FC<HabitSidebarProps> = memo(({ habit, currentDate, on
           </div>
         </DrawerHeader>
 
-        <DrawerContent>
+        <DrawerContent className="space-y-4">
           <div className="flex-shrink-0">
             <OverviewCards habit={habit} currentDate={currentDate} />
           </div>
 
-          <div className="bg-card rounded-xl shadow-2xs border border-border p-4 flex-shrink-0 mb-6">
+          <div className="bg-card rounded-xl shadow-2xs border border-border p-4 flex-shrink-0">
             <CalendarHeatmapComponent habit={habit} />
           </div>
+
+          {/* Pixel Achievement Hall for Habit (in Pixel Mode) */}
+          {isPixelTheme && (
+            <div className="flex-shrink-0 pb-6">
+              <PixelAchievementHall
+                currentStreak={stats.currentStreak}
+                totalDays={stats.totalCheckIns}
+              />
+            </div>
+          )}
         </DrawerContent>
       </Drawer>
 
@@ -696,10 +959,12 @@ interface HabitItemProps {
   habit: Habit;
   currentDate: string;
   onSelectDate: (date: string) => void;
+  onCheckInEffect?: (x: number, y: number, text: string) => void;
   onClick: () => void;
 }
 
-const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelectDate, onClick }) => {
+const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelectDate, onCheckInEffect, onClick }) => {
+  const { isPixelTheme } = useAppThemeStyle();
   const { data } = useHabitData();
   const checkIns = data?.checkIns ?? EMPTY_CHECKINS;
   const { toggleCheckIn } = useHabitActions();
@@ -722,23 +987,44 @@ const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelect
     }
     const completed = !getCheckInStatus(checkIns, habit.id, dateStr);
     toggleCheckIn(habit.id, dateStr, completed);
+
+    if (completed && onCheckInEffect && isPixelTheme) {
+      onCheckInEffect(e.clientX, e.clientY, "+10 EXP ✨");
+    }
   };
 
   return (
-    <Item onClick={onClick} className="cursor-pointer group">
+    <Item
+      onClick={onClick}
+      className={`cursor-pointer group transition-colors ${
+        isPixelTheme ? "hover:border-amber-900/40 dark:hover:border-amber-700/40" : ""
+      }`}
+    >
       <div className="flex items-center gap-4 min-w-0">
         <ItemAvatar>
-          <HabitAvatar />
+          <HabitAvatar category={habit.category} />
         </ItemAvatar>
 
         <ItemContent>
-          <ItemTitle className="group-hover:text-blue-500 transition-colors">
-            {habit.name}
+          <ItemTitle className="group-hover:text-blue-500 transition-colors flex items-center gap-2">
+            <span>{habit.name}</span>
+            {stats.currentStreak >= 3 && (
+              <span
+                className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                  isPixelTheme
+                    ? "bg-orange-100 dark:bg-orange-950/60 text-orange-700 dark:text-orange-300 font-mono border border-orange-500/30"
+                    : "bg-orange-50 dark:bg-orange-950/30 text-orange-600 dark:text-orange-400"
+                }`}
+              >
+                {isPixelTheme ? <PixelFlame size={12} /> : <Flame size={12} />}
+                {stats.currentStreak}{isPixelTheme ? "连击" : "天连胜"}
+              </span>
+            )}
           </ItemTitle>
-          <ItemDescription>
+          <ItemDescription className={isPixelTheme ? "font-mono text-xs" : ""}>
             <span>已坚持 {stats.monthCheckIns} 天</span>
             <span>•</span>
-            <span>连续 {stats.currentStreak} 天</span>
+            <span>{isPixelTheme ? `累计经验 ${stats.totalCheckIns * 10} EXP` : `连续 ${stats.currentStreak} 天`}</span>
           </ItemDescription>
         </ItemContent>
       </div>
@@ -749,10 +1035,15 @@ const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelect
             key={day.dateStr}
             type="button"
             onClick={(e) => handleDotClick(e, day.dateStr, day.isActiveDate)}
-            className={`w-6 h-6 rounded-full flex items-center justify-center transition-all duration-300 transform active:scale-75 cursor-pointer outline-none ${day.isCheckedIn
-                ? "bg-emerald-500 text-white shadow-xs shadow-emerald-500/40 scale-100"
-                : "bg-muted/60 hover:bg-muted text-transparent opacity-80 hover:opacity-100"
-              } ${day.isActiveDate ? "ring-2 ring-blue-500 ring-offset-1 scale-105" : ""}`}
+            className={`w-6 h-6 flex items-center justify-center transition-all duration-200 transform active:scale-75 cursor-pointer outline-none ${
+              isPixelTheme ? "rounded-md" : "rounded-full"
+            } ${
+              day.isCheckedIn
+                ? isPixelTheme
+                  ? "bg-emerald-500 text-white font-bold border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b] scale-100"
+                  : "bg-emerald-500 text-white shadow-xs shadow-emerald-500/40 scale-100"
+                : "bg-muted/60 hover:bg-muted text-transparent opacity-80 hover:opacity-100 border border-border/60"
+            } ${day.isActiveDate ? (isPixelTheme ? "ring-2 ring-amber-400 ring-offset-1 scale-105" : "ring-2 ring-blue-500 ring-offset-1 scale-105") : ""}`}
             title={
               day.isActiveDate
                 ? `${day.dateStr} (点击${day.isCheckedIn ? "取消打卡" : "完成打卡"})`
@@ -761,8 +1052,9 @@ const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelect
           >
             <Check
               size={13}
-              className={`transition-all duration-300 transform stroke-[3] ${day.isCheckedIn ? "scale-100 opacity-100 rotate-0" : "scale-0 opacity-0 -rotate-45"
-                }`}
+              className={`transition-all duration-200 transform stroke-[3] ${
+                day.isCheckedIn ? "scale-100 opacity-100 rotate-0" : "scale-0 opacity-0 -rotate-45"
+              }`}
             />
           </button>
         ))}
@@ -776,6 +1068,7 @@ HabitItem.displayName = "HabitItem";
 // Main Component: HabitPanel
 // ============================================================
 export const HabitPanel: React.FC = () => {
+  const { isPixelTheme } = useAppThemeStyle();
   const [currentDate, setCurrentDate] = useState<string>(todayYMD());
   const { data } = useHabitData();
   const habitsData = data?.habits ?? EMPTY_HABITS;
@@ -790,12 +1083,25 @@ export const HabitPanel: React.FC = () => {
   );
 
   const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+  const [particles, setParticles] = useState<ExpParticleItem[]>([]);
 
   const handleHabitClick = useCallback((habit: Habit) => setSelectedHabitId(habit.id), []);
   const handleCloseSidebar = useCallback(() => setSelectedHabitId(null), []);
 
+  const triggerParticle = useCallback((x: number, y: number, text = "+10 EXP ✨") => {
+    const id = Math.random().toString(36).slice(2, 9);
+    setParticles((prev) => [...prev, { id, x, y, text }]);
+  }, []);
+
+  const removeParticle = useCallback((id: string) => {
+    setParticles((prev) => prev.filter((p) => p.id !== id));
+  }, []);
+
   return (
     <div className="flex w-full h-full bg-transparent relative overflow-hidden select-none">
+      {/* 8-bit Floating Particles (in Pixel Mode) */}
+      {isPixelTheme && <ExpParticleContainer particles={particles} onFinish={removeParticle} />}
+
       {/* Main Content Area */}
       <div className="flex flex-col flex-1 w-full h-full transition-all duration-300">
         {/* Date Switcher */}
@@ -805,11 +1111,23 @@ export const HabitPanel: React.FC = () => {
         <div className="flex-1 bg-transparent overflow-y-auto p-6 pb-24 space-y-3">
           {habits.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-64 text-center p-8 border border-dashed border-border rounded-2xl">
-              <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
-                <Smile size={28} />
-              </div>
-              <h3 className="text-base font-bold text-foreground mb-1">暂无习惯项目</h3>
-              <p className="text-xs text-muted-foreground max-w-xs mb-4">点击右下角的「+」按钮创建你的第一个打卡项目</p>
+              {isPixelTheme ? (
+                <div className="w-14 h-14 rounded-xl bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-900/60 flex items-center justify-center text-muted-foreground mb-3 shadow-[2px_2px_0px_rgba(120,53,15,0.4)]">
+                  <PixelSlime size={28} />
+                </div>
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
+                  <Smile size={28} />
+                </div>
+              )}
+              <h3 className="text-base font-bold text-foreground mb-1">
+                {isPixelTheme ? "暂无打卡任务" : "暂无习惯项目"}
+              </h3>
+              <p className="text-xs text-muted-foreground max-w-xs mb-4">
+                {isPixelTheme
+                  ? "点击右下角的「+」按钮开启你的第一个自律冒险"
+                  : "点击右下角的「+」按钮创建你的第一个打卡项目"}
+              </p>
               <Button
                 type="button"
                 size="sm"
@@ -826,6 +1144,7 @@ export const HabitPanel: React.FC = () => {
                 habit={habit}
                 currentDate={currentDate}
                 onSelectDate={setCurrentDate}
+                onCheckInEffect={triggerParticle}
                 onClick={() => handleHabitClick(habit)}
               />
             ))

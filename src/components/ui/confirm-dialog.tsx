@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -26,6 +27,7 @@ export function ConfirmDialog({
   onConfirm,
   target,
 }: ConfirmDialogProps) {
+  const { isPixelTheme } = useAppThemeStyle();
   const popoverRef = useRef<HTMLDivElement | null>(null);
   const [coords, setCoords] = useState<{
     top: number;
@@ -142,11 +144,16 @@ export function ConfirmDialog({
       <div
         ref={popoverRef}
         style={{ top: `${coords.top}px`, left: `${coords.left}px` }}
-        className="fixed z-[1060] min-w-[220px] max-w-[320px] rounded-lg border border-border/80 bg-popover text-popover-foreground p-3.5 shadow-[0_4px_16px_rgba(0,0,0,0.1),0_2px_4px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-150 flex flex-col"
+        className={cn(
+          "fixed z-[1060] min-w-[220px] max-w-[320px] p-3.5 animate-in fade-in zoom-in-95 duration-150 flex flex-col",
+          isPixelTheme
+            ? "rounded-xl border-2 border-border bg-card text-foreground font-mono shadow-[4px_4px_0px_#000]"
+            : "rounded-lg border border-border/80 bg-popover text-popover-foreground shadow-[0_4px_16px_rgba(0,0,0,0.1),0_2px_4px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.5)]"
+        )}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Arrow pointer */}
-        <div style={coords.arrowStyle} className="absolute size-2 bg-popover z-10" />
+        {!isPixelTheme && <div style={coords.arrowStyle} className="absolute size-2 bg-popover z-10" />}
 
         <div className="flex items-start gap-2.5">
           {variant === "destructive" ? (
@@ -171,7 +178,12 @@ export function ConfirmDialog({
               e.stopPropagation();
               onOpenChange(false);
             }}
-            className="inline-flex items-center justify-center h-6 px-2.5 text-xs rounded border border-border bg-transparent text-foreground hover:bg-muted active:bg-muted/80 transition-colors cursor-pointer select-none"
+            className={cn(
+              "inline-flex items-center justify-center h-6 px-2.5 text-xs transition-colors cursor-pointer select-none",
+              isPixelTheme
+                ? "rounded-xs border border-border bg-muted hover:bg-accent text-foreground shadow-[1px_1px_0px_#000]"
+                : "rounded border border-border bg-transparent text-foreground hover:bg-muted active:bg-muted/80"
+            )}
           >
             {cancelText}
           </button>
@@ -183,10 +195,15 @@ export function ConfirmDialog({
               onOpenChange(false);
             }}
             className={cn(
-              "inline-flex items-center justify-center h-6 px-2.5 text-xs rounded font-medium text-white shadow-xs transition-colors cursor-pointer select-none",
+              "inline-flex items-center justify-center h-6 px-2.5 text-xs font-medium text-white transition-colors cursor-pointer select-none",
+              isPixelTheme ? "rounded-xs shadow-[1px_1px_0px_#000] font-bold" : "rounded shadow-xs",
               variant === "destructive"
-                ? "bg-[#f53f3f] hover:bg-[#e03535] active:bg-[#cb2727] dark:bg-[#f76560] dark:hover:bg-[#f53f3f]"
-                : "bg-[#165dff] hover:bg-[#0e42d2] active:bg-[#0935b5] dark:bg-[#3c7eff] dark:hover:bg-[#165dff]"
+                ? isPixelTheme
+                  ? "bg-red-700 hover:bg-red-800 active:bg-red-900 border border-red-950 text-white"
+                  : "bg-[#f53f3f] hover:bg-[#e03535] active:bg-[#cb2727] dark:bg-[#f76560] dark:hover:bg-[#f53f3f]"
+                : isPixelTheme
+                  ? "bg-amber-600 hover:bg-amber-700 active:bg-amber-800 border border-amber-900 text-white"
+                  : "bg-[#165dff] hover:bg-[#0e42d2] active:bg-[#0935b5] dark:bg-[#3c7eff] dark:hover:bg-[#165dff]"
             )}
           >
             {confirmText}

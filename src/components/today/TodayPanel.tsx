@@ -17,6 +17,12 @@ import { openQuickEditWindow, prewarmQuickEditWindow } from "@/services/quickEdi
 import { taskIntersectsDay, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
 import { ProjectTimeline } from "./ProjectTimeline";
 import { cn } from "@/lib/utils";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import {
+  PixelSparkle,
+  PixelSword,
+  PixelScroll,
+} from "@/components/pixel/PixelIcons";
 
 // ============================================================
 // Constants & Pure Selectors
@@ -149,6 +155,7 @@ function isReviewWritten(reviews: DailyReviewItem[], dateStr: string): boolean {
 // Main Component: TodayPanel (Consolidated 1:1 Replica)
 // ============================================================
 export const TodayPanel: React.FC = () => {
+  const { isPixelTheme } = useAppThemeStyle();
   const navigate = useNavigate();
 
   const { data: timeData } = useTimeManagementData();
@@ -177,8 +184,6 @@ export const TodayPanel: React.FC = () => {
     }));
   };
 
-
-
   // The editor is an event-only window. Warm it after the first paint so the
   // first task click does not pay the cost of creating a new WebView.
   useEffect(() => {
@@ -194,7 +199,6 @@ export const TodayPanel: React.FC = () => {
 
   const now = Date.now();
   const today = todayYMD();
-
 
   // Filter tasks due today sorted by quadrant (Q2 > Q1 > Q3 > Q4) then deadline
   const dueTasks = useMemo(
@@ -277,6 +281,7 @@ export const TodayPanel: React.FC = () => {
         onClick={(e) => openTaskQuickEdit(task, e.currentTarget)}
         className={cn(
           "flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer group select-none",
+          isPixelTheme && "hover:bg-amber-100/50 dark:hover:bg-amber-950/40",
           task.completed && "opacity-75 bg-muted/15"
         )}
       >
@@ -291,9 +296,14 @@ export const TodayPanel: React.FC = () => {
               handleToggleTask(task);
             }}
             className={cn(
-              "size-5 rounded-full flex items-center justify-center shrink-0 transition-all cursor-pointer",
+              "size-5 flex items-center justify-center shrink-0 transition-all cursor-pointer",
+              isPixelTheme ? "rounded-xs" : "rounded-full",
               task.completed
-                ? "bg-emerald-600 dark:bg-emerald-500 text-white shadow-2xs"
+                ? isPixelTheme
+                  ? "bg-emerald-600 text-white border border-emerald-800 shadow-[1px_1px_0px_#064e3b]"
+                  : "bg-emerald-600 dark:bg-emerald-500 text-white shadow-2xs"
+                : isPixelTheme
+                ? "border-2 border-amber-900/60 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/60 hover:border-emerald-500"
                 : "border-2 border-slate-300 dark:border-slate-600 hover:border-emerald-500 bg-transparent"
             )}
           >
@@ -303,6 +313,7 @@ export const TodayPanel: React.FC = () => {
           <span
             className={cn(
               "text-sm font-medium text-foreground truncate transition-colors",
+              isPixelTheme && "font-mono",
               task.completed && "line-through text-muted-foreground"
             )}
           >
@@ -316,6 +327,7 @@ export const TodayPanel: React.FC = () => {
             <span
               className={cn(
                 "text-xs tabular-nums",
+                isPixelTheme && "font-mono",
                 due.overdue ? "text-red-500 font-semibold" : "text-muted-foreground"
               )}
             >
@@ -331,6 +343,22 @@ export const TodayPanel: React.FC = () => {
     );
   };
 
+  const getQuadrantTitle = (q: QuadrantConfig) => {
+    if (!isPixelTheme) return q.title;
+    switch (q.type) {
+      case "Q1":
+        return "🔥 紧急讨伐 (重要且紧急)";
+      case "Q2":
+        return "🌿 核心修炼 (重要不紧急)";
+      case "Q3":
+        return "⚡ 突发委托 (紧急不重要)";
+      case "Q4":
+        return "💧 支线见闻 (不重要不紧急)";
+      default:
+        return q.title;
+    }
+  };
+
   const renderQuadrantSection = (q: QuadrantConfig) => {
     const quadrantTasks = tasksByQuadrant[q.type];
     if (quadrantTasks.length === 0) return null;
@@ -340,19 +368,30 @@ export const TodayPanel: React.FC = () => {
     return (
       <div
         key={q.type}
-        className="bg-card border border-border rounded-t-2xl rounded-b-none shadow-xs overflow-hidden"
+        className={cn(
+          "bg-card overflow-hidden",
+          isPixelTheme
+            ? "border-2 border-border/90 rounded-lg shadow-[2px_2px_0px_rgba(0,0,0,0.08)]"
+            : "border border-border rounded-t-2xl rounded-b-none shadow-xs"
+        )}
       >
         {/* Quadrant Card Header */}
         <div
           onClick={() => toggleQuadrantCollapse(q.type)}
-          className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-muted/30 transition-colors select-none"
+          className={cn(
+            "flex items-center justify-between px-4 py-3 cursor-pointer transition-colors select-none",
+            isPixelTheme ? "hover:bg-amber-100/60 dark:hover:bg-amber-950/40" : "hover:bg-muted/30"
+          )}
         >
           <div className="flex items-center gap-2.5">
-            <span className={cn("size-2.5 rounded-full shrink-0", q.dotColor)} />
-            <span className="text-sm font-bold text-foreground">{q.title}</span>
+            <span className={cn(isPixelTheme ? "size-2.5 rounded-xs" : "size-2.5 rounded-full shrink-0", q.dotColor)} />
+            <span className={cn("text-sm font-bold text-foreground", isPixelTheme && "font-mono")}>
+              {getQuadrantTitle(q)}
+            </span>
             <span
               className={cn(
-                "px-2 py-0.5 rounded-full text-xs font-semibold tabular-nums border",
+                "px-2 py-0.5 text-xs font-semibold tabular-nums border",
+                isPixelTheme ? "rounded-xs font-mono" : "rounded-full",
                 q.badgeBg
               )}
             >
@@ -383,12 +422,21 @@ export const TodayPanel: React.FC = () => {
     <div className="flex flex-col h-full w-full max-w-[1080px] mx-auto px-6 py-6 md:px-9 overflow-y-auto select-none space-y-6">
       {/* 主体: 主列表 + 右侧轻栏 */}
       {remaining === 0 && dueTasks.length === 0 && todayHabits.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-3.5 text-center text-muted-foreground py-6 rounded-t-2xl rounded-b-none bg-card border border-border/70">
-          <div className="text-4xl leading-none">🍃</div>
-          <h2 className="text-base font-bold text-foreground">今日已清空</h2>
+        <div
+          className={cn(
+            "flex flex-col items-center justify-center gap-3.5 text-center text-muted-foreground py-6 bg-card",
+            isPixelTheme
+              ? "border-2 border-border/90 rounded-xl shadow-[3px_3px_0px_rgba(0,0,0,0.1)] font-mono"
+              : "rounded-t-2xl rounded-b-none border border-border/70"
+          )}
+        >
+          <div className="text-4xl leading-none">{isPixelTheme ? "🏆" : "🍃"}</div>
+          <h2 className="text-base font-bold text-foreground">
+            {isPixelTheme ? "⚔️ 今日委托已全数通关！" : "今日已清空"}
+          </h2>
           <p className="text-xs text-muted-foreground max-w-sm">
             {dueTasks.length} 项任务 · {checkedHabits.length} 次打卡 · {reviewWritten ? "1 篇复盘" : "复盘"}
-            ，都完成了。剩下的时间是你自己的。
+            ，经验值与金币已结算。
           </p>
         </div>
       ) : (
@@ -396,13 +444,23 @@ export const TodayPanel: React.FC = () => {
           {/* 左栏: 任务主列表 (按象限分组) */}
           <div className="min-w-0 pr-1 space-y-3.5">
             <div className="flex items-center gap-2 text-xs font-bold text-foreground mb-1">
-              <span className="size-2 rounded-2xs bg-blue-500 shrink-0" />
-              今日到期 <span className="font-semibold text-muted-foreground tabular-nums">{dueTasks.length} 项</span>
+              {isPixelTheme ? <PixelSparkle size={14} /> : <span className="size-2 rounded-2xs bg-blue-500 shrink-0" />}
+              <span className={isPixelTheme ? "font-mono font-bold" : ""}>
+                {isPixelTheme ? "今日冒险委托" : "今日到期"}
+              </span>
+              <span className="font-semibold text-muted-foreground tabular-nums">{dueTasks.length} 项</span>
             </div>
 
             {dueTasks.length === 0 ? (
-              <div className="py-8 text-center text-xs text-muted-foreground bg-card/40 rounded-t-2xl rounded-b-none border border-border/60">
-                今天没有到期任务
+              <div
+                className={cn(
+                  "py-8 text-center text-xs text-muted-foreground bg-card/40 border",
+                  isPixelTheme
+                    ? "border-2 border-border/80 rounded-lg font-mono shadow-[2px_2px_0px_rgba(0,0,0,0.06)]"
+                    : "rounded-t-2xl rounded-b-none border-border/60"
+                )}
+              >
+                {isPixelTheme ? "今日暂无委托，休息一下吧" : "今天没有到期任务"}
               </div>
             ) : (
               <div className="flex flex-col gap-3.5">
@@ -414,10 +472,20 @@ export const TodayPanel: React.FC = () => {
           {/* 右侧轻栏: 习惯 + 复盘 */}
           <div className="flex flex-col gap-4">
             {/* 习惯打卡卡片 */}
-            <div className="bg-card border border-border rounded-xl p-4 shadow-xs">
+            <div
+              className={cn(
+                "bg-card p-4 shadow-xs",
+                isPixelTheme
+                  ? "border-2 border-border/90 rounded-xl shadow-[2px_2px_0px_rgba(0,0,0,0.08)] font-mono"
+                  : "border border-border rounded-xl"
+              )}
+            >
               <div className="flex items-center gap-2 text-xs font-bold text-foreground mb-2.5">
-                <span className="size-2 rounded-2xs bg-emerald-500 shrink-0" />
-                习惯打卡 <span className="font-semibold text-muted-foreground tabular-nums">{checkedHabits.length} / {todayHabits.length}</span>
+                {isPixelTheme ? <PixelSword size={14} /> : <span className="size-2 rounded-2xs bg-emerald-500 shrink-0" />}
+                <span>{isPixelTheme ? "每日修行" : "习惯打卡"}</span>
+                <span className="font-semibold text-muted-foreground tabular-nums">
+                  {checkedHabits.length} / {todayHabits.length}
+                </span>
               </div>
 
               {todayHabits.length === 0 ? (
@@ -433,7 +501,10 @@ export const TodayPanel: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => toggleCheckIn(habit.id, today, true)}
-                        className="px-2.5 py-1 rounded-full text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-500/30 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 transition-colors cursor-pointer shrink-0"
+                        className={cn(
+                          "px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950/60 border border-emerald-600/40 hover:bg-emerald-200 transition-colors cursor-pointer shrink-0",
+                          isPixelTheme ? "rounded-xs border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b]" : "rounded-full"
+                        )}
                       >
                         打卡
                       </button>
@@ -446,7 +517,12 @@ export const TodayPanel: React.FC = () => {
                       <span className="text-[11px] text-muted-foreground tabular-nums shrink-0">
                         连续 {getHabitStreak(checkIns, habit.id)} 天
                       </span>
-                      <span className="size-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-xs font-bold shrink-0">
+                      <span
+                        className={cn(
+                          "size-5 bg-emerald-500 text-white flex items-center justify-center text-xs font-bold shrink-0",
+                          isPixelTheme ? "rounded-xs border border-emerald-700" : "rounded-full"
+                        )}
+                      >
                         ✓
                       </span>
                     </div>
@@ -456,36 +532,50 @@ export const TodayPanel: React.FC = () => {
             </div>
 
             {/* 每日复盘卡片 */}
-            <div className={`bg-card border border-border border-l-3 border-l-violet-500 rounded-xl p-4 shadow-xs`}>
-              <div className="flex items-center gap-2 text-xs font-bold text-foreground mb-1.5">
-                <span className="size-2 rounded-2xs bg-violet-500 shrink-0" />
-                每日复盘
+            <div
+              className={cn(
+                "bg-card p-4 shadow-xs",
+                isPixelTheme
+                  ? "border-2 border-border/90 rounded-xl shadow-[2px_2px_0px_rgba(0,0,0,0.08)] font-mono"
+                  : "border border-border rounded-xl"
+              )}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                  {isPixelTheme ? <PixelScroll size={14} /> : <span className="size-2 rounded-2xs bg-amber-500 shrink-0" />}
+                  <span>{isPixelTheme ? "冒险日志" : "每日复盘"}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigate({ to: "/daily-review" })}
+                  className={cn(
+                    "text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 cursor-pointer font-medium",
+                    isPixelTheme && "font-mono font-bold"
+                  )}
+                >
+                  <span>前往</span>
+                  <ChevronRight size={13} />
+                </button>
               </div>
 
-              {reviewWritten ? (
-                <p className="text-xs text-muted-foreground leading-relaxed mt-1.5">今天的复盘已经写好了 ✓</p>
-              ) : (
-                <>
-                  <p className="text-xs text-muted-foreground leading-relaxed my-2">
-                    今天的复盘还没写。花 5 分钟回顾一下，明天会更清楚该做什么。
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => navigate({ to: "/daily-review" })}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-violet-600 dark:text-violet-400 bg-violet-50 dark:bg-violet-950/40 border border-violet-500/30 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/60 transition-colors cursor-pointer"
-                  >
-                    去写复盘 <ChevronRight size={13} />
-                  </button>
-                </>
-              )}
+              <div className="text-xs text-muted-foreground">
+                {reviewWritten ? (
+                  <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
+                    <span>✨ 今日已完成复盘，复利积累中</span>
+                  </div>
+                ) : (
+                  <span>今日尚未记录复盘心得，总结今日让成长加速</span>
+                )}
+              </div>
             </div>
+
+            {/* 项目时间轴卡片 */}
+            <ProjectTimeline />
           </div>
         </div>
       )}
-
-      {/* 项目时间线 */}
-      <ProjectTimeline />
     </div>
   );
 };
+
 

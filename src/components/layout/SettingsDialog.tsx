@@ -1,9 +1,28 @@
 import { useEffect, useId, useState } from "react";
-import { FileText, Loader2, LogOut, Mail, Settings2, SlidersHorizontal, Timer, UserRound, X } from "lucide-react";
+import {
+  FileText,
+  Loader2,
+  LogOut,
+  Mail,
+  Palette,
+  Settings2,
+  SlidersHorizontal,
+  Sparkles,
+  Timer,
+  UserRound,
+  X,
+  Check,
+} from "lucide-react";
 import { useAuth } from "@/lib/auth";
-import { setOpenFocusAssistantOnStart as persistOpenFocusAssistantOnStart, shouldOpenFocusAssistantOnStart } from "@/lib/preferences";
+import {
+  setOpenFocusAssistantOnStart as persistOpenFocusAssistantOnStart,
+  shouldOpenFocusAssistantOnStart,
+  AppThemeStyle,
+} from "@/lib/preferences";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { supabase } from "@/lib/supabase";
 import { ProjectTemplateManager } from "@/components/projects/ProjectTemplateManager";
+import { PixelFlame, PixelSword } from "@/components/pixel/PixelIcons";
 
 type Tab = "account" | "general" | "templates";
 
@@ -17,6 +36,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const { session } = useAuth();
   const [tab, setTab] = useState<Tab>("general");
   const [openFocusAssistantOnStart, setOpenFocusAssistantOnStart] = useState(shouldOpenFocusAssistantOnStart);
+  const { themeStyle, setThemeStyle } = useAppThemeStyle();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
   const titleId = useId();
@@ -41,6 +61,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       persistOpenFocusAssistantOnStart(next);
       return next;
     });
+  };
+
+  const handleSelectThemeStyle = (style: AppThemeStyle) => {
+    setThemeStyle(style);
   };
 
   const signOut = async () => {
@@ -97,9 +121,112 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 </div>
               </div>
             ) : tab === "general" ? (
-              <div className="flex items-center justify-between gap-5 border-b border-border pb-5">
-                <div className="flex items-center gap-3"><Timer size={19} className="text-primary" /><div><h3 className="font-medium text-foreground">启动时打开悬浮专注助手</h3><p className="mt-1 text-sm text-muted-foreground">打开应用后自动显示专注助手</p></div></div>
-                <button type="button" role="switch" aria-checked={openFocusAssistantOnStart} onClick={toggleFocusAssistantOnStart} className={`relative h-6 w-11 cursor-pointer rounded-full transition-colors ${openFocusAssistantOnStart ? "bg-primary" : "bg-muted-foreground/30"}`}><span className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${openFocusAssistantOnStart ? "translate-x-5" : "translate-x-0.5"}`} /></button>
+              <div className="space-y-8">
+                {/* 界面视觉风格选择器 */}
+                <div className="space-y-3">
+                  <div className="flex items-center gap-2.5">
+                    <Palette size={18} className="text-primary" />
+                    <div>
+                      <h3 className="font-semibold text-foreground">界面视觉风格</h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">选择你喜爱的设计语言与交互风格</p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 pt-1">
+                    {/* 选项 1: 初始风格 */}
+                    <div
+                      onClick={() => handleSelectThemeStyle("default")}
+                      className={`relative flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
+                        themeStyle === "default"
+                          ? "border-primary bg-primary/5 shadow-xs ring-1 ring-primary"
+                          : "border-border hover:border-muted-foreground/40 bg-card hover:bg-accent/40"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+                            <Sparkles size={18} />
+                          </div>
+                          <span className="font-bold text-sm text-foreground">初始风格</span>
+                        </div>
+                        {themeStyle === "default" && (
+                          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary text-primary-foreground text-xs">
+                            <Check size={13} className="stroke-[3]" />
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                        现代简约矢量设计、柔和阴影与清爽的生产力办公界面。
+                      </p>
+                      <div className="mt-3 flex items-center gap-1.5 text-[11px] text-muted-foreground/80">
+                        <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-muted-foreground">现代排版</span>
+                        <span className="inline-block px-1.5 py-0.5 rounded bg-muted text-muted-foreground">简约清新</span>
+                      </div>
+                    </div>
+
+                    {/* 选项 2: 复古像素风 */}
+                    <div
+                      onClick={() => handleSelectThemeStyle("retro-pixel")}
+                      className={`relative flex flex-col p-4 rounded-xl border-2 cursor-pointer transition-all duration-200 ${
+                        themeStyle === "retro-pixel"
+                          ? "border-amber-700/80 bg-amber-100/50 dark:bg-amber-950/40 shadow-[2px_2px_0px_rgba(120,53,15,0.4)] ring-1 ring-amber-600"
+                          : "border-border hover:border-muted-foreground/40 bg-card hover:bg-accent/40"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-700 dark:text-amber-300 flex items-center justify-center border border-amber-900/30">
+                            <PixelFlame size={18} />
+                          </div>
+                          <span className="font-bold text-sm text-foreground font-mono">复古像素风</span>
+                        </div>
+                        {themeStyle === "retro-pixel" && (
+                          <span className="flex items-center justify-center w-5 h-5 rounded-md bg-amber-600 text-white text-xs border border-amber-800 shadow-[1px_1px_0px_#000]">
+                            <Check size={13} className="stroke-[3]" />
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground leading-relaxed mt-1">
+                        8-bit 点阵像素、RPG 冒险成就系统、草地打卡与 +10 EXP 跳字激励。
+                      </p>
+                      <div className="mt-3 flex items-center gap-1.5 text-[11px]">
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-200/70 dark:bg-amber-900/50 text-amber-900 dark:text-amber-200 font-mono font-bold">
+                          <PixelSword size={11} /> 8-bit RPG
+                        </span>
+                        <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-200/70 dark:bg-emerald-900/50 text-emerald-900 dark:text-emerald-200 font-mono font-bold">
+                          草地热力图
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="border-t border-border pt-6">
+                  <div className="flex items-center justify-between gap-5">
+                    <div className="flex items-center gap-3">
+                      <Timer size={19} className="text-primary" />
+                      <div>
+                        <h3 className="font-medium text-foreground">启动时打开悬浮专注助手</h3>
+                        <p className="mt-1 text-sm text-muted-foreground">打开应用后自动显示专注助手</p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={openFocusAssistantOnStart}
+                      onClick={toggleFocusAssistantOnStart}
+                      className={`relative h-6 w-11 cursor-pointer rounded-full transition-colors ${
+                        openFocusAssistantOnStart ? "bg-primary" : "bg-muted-foreground/30"
+                      }`}
+                    >
+                      <span
+                        className={`absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform ${
+                          openFocusAssistantOnStart ? "translate-x-5" : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
               </div>
             ) : <ProjectTemplateManager />}
           </div>
@@ -108,3 +235,4 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+

@@ -9,7 +9,7 @@ import { queryClient } from "@/lib/queryClient";
 import { showFocusAssistant } from "@/services/focusAssistantWindow";
 import { discardQuickEditDraft } from "@/services/quickEditWindow";
 import { focusAssistantApi } from "@/services/focusAssistantService";
-import { shouldOpenFocusAssistantOnStart } from "@/lib/preferences";
+import { shouldOpenFocusAssistantOnStart, applyAppThemeStyle } from "@/lib/preferences";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { setStorageUserId } from "@/lib/userStorage";
 import { flushOfflineQueue } from "@/lib/offlineSyncQueue";
@@ -20,6 +20,9 @@ function App() {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
+    // 0. 初始化全局视觉风格
+    applyAppThemeStyle();
+
     // 1. 获取当前会话（首次加载）
     supabase.auth.getSession().then(({ data }) => {
       setStorageUserId(data.session?.user.id ?? null);

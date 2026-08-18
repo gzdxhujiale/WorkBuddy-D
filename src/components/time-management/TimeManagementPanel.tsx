@@ -31,12 +31,14 @@ import {
   DropdownMenuContent,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 
 export type ViewType = "quadrant" | "day" | "week" | "month";
 export type StatusFilterType = "uncompleted" | "all" | "completed";
 type ProjectTaskFilter = "non-project" | "all" | "project";
 
 export const TimeManagementPanel: React.FC = () => {
+  const { isPixelTheme } = useAppThemeStyle();
   const [activeView, setActiveView] = useState<ViewType>("quadrant");
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   
@@ -99,149 +101,108 @@ export const TimeManagementPanel: React.FC = () => {
     });
   };
 
-  const handlePrevDate = () => {
-    setCurrentDate((prev) => {
-      const d = new Date(prev);
-      if (activeView === "day") {
-        d.setDate(d.getDate() - 1);
-      } else if (activeView === "week") {
-        d.setDate(d.getDate() - 7);
-      } else if (activeView === "month") {
-        d.setMonth(d.getMonth() - 1);
-      }
-      return d;
+  const filteredTasks = useMemo(() => {
+    return tasks.filter((task) => {
+      if (statusFilter === "uncompleted" && task.completed) return false;
+      if (statusFilter === "completed" && !task.completed) return false;
+      if (quadrantFilter !== "ALL" && task.quadrant !== quadrantFilter) return false;
+      if (projectTaskFilter === "non-project" && task.projectId) return false;
+      if (projectTaskFilter === "project" && !task.projectId) return false;
+      return true;
     });
+  }, [tasks, statusFilter, quadrantFilter, projectTaskFilter]);
+
+  const periodTasks = useMemo(() => {
+    if (activeView === "day") {
+      return sortTasksByQuadrantAndDeadline(
+        filteredTasks.filter((t) => taskIntersectsDay(t, currentDate))
+      );
+    }
+    if (activeView === "week") {
+      const d = new Date(currentDate);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+      const mon = new Date(d.setDate(diff));
+      mon.setHours(0, 0, 0, 0);
+      const sun = new Date(mon);
+      sun.setDate(mon.getDate() + 6);
+      sun.setHours(23, 59, 59, 999);
+      return sortTasksByQuadrantAndDeadline(
+        filteredTasks.filter((t) => taskIntersectsInterval(t, mon.getTime(), sun.getTime()))
+      );
+    }
+    if (activeView === "month") {
+      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
+      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0, 23, 59, 59, 999);
+      return sortTasksByQuadrantAndDeadline(
+        filteredTasks.filter((t) => taskIntersectsInterval(t, startOfMonth.getTime(), endOfMonth.getTime()))
+      );
+    }
+    return [];
+  }, [activeView, currentDate, filteredTasks]);
+
+  const currentDateStr = useMemo(() => {
+    const y = currentDate.getFullYear();
+    const m = String(currentDate.getMonth() + 1).padStart(2, "0");
+    const d = String(currentDate.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }, [currentDate]);
+
+  const handlePrevDate = () => {
+    const d = new Date(currentDate);
+    if (activeView === "day") d.setDate(d.getDate() - 1);
+    else if (activeView === "week") d.setDate(d.getDate() - 7);
+    else if (activeView === "month") d.setMonth(d.getMonth() - 1);
+    setCurrentDate(d);
   };
 
   const handleNextDate = () => {
-    setCurrentDate((prev) => {
-      const d = new Date(prev);
-      if (activeView === "day") {
-        d.setDate(d.getDate() + 1);
-      } else if (activeView === "week") {
-        d.setDate(d.getDate() + 7);
-      } else if (activeView === "month") {
-        d.setMonth(d.getMonth() + 1);
-      }
-      return d;
-    });
+    const d = new Date(currentDate);
+    if (activeView === "day") d.setDate(d.getDate() + 1);
+    else if (activeView === "week") d.setDate(d.getDate() + 7);
+    else if (activeView === "month") d.setMonth(d.getMonth() + 1);
+    setCurrentDate(d);
   };
 
   const handleGoToday = () => {
     setCurrentDate(new Date());
   };
 
-  const filteredTasks = useMemo(() => {
-    return tasks.filter((t) => {
-      if (projectTaskFilter === "non-project" && t.projectId) return false;
-      if (projectTaskFilter === "project" && !t.projectId) return false;
+  const getLeftHeaderTitle = () => {
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth() + 1;
+    const date = currentDate.getDate();
+    const day = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"][currentDate.getDay()];
 
-      if (statusFilter === "uncompleted" && t.completed) return false;
-      if (statusFilter === "completed" && !t.completed) return false;
-
-      if (quadrantFilter !== "ALL" && t.quadrant !== quadrantFilter) {
-        return false;
-      }
-
-      return true;
-    });
-  }, [tasks, projectTaskFilter, statusFilter, quadrantFilter]);
-
-  const formatDateYMD = (d: Date) => {
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  };
-
-  const currentDateStr = formatDateYMD(currentDate);
-
-  const getWeekRange = (d: Date) => {
-    const dayOfWeek = (d.getDay() + 6) % 7;
-    const monday = new Date(d);
-    monday.setHours(0, 0, 0, 0);
-    monday.setDate(d.getDate() - dayOfWeek);
-
-    const sunday = new Date(monday);
-    sunday.setDate(monday.getDate() + 6);
-    sunday.setHours(23, 59, 59, 999);
-
-    return { monday, sunday };
-  };
-
-  // Filter tasks based on activeView for right side panel & sub-views
-  // Day View = 当日任务, Week View = 当周任务, Month View = 当月任务
-  const periodTasks = useMemo(() => {
-    const list = filteredTasks.filter((t) => {
-      if (activeView === "day") {
-        return taskIntersectsDay(t, currentDate);
-      }
-
-      if (activeView === "week") {
-        const { monday, sunday } = getWeekRange(currentDate);
-        return taskIntersectsInterval(t, monday.getTime(), sunday.getTime() + 1);
-      }
-
-      if (activeView === "month") {
-        const monthStart = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1).getTime();
-        const monthEnd = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1).getTime();
-        return taskIntersectsInterval(t, monthStart, monthEnd);
-      }
-
-      return true;
-    });
-
-    if (activeView === "day") {
-      return sortTasksByQuadrantAndDeadline(list);
+    let titleText = "";
+    if (activeView === "day") titleText = `${year}年${month}月${date}日 ${day}`;
+    else if (activeView === "week") {
+      const d = new Date(currentDate);
+      const curDay = d.getDay();
+      const diff = d.getDate() - curDay + (curDay === 0 ? -6 : 1);
+      const mon = new Date(d.setDate(diff));
+      const sun = new Date(mon);
+      sun.setDate(mon.getDate() + 6);
+      titleText = `${mon.getMonth() + 1}月${mon.getDate()}日 - ${sun.getMonth() + 1}月${sun.getDate()}日`;
+    } else if (activeView === "month") {
+      titleText = `${year}年 ${month}月`;
     }
-    return list;
-  }, [filteredTasks, activeView, currentDate]);
+
+    return (
+      <div className="flex items-center gap-2">
+        <span>{titleText}</span>
+        {activeView === "day" && (
+          <span className="text-muted-foreground font-medium text-xs">· 日任务时间轴</span>
+        )}
+      </div>
+    );
+  };
 
   const getSidebarTitle = () => {
-    if (activeView === "day") {
-      return `${currentDate.getMonth() + 1}月${currentDate.getDate()}日 · 当日任务列表`;
-    }
-    if (activeView === "week") {
-      const { monday, sunday } = getWeekRange(currentDate);
-      return `${monday.getMonth() + 1}月${monday.getDate()}日 - ${sunday.getMonth() + 1}月${sunday.getDate()}日 · 当周任务列表`;
-    }
-    if (activeView === "month") {
-      return `${currentDate.getFullYear()}年 ${currentDate.getMonth() + 1}月 · 当月任务列表`;
-    }
-    return "任务列表";
-  };
-
-  const getLeftHeaderTitle = () => {
-    const monthLabel = `${currentDate.getFullYear()}年 ${currentDate.getMonth() + 1}月`;
-    if (activeView === "month") {
-      return (
-        <>
-          {monthLabel}
-          <span className="text-muted-foreground font-medium ml-2 text-xs">
-            · 月度任务截止表
-          </span>
-        </>
-      );
-    }
-    if (activeView === "week") {
-      const { monday, sunday } = getWeekRange(currentDate);
-      return (
-        <>
-          {monday.getMonth() + 1}月{monday.getDate()}日 - {sunday.getMonth() + 1}月{sunday.getDate()}日
-          <span className="text-muted-foreground font-medium ml-2 text-xs">
-            · 周度任务视图
-          </span>
-        </>
-      );
-    }
-    return (
-      <>
-        {currentDate.getFullYear()}年{currentDate.getMonth() + 1}月{currentDate.getDate()}日
-        <span className="text-muted-foreground font-medium ml-2 text-xs">
-          · 日任务时间轴
-        </span>
-      </>
-    );
+    if (activeView === "day") return "当日任务概览";
+    if (activeView === "week") return "本周任务概览";
+    if (activeView === "month") return "本月任务概览";
+    return "任务概览";
   };
 
   return (
@@ -249,24 +210,32 @@ export const TimeManagementPanel: React.FC = () => {
       {/* Panel Header */}
       <header className="flex h-12 items-center justify-between gap-3 border-b border-border bg-card px-6 shrink-0 select-none">
         {/* View Switcher Tabs */}
-        <div className="flex items-center bg-muted p-0.5 rounded-lg border border-border">
+        <div className={`flex items-center bg-muted p-0.5 ${isPixelTheme ? "rounded-xs font-mono" : "rounded-lg"} border border-border`}>
           <button
             onClick={() => setActiveView("quadrant")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs transition-all cursor-pointer ${
+              isPixelTheme ? "rounded-xs" : "rounded-md"
+            } ${
               activeView === "quadrant"
-                ? "bg-card text-foreground shadow-2xs font-semibold"
-                : "text-muted-foreground hover:text-foreground"
+                ? isPixelTheme
+                  ? "bg-card text-foreground border border-border shadow-[1px_1px_0px_#000] font-bold"
+                  : "bg-card text-foreground shadow-2xs font-semibold"
+                : "text-muted-foreground hover:text-foreground font-medium"
             }`}
           >
             <LayoutGrid size={14} />
-            <span>四象限</span>
+            <span>{isPixelTheme ? "四象限" : "四象限"}</span>
           </button>
           <button
             onClick={() => setActiveView("day")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs transition-all cursor-pointer ${
+              isPixelTheme ? "rounded-xs" : "rounded-md"
+            } ${
               activeView === "day"
-                ? "bg-card text-foreground shadow-2xs font-semibold"
-                : "text-muted-foreground hover:text-foreground"
+                ? isPixelTheme
+                  ? "bg-card text-foreground border border-border shadow-[1px_1px_0px_#000] font-bold"
+                  : "bg-card text-foreground shadow-2xs font-semibold"
+                : "text-muted-foreground hover:text-foreground font-medium"
             }`}
           >
             <Sun size={14} />
@@ -274,10 +243,14 @@ export const TimeManagementPanel: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveView("week")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs transition-all cursor-pointer ${
+              isPixelTheme ? "rounded-xs" : "rounded-md"
+            } ${
               activeView === "week"
-                ? "bg-card text-foreground shadow-2xs font-semibold"
-                : "text-muted-foreground hover:text-foreground"
+                ? isPixelTheme
+                  ? "bg-card text-foreground border border-border shadow-[1px_1px_0px_#000] font-bold"
+                  : "bg-card text-foreground shadow-2xs font-semibold"
+                : "text-muted-foreground hover:text-foreground font-medium"
             }`}
           >
             <CalendarRange size={14} />
@@ -285,10 +258,14 @@ export const TimeManagementPanel: React.FC = () => {
           </button>
           <button
             onClick={() => setActiveView("month")}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs transition-all cursor-pointer ${
+              isPixelTheme ? "rounded-xs" : "rounded-md"
+            } ${
               activeView === "month"
-                ? "bg-card text-foreground shadow-2xs font-semibold"
-                : "text-muted-foreground hover:text-foreground"
+                ? isPixelTheme
+                  ? "bg-card text-foreground border border-border shadow-[1px_1px_0px_#000] font-bold"
+                  : "bg-card text-foreground shadow-2xs font-semibold"
+                : "text-muted-foreground hover:text-foreground font-medium"
             }`}
           >
             <CalendarIcon size={14} />
@@ -297,7 +274,18 @@ export const TimeManagementPanel: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <button onClick={() => void toggleFocusAssistant()} className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300 cursor-pointer" title="显示或隐藏悬浮专注助手"><Timer size={14} />悬浮专注</button>
+          <button
+            onClick={() => void toggleFocusAssistant()}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+              isPixelTheme
+                ? "rounded-xs border-2 border-rose-800 bg-rose-100 dark:bg-rose-950/70 text-rose-800 dark:text-rose-200 shadow-[1px_1px_0px_#000] font-mono"
+                : "rounded-lg border border-rose-200 bg-rose-50 text-rose-600 hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300"
+            }`}
+            title="显示或隐藏悬浮专注助手"
+          >
+            <Timer size={14} />
+            <span>悬浮专注</span>
+          </button>
           <DropdownMenu>
             <DropdownMenuTrigger
               className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
-import { ChevronLeft, ChevronRight, Cloud, Zap, Award, BarChart3 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Cloud } from "lucide-react";
 import dayjs from "dayjs";
 import { useDailyReviewData, useReviewActions, isReviewEmpty } from "@/hooks/useDailyReview";
 import { DailyReviewItem, CompoundStats as CompoundStatsType } from "@/types/dailyReview";
@@ -215,8 +215,20 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
 
 ReviewEditor.displayName = "ReviewEditor";
 
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { Zap, Award, BarChart3 } from "lucide-react";
+import {
+  PixelFlame,
+  PixelTrophy,
+  PixelSword,
+  PixelScroll,
+  PixelSparkle,
+  PixelHourglass,
+} from "@/components/pixel/PixelIcons";
+import { PixelAchievementHall } from "@/components/pixel/PixelBadge";
+
 // ==========================================
-// 2. CompoundStats Component (Memoized)
+// 2. CompoundStats Component (Adaptive: Modern vs 8-bit RPG)
 // ==========================================
 interface CompoundStatsProps {
   stats: CompoundStatsType;
@@ -226,6 +238,7 @@ interface CompoundStatsProps {
 }
 
 const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSelectDate, selectedDate }) => {
+  const { isPixelTheme } = useAppThemeStyle();
   const currentMonth = useMemo(() => dayjs(selectedDate), [selectedDate]);
   const startOfMonth = currentMonth.startOf("month");
   const daysInMonth = currentMonth.daysInMonth();
@@ -246,52 +259,95 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
   }, [startDayOfWeek, daysInMonth, currentMonth]);
 
   return (
-    <section className="flex flex-col h-full p-4 gap-4 overflow-y-auto">
+    <section className="flex flex-col h-full p-4 gap-4 overflow-y-auto no-scrollbar">
       {/* Stats Section */}
       <section className="shrink-0">
-        <h2 className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase mb-3">
-          复利成长
-        </h2>
-        <div className="grid grid-cols-2 gap-2.5">
-          <article className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center shadow-2xs dark:bg-amber-950/30">
-            <div className="text-xl font-bold text-amber-600 dark:text-amber-400 tabular-nums flex items-center justify-center gap-1">
-              <Zap size={16} className="text-amber-500 shrink-0" />
-              {stats.currentStreak}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-1">连续天数</div>
-          </article>
-
-          <article className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center shadow-2xs dark:bg-amber-950/30">
-            <div className="text-xl font-bold bg-gradient-to-r from-amber-500 to-amber-600 bg-clip-text text-transparent tabular-nums">
-              {stats.compoundValue.toFixed(2)}x
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-1">复利系数</div>
-          </article>
-
-          <article className="p-3 rounded-lg bg-card border border-border text-center shadow-2xs">
-            <div className="text-xl font-bold text-foreground tabular-nums flex items-center justify-center gap-1">
-              <BarChart3 size={16} className="text-muted-foreground opacity-60 shrink-0" />
-              {stats.totalReviews}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-1">总复盘数</div>
-          </article>
-
-          <article className="p-3 rounded-lg bg-card border border-border text-center shadow-2xs">
-            <div className="text-xl font-bold text-foreground tabular-nums flex items-center justify-center gap-1">
-              <Award size={16} className="text-muted-foreground opacity-60 shrink-0" />
-              {stats.longestStreak}
-            </div>
-            <div className="text-[11px] text-muted-foreground mt-1">最长连续</div>
-          </article>
+        <div className="flex items-center gap-1.5 mb-2.5">
+          {isPixelTheme && <PixelSparkle size={14} />}
+          <h2 className={`text-xs font-semibold tracking-wider text-muted-foreground uppercase ${isPixelTheme ? "font-mono font-bold text-foreground" : ""}`}>
+            {isPixelTheme ? "复利冒险家属性" : "复利成长"}
+          </h2>
         </div>
+
+        {isPixelTheme ? (
+          /* 8-bit RPG Stats Grid */
+          <div className="grid grid-cols-2 gap-2.5">
+            <article className="p-3 rounded-xl bg-orange-50/90 dark:bg-orange-950/30 border-2 border-orange-900/40 dark:border-orange-700/50 shadow-[2px_2px_0px_rgba(194,65,12,0.3)] text-center transition-transform hover:-translate-y-0.5">
+              <div className="text-lg font-black text-orange-700 dark:text-orange-300 tabular-nums font-mono flex items-center justify-center gap-1">
+                <PixelFlame size={16} />
+                {stats.currentStreak}
+              </div>
+              <div className="text-[10px] text-orange-800/80 dark:text-orange-400/80 font-bold mt-0.5">连续复盘/天</div>
+            </article>
+
+            <article className="p-3 rounded-xl bg-amber-50/90 dark:bg-amber-950/30 border-2 border-amber-900/40 dark:border-amber-700/50 shadow-[2px_2px_0px_rgba(180,83,9,0.3)] text-center transition-transform hover:-translate-y-0.5">
+              <div className="text-lg font-black text-amber-700 dark:text-amber-300 tabular-nums font-mono flex items-center justify-center gap-1">
+                <PixelSword size={16} />
+                {stats.compoundValue.toFixed(2)}x
+              </div>
+              <div className="text-[10px] text-amber-800/80 dark:text-amber-400/80 font-bold mt-0.5">复利系数</div>
+            </article>
+
+            <article className="p-3 rounded-xl bg-card border-2 border-border/80 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] text-center transition-transform hover:-translate-y-0.5">
+              <div className="text-lg font-black text-foreground tabular-nums font-mono flex items-center justify-center gap-1">
+                <PixelScroll size={16} />
+                {stats.totalReviews}
+              </div>
+              <div className="text-[10px] text-muted-foreground font-semibold mt-0.5">累计复盘篇数</div>
+            </article>
+
+            <article className="p-3 rounded-xl bg-card border-2 border-border/80 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] text-center transition-transform hover:-translate-y-0.5">
+              <div className="text-lg font-black text-foreground tabular-nums font-mono flex items-center justify-center gap-1">
+                <PixelTrophy size={16} />
+                {stats.longestStreak}
+              </div>
+              <div className="text-[10px] text-muted-foreground font-semibold mt-0.5">最高连击纪录</div>
+            </article>
+          </div>
+        ) : (
+          /* Modern Minimal Stats Grid */
+          <div className="grid grid-cols-2 gap-2.5">
+            <article className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center shadow-2xs dark:bg-amber-950/30">
+              <div className="text-xl font-bold text-amber-600 dark:text-amber-400 tabular-nums flex items-center justify-center gap-1">
+                <Zap size={16} className="text-amber-500 shrink-0" />
+                {stats.currentStreak}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-1">连续天数</div>
+            </article>
+
+            <article className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/20 text-center shadow-2xs dark:bg-amber-950/30">
+              <div className="text-xl font-bold bg-gradient-to-r from-amber-500 to-amber-600 bg-clip-text text-transparent tabular-nums">
+                {stats.compoundValue.toFixed(2)}x
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-1">复利系数</div>
+            </article>
+
+            <article className="p-3 rounded-lg bg-card border border-border text-center shadow-2xs">
+              <div className="text-xl font-bold text-foreground tabular-nums flex items-center justify-center gap-1">
+                <BarChart3 size={16} className="text-muted-foreground opacity-60 shrink-0" />
+                {stats.totalReviews}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-1">总复盘数</div>
+            </article>
+
+            <article className="p-3 rounded-lg bg-card border border-border text-center shadow-2xs">
+              <div className="text-xl font-bold text-foreground tabular-nums flex items-center justify-center gap-1">
+                <Award size={16} className="text-muted-foreground opacity-60 shrink-0" />
+                {stats.longestStreak}
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-1">最长连续</div>
+            </article>
+          </div>
+        )}
       </section>
 
       {/* Calendar Section */}
-      <section className="flex-1 flex flex-col min-h-0">
+      <section className="shrink-0 flex flex-col min-h-0">
         <header className="flex items-center justify-between mb-2">
-          <h2 className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
-            {currentMonth.format("YYYY年 M月")} 打卡记录
-          </h2>
+          <div className="flex items-center gap-1 text-xs font-semibold text-foreground">
+            {isPixelTheme && <PixelHourglass size={14} />}
+            <span>{currentMonth.format("YYYY年 M月")} {isPixelTheme ? "复盘日历" : "打卡记录"}</span>
+          </div>
           <nav className="flex items-center gap-1">
             <button
               type="button"
@@ -332,30 +388,38 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
           </nav>
         </header>
 
-        <div className="bg-card rounded-xl border border-border p-3 shadow-2xs">
+        <div className={`bg-card rounded-xl border p-3 ${isPixelTheme ? "border-2 border-border/80 shadow-[2px_2px_0px_rgba(0,0,0,0.06)]" : "border-border shadow-2xs"}`}>
           <div className="grid grid-cols-7 gap-1 text-center text-xs text-muted-foreground font-medium mb-1">
             {WEEK_DAYS.map((w) => (
-              <div key={w} className="py-1">{w}</div>
+              <div key={w} className="py-0.5">{w}</div>
             ))}
           </div>
           <div className="grid grid-cols-7 gap-1 text-center">
             {days.map((day, idx) => {
-              if (!day) return <div key={`empty-${idx}`} className="h-8" />;
+              if (!day) return <div key={`empty-${idx}`} className={isPixelTheme ? "h-7" : "h-8"} />;
               const dStr = day.format("YYYY-MM-DD");
               const isDisabled = dStr > todayStr;
               const review = reviews.find((r) => r.date === dStr);
 
-              let levelClass = "bg-transparent text-foreground hover:bg-accent";
+              let levelClass = "bg-transparent text-foreground hover:bg-accent border-transparent";
               if (review && review.content.trim().length > 0) {
                 const len = review.content.trim().length;
                 if (len > 200) {
-                  levelClass = "bg-emerald-700 text-white font-bold dark:bg-emerald-600";
+                  levelClass = isPixelTheme
+                    ? "bg-emerald-600 text-white font-bold border-2 border-emerald-800 shadow-[1px_1px_0px_#064e3b]"
+                    : "bg-emerald-700 text-white font-bold dark:bg-emerald-600";
                 } else if (len > 100) {
-                  levelClass = "bg-emerald-500 text-white font-semibold dark:bg-emerald-500";
+                  levelClass = isPixelTheme
+                    ? "bg-emerald-500 text-white font-bold border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b]"
+                    : "bg-emerald-500 text-white font-semibold dark:bg-emerald-500";
                 } else if (len > 30) {
-                  levelClass = "bg-emerald-300 text-emerald-950 font-semibold dark:bg-emerald-700 dark:text-emerald-100";
+                  levelClass = isPixelTheme
+                    ? "bg-emerald-400 text-emerald-950 font-bold border border-emerald-600"
+                    : "bg-emerald-300 text-emerald-950 font-semibold dark:bg-emerald-700 dark:text-emerald-100";
                 } else {
-                  levelClass = "bg-emerald-100 text-emerald-800 font-semibold dark:bg-emerald-950 dark:text-emerald-300";
+                  levelClass = isPixelTheme
+                    ? "bg-emerald-200 text-emerald-900 font-bold border border-emerald-400 dark:bg-emerald-950 dark:text-emerald-300"
+                    : "bg-emerald-100 text-emerald-800 font-semibold dark:bg-emerald-950 dark:text-emerald-300";
                 }
               }
 
@@ -366,12 +430,15 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
                   type="button"
                   disabled={isDisabled}
                   onClick={() => !isDisabled && onSelectDate(dStr)}
-                  className={`h-8 rounded-lg flex items-center justify-center text-xs font-medium transition-all border ${isDisabled
-                    ? "opacity-30 cursor-not-allowed border-transparent bg-muted/30"
-                    : isSelected
-                      ? "ring-2 ring-blue-500 ring-offset-1 border-blue-400 font-bold z-10 cursor-pointer"
+                  className={`${isPixelTheme ? "h-7 rounded-md text-[11px] font-mono font-bold" : "h-8 rounded-lg text-xs font-medium"} flex items-center justify-center transition-all border ${
+                    isDisabled
+                      ? "opacity-30 cursor-not-allowed border-transparent bg-muted/20"
+                      : isSelected
+                      ? isPixelTheme
+                        ? "ring-2 ring-amber-400 ring-offset-1 border-amber-500 font-black z-10 cursor-pointer scale-105"
+                        : "ring-2 ring-blue-500 ring-offset-1 border-blue-400 font-bold z-10 cursor-pointer"
                       : "border-transparent cursor-pointer"
-                    } ${levelClass}`}
+                  } ${levelClass}`}
                 >
                   {day.date()}
                 </button>
@@ -381,16 +448,26 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
         </div>
 
         {/* Legend */}
-        <footer className="flex items-center gap-1 mt-3 text-[10px] text-muted-foreground">
-          <span>少</span>
+        <footer className="flex items-center justify-end gap-1 mt-2 text-[10px] text-muted-foreground">
+          <span>{isPixelTheme ? "短记" : "少"}</span>
           <div className="w-2.5 h-2.5 rounded-2xs bg-card border border-border"></div>
           <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-100 dark:bg-emerald-950"></div>
           <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-300 dark:bg-emerald-700"></div>
           <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-500"></div>
           <div className="w-2.5 h-2.5 rounded-2xs bg-emerald-700 dark:bg-emerald-600"></div>
-          <span>多</span>
+          <span>{isPixelTheme ? "长文" : "多"}</span>
         </footer>
       </section>
+
+      {/* Pixel Achievement Hall (Only in Pixel Theme) */}
+      {isPixelTheme && (
+        <section className="shrink-0 pb-2">
+          <PixelAchievementHall
+            currentStreak={stats.currentStreak}
+            totalDays={stats.totalReviews}
+          />
+        </section>
+      )}
     </section>
   );
 });

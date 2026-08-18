@@ -35,6 +35,8 @@ import {
 } from "@/types/projects";
 import { QUADRANT_DB_MAP } from "@/types/timeManagement";
 import { createProjectId, createProjectStageId, createProjectTemplateId } from "@/lib/entityIds";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { PixelSparkle } from "@/components/pixel/PixelIcons";
 
 const priorityClasses: Record<Priority, string> = {
   low: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700",
@@ -361,6 +363,7 @@ function CreateTemplateDialog({
 }
 
 export function ProjectsPage() {
+  const { isPixelTheme } = useAppThemeStyle();
   const { data, isPending, error } = useProjectsData();
   const { saveProject, saveStage, saveTask, saveTemplate, createFromTemplate, deleteProject, deleteStage, deleteTask } = useProjectActions();
   const { confirm, dialogElement } = useConfirmDialog();
@@ -406,13 +409,16 @@ export function ProjectsPage() {
   return (
     <div className="flex flex-row h-full w-full min-h-0 overflow-hidden bg-background text-foreground">
       {/* Sidebar */}
-      <aside className="flex flex-col h-full w-[300px] shrink-0 border-r border-border bg-muted/20 overflow-hidden">
+      <aside className={`flex flex-col h-full w-[300px] shrink-0 border-r ${isPixelTheme ? "border-2 border-border/80 bg-muted/40 font-mono" : "border-border bg-muted/20"} overflow-hidden`}>
         <div className="flex h-12 shrink-0 items-center justify-between border-b border-border px-4 select-none">
-          <h3 className="text-base font-bold text-foreground">项目中心</h3>
+          <div className="flex items-center gap-2">
+            {isPixelTheme && <PixelSparkle size={15} />}
+            <h3 className="text-base font-bold text-foreground">{isPixelTheme ? "冒险项目公会" : "项目中心"}</h3>
+          </div>
           <Button
             variant="ghost"
             size="icon"
-            className="size-8 rounded-md text-muted-foreground hover:text-foreground"
+            className={isPixelTheme ? "size-8 rounded-xs border border-border bg-muted hover:bg-card text-foreground shadow-[1px_1px_0px_#000] cursor-pointer" : "size-8 rounded-md text-muted-foreground hover:text-foreground cursor-pointer"}
             onClick={() => setCreating(true)}
             aria-label="新建项目"
             title="新建项目"
@@ -430,8 +436,10 @@ export function ProjectsPage() {
                 key={project.id}
                 type="button"
                 onClick={() => setSelectedId(project.id)}
-                className={`w-full rounded-xl border p-3 text-left transition-all ${isCurrent
-                    ? "border-sky-300 bg-sky-50/80 shadow-sm dark:border-sky-800 dark:bg-sky-950/40"
+                className={`w-full ${isPixelTheme ? "rounded-lg font-mono" : "rounded-xl"} border p-3 text-left transition-all cursor-pointer ${isCurrent
+                    ? isPixelTheme
+                      ? "border-2 border-amber-800 dark:border-amber-600 bg-amber-100 dark:bg-amber-950/80 shadow-[2px_2px_0px_#000]"
+                      : "border-sky-300 bg-sky-50/80 shadow-sm dark:border-sky-800 dark:bg-sky-950/40"
                     : "border-transparent hover:bg-accent/60"
                   }`}
               >
