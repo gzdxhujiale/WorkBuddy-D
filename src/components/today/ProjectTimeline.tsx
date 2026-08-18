@@ -9,6 +9,9 @@ import {
 import { useProjectsData } from "@/hooks/useProjects";
 import { Button } from "@/components/ui/button";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
+import { cn } from "@/lib/utils";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { PixelScroll } from "@/components/pixel/PixelIcons";
 import type { ProjectStage, Project } from "@/types/projects";
 
 export type TimelineViewMode = "week" | "biweekly" | "month";
@@ -87,6 +90,7 @@ function formatShortDate(d: Date): string {
 }
 
 export const ProjectTimeline: React.FC = () => {
+  const { isPixelTheme } = useAppThemeStyle();
   const { data: projectsData } = useProjectsData();
   const projects = projectsData?.projects ?? [];
   const stages = projectsData?.stages ?? [];
@@ -242,18 +246,38 @@ export const ProjectTimeline: React.FC = () => {
   }, [currentProject, projectStages, tasks, todayDate]);
 
   return (
-    <section className="w-full rounded-none border border-border/80 bg-card/90 dark:bg-[#12141a] p-5 text-foreground shadow-sm transition-all">
+    <section
+      className={cn(
+        "w-full bg-card p-5 text-foreground shadow-xs transition-all",
+        isPixelTheme
+          ? "border-2 border-border/90 rounded-xl shadow-[3px_3px_0px_rgba(0,0,0,0.1)] font-mono"
+          : "border border-border rounded-xl"
+      )}
+    >
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-border/70">
         {/* Left: Indicator + Title + Date Range Picker */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2">
-            <span className="size-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
-            <h2 className="text-base font-bold tracking-tight text-foreground">项目时间线</h2>
+            {isPixelTheme ? (
+              <PixelScroll size={16} className="text-emerald-600 dark:text-emerald-400" />
+            ) : (
+              <span className="size-2.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+            )}
+            <h2 className="text-base font-bold tracking-tight text-foreground">
+              {isPixelTheme ? "📜 冒险项目时间线" : "项目时间线"}
+            </h2>
           </div>
 
           {/* Date Range & Arrow Controls */}
-          <div className="flex items-center gap-1.5 rounded-none border border-border/80 bg-muted/30 px-2.5 py-1 text-xs">
+          <div
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 text-xs",
+              isPixelTheme
+                ? "rounded-xs border border-border bg-muted/60"
+                : "rounded-lg border border-border/80 bg-muted/30"
+            )}
+          >
             <Calendar className="size-3.5 text-emerald-500" />
             <span className="font-medium tabular-nums text-foreground">
               {formatRangeLabel(viewMode, windowStartDate, windowEndDate)}
@@ -264,7 +288,10 @@ export const ProjectTimeline: React.FC = () => {
                 onClick={handlePrev}
                 aria-label={`向前切换${VIEW_MODE_LABELS[viewMode]}`}
                 title={`向前切换${VIEW_MODE_LABELS[viewMode]}`}
-                className="p-1 rounded-none hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                className={cn(
+                  "p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
+                  isPixelTheme ? "rounded-xs hover:bg-muted" : "rounded-md hover:bg-accent"
+                )}
               >
                 <ChevronLeft className="size-3.5" />
               </button>
@@ -273,7 +300,10 @@ export const ProjectTimeline: React.FC = () => {
                 onClick={handleNext}
                 aria-label={`向后切换${VIEW_MODE_LABELS[viewMode]}`}
                 title={`向后切换${VIEW_MODE_LABELS[viewMode]}`}
-                className="p-1 rounded-none hover:bg-accent text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                className={cn(
+                  "p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
+                  isPixelTheme ? "rounded-xs hover:bg-muted" : "rounded-md hover:bg-accent"
+                )}
               >
                 <ChevronRight className="size-3.5" />
               </button>
@@ -289,7 +319,12 @@ export const ProjectTimeline: React.FC = () => {
                   setProjectDropdownOpen(!projectDropdownOpen);
                   setViewDropdownOpen(false);
                 }}
-                className="flex items-center gap-1.5 rounded-none border border-border/70 bg-muted/20 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-accent transition-colors cursor-pointer"
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
+                  isPixelTheme
+                    ? "rounded-xs border border-border bg-muted/60 hover:bg-muted"
+                    : "rounded-lg border border-border/70 bg-muted/20 hover:bg-accent"
+                )}
               >
                 <FolderKanban className="size-3.5 text-sky-500" />
                 <span className="max-w-[120px] truncate">{currentProject?.name ?? "选择项目"}</span>
@@ -298,7 +333,10 @@ export const ProjectTimeline: React.FC = () => {
 
               {projectDropdownOpen && (
                 <div
-                  className="absolute left-0 top-full mt-1.5 z-50 min-w-44 rounded-none border border-border bg-popover p-1 shadow-lg animate-in fade-in zoom-in-95"
+                  className={cn(
+                    "absolute left-0 top-full mt-1.5 z-50 min-w-44 border border-border bg-popover p-1 shadow-lg animate-in fade-in zoom-in-95",
+                    isPixelTheme ? "rounded-xs shadow-[3px_3px_0px_#000]" : "rounded-xl"
+                  )}
                   onMouseLeave={() => setProjectDropdownOpen(false)}
                 >
                   {projects.map((proj) => (
@@ -309,11 +347,13 @@ export const ProjectTimeline: React.FC = () => {
                         setSelectedProjectId(proj.id);
                         setProjectDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-2.5 py-1.5 text-xs rounded-none transition-colors flex items-center justify-between cursor-pointer ${
+                      className={cn(
+                        "w-full text-left px-2.5 py-1.5 text-xs transition-colors flex items-center justify-between cursor-pointer",
+                        isPixelTheme ? "rounded-xs" : "rounded-lg",
                         currentProject?.id === proj.id
                           ? "bg-accent font-semibold text-foreground"
                           : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
+                      )}
                     >
                       <span className="truncate">{proj.name}</span>
                     </button>
@@ -334,7 +374,12 @@ export const ProjectTimeline: React.FC = () => {
                 setViewDropdownOpen(!viewDropdownOpen);
                 setProjectDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 rounded-none border border-border/80 bg-muted/30 px-3 py-1 text-xs font-medium text-foreground hover:bg-accent transition-colors cursor-pointer"
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1 text-xs font-medium text-foreground transition-colors cursor-pointer",
+                isPixelTheme
+                  ? "rounded-xs border border-border bg-muted/60 hover:bg-muted"
+                  : "rounded-lg border border-border/80 bg-muted/30 hover:bg-accent"
+              )}
             >
               <span>{VIEW_MODE_LABELS[viewMode]}</span>
               <ChevronDown className="size-3 text-muted-foreground" />
@@ -342,7 +387,10 @@ export const ProjectTimeline: React.FC = () => {
 
             {viewDropdownOpen && (
               <div
-                className="absolute right-0 top-full mt-1.5 z-50 min-w-28 rounded-none border border-border bg-popover p-1 shadow-lg animate-in fade-in zoom-in-95"
+                className={cn(
+                  "absolute right-0 top-full mt-1.5 z-50 min-w-28 border border-border bg-popover p-1 shadow-lg animate-in fade-in zoom-in-95",
+                  isPixelTheme ? "rounded-xs shadow-[3px_3px_0px_#000]" : "rounded-xl"
+                )}
                 onMouseLeave={() => setViewDropdownOpen(false)}
               >
                 {(["week", "biweekly", "month"] as TimelineViewMode[]).map((mode) => (
@@ -350,11 +398,13 @@ export const ProjectTimeline: React.FC = () => {
                     key={mode}
                     type="button"
                     onClick={() => handleSelectViewMode(mode)}
-                    className={`w-full text-left px-2.5 py-1.5 text-xs rounded-none transition-colors cursor-pointer ${
+                    className={cn(
+                      "w-full text-left px-2.5 py-1.5 text-xs transition-colors cursor-pointer",
+                      isPixelTheme ? "rounded-xs" : "rounded-lg",
                       viewMode === mode
                         ? "bg-accent font-semibold text-foreground"
                         : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                    }`}
+                    )}
                   >
                     {VIEW_MODE_LABELS[mode]}
                   </button>
@@ -368,7 +418,10 @@ export const ProjectTimeline: React.FC = () => {
             size="sm"
             variant="ghost"
             onClick={handleGoToday}
-            className="h-7 rounded-none bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-3 text-xs font-semibold cursor-pointer"
+            className={cn(
+              "h-7 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 px-3 text-xs font-semibold cursor-pointer",
+              isPixelTheme ? "rounded-xs border-emerald-600/60 shadow-[1px_1px_0px_#000]" : "rounded-lg"
+            )}
           >
             今天
           </Button>

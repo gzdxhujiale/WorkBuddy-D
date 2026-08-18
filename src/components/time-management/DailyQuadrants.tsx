@@ -1,9 +1,28 @@
 import React, { useState, memo } from "react";
-import { Plus, CheckCircle2, Circle, AlignLeft, X, ChevronDown, ChevronRight } from "lucide-react";
+import { Plus, CheckCircle2, Circle, AlignLeft, X, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { Task, QuadrantType } from "@/types/timeManagement";
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { Button } from "@/components/ui/button";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+
+const getPixelGroupTitle = (group: string): string => {
+  switch (group) {
+    case "已过期":
+      return "💀 逾期讨伐";
+    case "一天内":
+      return "⏳ 24H迫近";
+    case "三天内":
+      return "⚔️ 三日攻坚";
+    case "一周内":
+      return "📜 本周排期";
+    case "一周外":
+      return "🗺️ 远期探索";
+    case "无日期":
+      return "📦 待定委托";
+    default:
+      return group;
+  }
+};
 
 interface CollapsibleGroupProps {
   title: string;
@@ -41,19 +60,21 @@ const CollapsibleGroup: React.FC<CollapsibleGroupProps> = memo(
             className={
               isExpired
                 ? "text-red-600 dark:text-red-400 font-semibold"
-                : "text-muted-foreground hover:text-foreground font-medium"
+                : isPixelTheme
+                  ? "text-muted-foreground hover:text-foreground font-semibold font-mono"
+                  : "text-muted-foreground hover:text-foreground font-medium"
             }
           >
-            {title}
+            {isPixelTheme ? getPixelGroupTitle(title) : title}
           </span>
           <span
-            className={`px-1.5 py-0.5 text-[10px] font-semibold ${
-              isPixelTheme ? "rounded-xs font-mono border border-border" : "rounded-full"
-            } ${
-              isExpired
-                ? "bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400"
+            className={`px-1.5 py-0.5 text-[10px] font-semibold ${isPixelTheme ? "rounded-xs font-mono border border-border/80 shadow-[1px_1px_0px_#000]" : "rounded-full"
+              } ${isExpired
+                ? isPixelTheme
+                  ? "bg-red-100 dark:bg-red-950/80 text-red-700 dark:text-red-300 border-red-800"
+                  : "bg-red-100 dark:bg-red-950/60 text-red-600 dark:text-red-400"
                 : "bg-muted text-muted-foreground"
-            }`}
+              }`}
           >
             {count}
           </span>
@@ -94,7 +115,7 @@ const QUADRANT_CONFIG: Record<
 > = {
   Q1: {
     title: "重要且紧急",
-    pixelTitle: "🔥 炎魔领域 (重要且紧急)",
+    pixelTitle: "🔥 紧急讨伐",
     desc: "危机、急迫的问题",
     textClass: "text-red-600 dark:text-red-400",
     badgeBgClass: "bg-red-500",
@@ -104,7 +125,7 @@ const QUADRANT_CONFIG: Record<
   },
   Q2: {
     title: "重要不紧急",
-    pixelTitle: "🌿 智慧圣殿 (重要不紧急)",
+    pixelTitle: "🌿 核心修炼",
     desc: "计划、预防、要事",
     textClass: "text-blue-600 dark:text-blue-400",
     badgeBgClass: "bg-blue-600",
@@ -114,7 +135,7 @@ const QUADRANT_CONFIG: Record<
   },
   Q3: {
     title: "紧急不重要",
-    pixelTitle: "⚡ 迅雷荒原 (紧急不重要)",
+    pixelTitle: "⚡ 突发委托",
     desc: "干扰、某些会议",
     textClass: "text-amber-600 dark:text-amber-400",
     badgeBgClass: "bg-amber-500",
@@ -124,7 +145,7 @@ const QUADRANT_CONFIG: Record<
   },
   Q4: {
     title: "不重要不紧急",
-    pixelTitle: "💧 宁静之海 (不重要不紧急)",
+    pixelTitle: "💧 支线见闻",
     desc: "琐事、消遣",
     textClass: "text-slate-600 dark:text-slate-400",
     badgeBgClass: "bg-slate-500",
@@ -341,33 +362,48 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
             onDragLeave={handleDragLeaveTask}
             onDrop={(e) => handleDropOnTask(e, task)}
             onClick={(e) => onEditTask(task, e.currentTarget)}
-            className={`group flex items-center justify-between px-2.5 py-1.5 rounded-lg border-b border-slate-200/50 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/60 hover:bg-slate-100/80 dark:hover:bg-slate-800/80 transition-all cursor-grab active:cursor-grabbing ${
-              task.completed ? "opacity-60 line-through" : ""
-            } ${
-              isHovered && dropPosition === "top"
-                ? "border-t-2 border-t-blue-600"
+            className={`group flex items-center justify-between transition-all cursor-grab active:cursor-grabbing select-none ${isPixelTheme
+                ? "px-3 py-2 rounded-xs border border-border/80 bg-card hover:bg-amber-100/60 dark:hover:bg-amber-950/40 shadow-[1px_1px_0px_rgba(0,0,0,0.06)] font-mono text-foreground"
+                : "px-2.5 py-1.5 rounded-lg border-b border-slate-200/50 dark:border-slate-800/80 bg-white/70 dark:bg-slate-900/60 hover:bg-slate-100/80 dark:hover:bg-slate-800/80"
+              } ${task.completed ? (isPixelTheme ? "opacity-60 line-through bg-muted/40" : "opacity-60 line-through") : ""} ${isHovered && dropPosition === "top"
+                ? isPixelTheme
+                  ? "border-t-2 border-t-amber-600 bg-amber-500/10"
+                  : "border-t-2 border-t-blue-600"
                 : isHovered && dropPosition === "bottom"
-                ? "border-b-2 border-b-blue-600"
-                : ""
-            }`}
+                  ? isPixelTheme
+                    ? "border-b-2 border-b-amber-600 bg-amber-500/10"
+                    : "border-b-2 border-b-blue-600"
+                  : ""
+              }`}
           >
-            <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div className="flex items-center gap-2.5 min-w-0 flex-1">
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onToggleComplete(task.id);
                 }}
-                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors flex-shrink-0 cursor-pointer"
+                className={`flex-shrink-0 cursor-pointer transition-all ${isPixelTheme
+                    ? `size-4 rounded-xs flex items-center justify-center ${task.completed
+                      ? "bg-emerald-600 text-white border border-emerald-800 shadow-[1px_1px_0px_#064e3b]"
+                      : "border-2 border-amber-900/60 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/60 hover:border-emerald-500 shadow-[1px_1px_0px_#000]"
+                    }`
+                    : "text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  }`}
               >
-                {task.completed ? (
+                {isPixelTheme ? (
+                  task.completed && <Check size={11} className="stroke-[3]" />
+                ) : task.completed ? (
                   <CheckCircle2 size={16} className={iconTextClass} />
                 ) : (
                   <Circle size={16} />
                 )}
               </button>
 
-              <span className="text-xs font-medium text-slate-800 dark:text-slate-200 truncate">
+              <span
+                className={`text-xs font-medium truncate ${isPixelTheme ? "font-mono text-foreground" : "text-slate-800 dark:text-slate-200"
+                  }`}
+              >
                 {task.title}
               </span>
 
@@ -385,7 +421,10 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
                     });
                   }}
                   title="点击延期至今日"
-                  className="text-[10px] font-medium text-red-600 bg-red-50 dark:bg-red-950/40 hover:bg-red-600 hover:text-white border border-red-200 dark:border-red-900 px-1.5 py-0.5 rounded-md flex-shrink-0 transition-colors cursor-pointer group/tag"
+                  className={`text-[10px] font-medium flex-shrink-0 transition-colors cursor-pointer group/tag ${isPixelTheme
+                      ? "rounded-xs border-2 border-red-800 bg-red-100/90 dark:bg-red-950/70 text-red-700 dark:text-red-300 font-mono px-1.5 py-0.5 shadow-[1px_1px_0px_#7f1d1d] hover:bg-red-600 hover:text-white"
+                      : "rounded-md border border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-600 px-1.5 py-0.5 hover:bg-red-600 hover:text-white"
+                    }`}
                 >
                   <span className="group-hover/tag:hidden">已过期</span>
                   <span className="hidden group-hover/tag:inline">延期</span>
@@ -396,7 +435,7 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
             <div className="flex items-center gap-1.5 flex-shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
               {hasContent && (
                 <span title="包含任务详情">
-                  <AlignLeft size={13} className="text-slate-400" />
+                  <AlignLeft size={13} className="text-muted-foreground" />
                 </span>
               )}
               <Button
@@ -406,7 +445,11 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
                   e.stopPropagation();
                   onDeleteTask(task.id);
                 }}
-                className="h-6 w-6 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                className={
+                  isPixelTheme
+                    ? "h-6 w-6 rounded-xs border border-border/80 bg-muted hover:bg-red-600 hover:text-white text-muted-foreground shadow-[1px_1px_0px_#000] cursor-pointer"
+                    : "h-6 w-6 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                }
                 title="删除任务"
               >
                 <X size={14} />
@@ -457,17 +500,17 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
           key={type}
           onDragOver={handleDragOver}
           onDrop={(e) => handleDropOnQuadrant(e, type)}
-          className={`flex flex-col h-full ${
-            isPixelTheme
-              ? "rounded-xl border-2 border-border/90 bg-card shadow-[3px_3px_0px_rgba(0,0,0,0.1)]"
+          className={`flex flex-col h-full ${isPixelTheme
+              ? "rounded-xl border-2 border-border/90 bg-card shadow-[4px_4px_0px_rgba(0,0,0,0.12)] font-mono"
               : "rounded-t-2xl rounded-b-none border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs"
-          } ${config.accentBorder} ${config.bgGradient} overflow-hidden select-none`}
+            } ${config.accentBorder} ${config.bgGradient} overflow-hidden select-none`}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-4 py-3 border-b border-border/60" onDragOver={handleDragOver}>
             <div className="flex items-center gap-2">
               <span
-                className={`w-5 h-5 ${isPixelTheme ? "rounded-xs font-mono font-black" : "rounded-full font-bold"} text-white text-xs flex items-center justify-center shadow-xs ${config.badgeBgClass}`}
+                className={`w-5 h-5 ${isPixelTheme ? "rounded-xs font-mono font-black border border-black/40 shadow-[1px_1px_0px_#000]" : "rounded-full font-bold"
+                  } text-white text-xs flex items-center justify-center shadow-xs ${config.badgeBgClass}`}
               >
                 {type[1]}
               </span>
@@ -484,7 +527,7 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
               onClick={(e) => onCreateTask(type, e.currentTarget)}
               className={
                 isPixelTheme
-                  ? "h-7 w-7 rounded-xs border border-border bg-muted/60 hover:bg-muted text-foreground shadow-[1px_1px_0px_#000] cursor-pointer"
+                  ? "h-7 w-7 rounded-xs border-2 border-border bg-muted hover:bg-card text-foreground shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
                   : "h-7 w-7 text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 cursor-pointer"
               }
               title="新建任务"

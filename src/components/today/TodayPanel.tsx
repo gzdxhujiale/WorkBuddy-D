@@ -303,8 +303,8 @@ export const TodayPanel: React.FC = () => {
                   ? "bg-emerald-600 text-white border border-emerald-800 shadow-[1px_1px_0px_#064e3b]"
                   : "bg-emerald-600 dark:bg-emerald-500 text-white shadow-2xs"
                 : isPixelTheme
-                ? "border-2 border-amber-900/60 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/60 hover:border-emerald-500"
-                : "border-2 border-slate-300 dark:border-slate-600 hover:border-emerald-500 bg-transparent"
+                  ? "border-2 border-amber-900/60 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/60 hover:border-emerald-500"
+                  : "border-2 border-slate-300 dark:border-slate-600 hover:border-emerald-500 bg-transparent"
             )}
           >
             {task.completed && <Check size={12} className="stroke-[3]" />}
@@ -347,13 +347,13 @@ export const TodayPanel: React.FC = () => {
     if (!isPixelTheme) return q.title;
     switch (q.type) {
       case "Q1":
-        return "🔥 紧急讨伐 (重要且紧急)";
+        return "🔥 紧急讨伐";
       case "Q2":
-        return "🌿 核心修炼 (重要不紧急)";
+        return "🌿 核心修炼";
       case "Q3":
-        return "⚡ 突发委托 (紧急不重要)";
+        return "⚡ 突发委托";
       case "Q4":
-        return "💧 支线见闻 (不重要不紧急)";
+        return "💧 支线见闻";
       default:
         return q.title;
     }
@@ -419,15 +419,15 @@ export const TodayPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full max-w-[1080px] mx-auto px-6 py-6 md:px-9 overflow-y-auto select-none space-y-6">
-      {/* 主体: 主列表 + 右侧轻栏 */}
+    <div className="flex flex-col h-full w-full max-w-[1240px] mx-auto px-5 py-6 md:px-8 overflow-y-auto select-none space-y-6">
+      {/* ===== 上部分：左上 (任务列表) + 右上 (习惯打卡 & 每日复盘) ===== */}
       {remaining === 0 && dueTasks.length === 0 && todayHabits.length === 0 ? (
         <div
           className={cn(
-            "flex flex-col items-center justify-center gap-3.5 text-center text-muted-foreground py-6 bg-card",
+            "flex flex-col items-center justify-center gap-3.5 text-center text-muted-foreground py-7 bg-card",
             isPixelTheme
               ? "border-2 border-border/90 rounded-xl shadow-[3px_3px_0px_rgba(0,0,0,0.1)] font-mono"
-              : "rounded-t-2xl rounded-b-none border border-border/70"
+              : "rounded-xl border border-border/70 shadow-xs"
           )}
         >
           <div className="text-4xl leading-none">{isPixelTheme ? "🏆" : "🍃"}</div>
@@ -440,9 +440,9 @@ export const TodayPanel: React.FC = () => {
           </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_300px] gap-6">
-          {/* 左栏: 任务主列表 (按象限分组) */}
-          <div className="min-w-0 pr-1 space-y-3.5">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,1fr)] gap-6 items-start">
+          {/* 左上区域: 任务列表 (按象限分组) */}
+          <div className="min-w-0 space-y-3.5">
             <div className="flex items-center gap-2 text-xs font-bold text-foreground mb-1">
               {isPixelTheme ? <PixelSparkle size={14} /> : <span className="size-2 rounded-2xs bg-blue-500 shrink-0" />}
               <span className={isPixelTheme ? "font-mono font-bold" : ""}>
@@ -457,7 +457,7 @@ export const TodayPanel: React.FC = () => {
                   "py-8 text-center text-xs text-muted-foreground bg-card/40 border",
                   isPixelTheme
                     ? "border-2 border-border/80 rounded-lg font-mono shadow-[2px_2px_0px_rgba(0,0,0,0.06)]"
-                    : "rounded-t-2xl rounded-b-none border-border/60"
+                    : "rounded-xl border-border/60"
                 )}
               >
                 {isPixelTheme ? "今日暂无委托，休息一下吧" : "今天没有到期任务"}
@@ -469,8 +469,8 @@ export const TodayPanel: React.FC = () => {
             )}
           </div>
 
-          {/* 右侧轻栏: 习惯 + 复盘 */}
-          <div className="flex flex-col gap-4">
+          {/* 右上区域: 习惯打卡 + 每日复盘 */}
+          <div className="flex flex-col gap-4 min-w-0">
             {/* 习惯打卡卡片 */}
             <div
               className={cn(
@@ -568,12 +568,14 @@ export const TodayPanel: React.FC = () => {
                 )}
               </div>
             </div>
-
-            {/* 项目时间轴卡片 */}
-            <ProjectTimeline />
           </div>
         </div>
       )}
+
+      {/* ===== 下部分：项目时间线 ===== */}
+      <div className="w-full pt-1">
+        <ProjectTimeline />
+      </div>
     </div>
   );
 };
