@@ -6,6 +6,7 @@ import {
   Check,
   Calendar,
   AlignLeft,
+  FolderKanban,
 } from "lucide-react";
 import { useTimeManagementData, useTaskActions } from "@/hooks/useTimeManagement";
 import { Task, QuadrantType } from "@/types/timeManagement";
@@ -17,6 +18,8 @@ import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { openQuickEditWindow, prewarmQuickEditWindow } from "@/services/quickEditWindow";
 import { taskIntersectsDay, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
 import { hasTaskDescription } from "@/lib/taskDescription";
+import { useProjectsData } from "@/hooks/useProjects";
+import { useUiStore } from "@/stores/uiStore";
 import { ProjectTimeline } from "./ProjectTimeline";
 import { cn } from "@/lib/utils";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
@@ -172,6 +175,14 @@ export const TodayPanel: React.FC = () => {
   const { data: reviewsData } = useDailyReviewData();
   const reviews = reviewsData ?? EMPTY_REVIEWS;
 
+  const { data: projectsData } = useProjectsData();
+  const projects = projectsData?.projects ?? [];
+  const stages = projectsData?.stages ?? [];
+  const setHoveredStageId = useUiStore((s) => s.setHoveredStageId);
+
+  type TaskFilterType = "all" | "project" | "standalone";
+  const [taskFilter, setTaskFilter] = useState<TaskFilterType>("all");
+
   const [collapsedQuadrants, setCollapsedQuadrants] = useState<Record<QuadrantType, boolean>>({
     Q1: false,
     Q2: false,
@@ -212,6 +223,19 @@ export const TodayPanel: React.FC = () => {
   );
   const pendingTasks = useMemo(() => dueTasks.filter((t) => !t.completed), [dueTasks]);
 
+  const projectTasksCount = useMemo(() => dueTasks.filter((t) => Boolean(t.projectId)).length, [dueTasks]);
+  const standaloneTasksCount = useMemo(() => dueTasks.filter((t) => !t.projectId).length, [dueTasks]);
+
+  const filteredDueTasks = useMemo(() => {
+    if (taskFilter === "project") {
+      return dueTasks.filter((t) => Boolean(t.projectId));
+    }
+    if (taskFilter === "standalone") {
+      return dueTasks.filter((t) => !t.projectId);
+    }
+    return dueTasks;
+  }, [dueTasks, taskFilter]);
+
   // Group due tasks by quadrant with uncompleted first, then completed
   const tasksByQuadrant = useMemo(() => {
     const map: Record<QuadrantType, Task[]> = {
@@ -220,7 +244,7 @@ export const TodayPanel: React.FC = () => {
       Q3: [],
       Q4: [],
     };
-    for (const task of dueTasks) {
+    for (const task of filteredDueTasks) {
       if (map[task.quadrant]) {
         map[task.quadrant].push(task);
       } else {
@@ -236,7 +260,7 @@ export const TodayPanel: React.FC = () => {
       });
     }
     return map;
-  }, [dueTasks]);
+  }, [filteredDueTasks]);
 
   // Today habits
   const todayHabits = useMemo(() => getHabitsForDate(habits, today), [habits, today]);
@@ -276,19 +300,27 @@ export const TodayPanel: React.FC = () => {
 
   const renderTaskItem = (task: Task) => {
     const due = !task.completed && task.scheduledEndAt ? dueLabel(task.scheduledEndAt, now) : null;
+    const project = task.projectId ? projects.find((p) => p.id === task.projectId) : undefined;
+    const stage = task.projectStageId ? stages.find((s) => s.id === task.projectStageId) : undefined;
 
     return (
       <div
         key={task.id}
         onClick={(e) => openTaskQuickEdit(task, e.currentTarget)}
+        onMouseEnter={() => {
+          if (task.projectStageId) setHoveredStageId(task.projectStageId);
+        }}
+        onMouseLeave={() => {
+          if (task.projectStageId) setHoveredStageId(null);
+        }}
         className={cn(
           "flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer group select-none",
           isPixelTheme && "hover:bg-amber-100/50 dark:hover:bg-amber-950/40",
           task.completed && "opacity-75 bg-muted/15"
         )}
       >
-        {/* Left Side: Circular Checkbox & Task Title */}
-        <div className="flex items-center gap-3 min-w-0 flex-1">
+        {/* Left Side: Circular Checkbox & Task Title & Project Badge */}
+        <div className="flex items-center gap-2.5 min-w-0 flex-1">
           <button
             type="button"
             role="checkbox"
@@ -311,6 +343,21 @@ export const TodayPanel: React.FC = () => {
           >
             {task.completed && <Check size={12} className="stroke-[3]" />}
           </button>
+
+          {project && stage && (
+            <span
+              className={cn(
+                "inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium shrink-0 max-w-[130px] truncate border",
+                isPixelTheme
+                  ? "rounded-xs font-mono bg-amber-100/90 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 border-amber-800/40 shadow-[1px_1px_0px_#000]"
+                  : "rounded-md bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border-sky-200/80 dark:border-sky-800/60"
+              )}
+              title={`所属项目：${project.name} · ${stage.name}`}
+            >
+              <FolderKanban size={10} className="shrink-0 text-sky-500" />
+              <span className="truncate">{project.name} · {stage.name}</span>
+            </span>
+          )}
 
           <span
             className={cn(
@@ -450,15 +497,72 @@ export const TodayPanel: React.FC = () => {
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,1fr)] gap-6 items-start">
           {/* 左上区域: 任务列表 (按象限分组) */}
           <div className="min-w-0 space-y-3.5">
-            <div className="flex items-center gap-2 text-xs font-bold text-foreground mb-1">
-              {isPixelTheme ? <PixelSparkle size={14} /> : <span className="size-2 rounded-2xs bg-blue-500 shrink-0" />}
-              <span className={isPixelTheme ? "font-mono font-bold" : ""}>
-                {isPixelTheme ? "今日冒险委托" : "今日到期"}
-              </span>
-              <span className="font-semibold text-muted-foreground tabular-nums">{dueTasks.length} 项</span>
+            {/* Header: Title + Filter Pills */}
+            <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+              <div className="flex items-center gap-2 text-xs font-bold text-foreground">
+                {isPixelTheme ? <PixelSparkle size={14} /> : <span className="size-2 rounded-2xs bg-blue-500 shrink-0" />}
+                <span className={isPixelTheme ? "font-mono font-bold" : ""}>
+                  {isPixelTheme ? "今日冒险委托" : "今日到期"}
+                </span>
+                <span className="font-semibold text-muted-foreground tabular-nums">
+                  {filteredDueTasks.length} 项
+                </span>
+              </div>
+
+              {/* Task Filter Pills */}
+              <div
+                className={cn(
+                  "flex items-center gap-1 p-0.5 border text-xs select-none",
+                  isPixelTheme
+                    ? "rounded-xs border-border bg-muted/60 font-mono shadow-[1px_1px_0px_#000]"
+                    : "rounded-lg border-border/70 bg-muted/40"
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => setTaskFilter("all")}
+                  className={cn(
+                    "px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer",
+                    isPixelTheme ? "rounded-xs" : "rounded-md",
+                    taskFilter === "all"
+                      ? "bg-background text-foreground font-semibold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  全部 {dueTasks.length}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTaskFilter("project")}
+                  className={cn(
+                    "px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1",
+                    isPixelTheme ? "rounded-xs" : "rounded-md",
+                    taskFilter === "project"
+                      ? "bg-background text-foreground font-semibold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <span>{isPixelTheme ? "⚔️ 仅项目" : "仅项目"}</span>
+                  <span className="opacity-75 tabular-nums">{projectTasksCount}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTaskFilter("standalone")}
+                  className={cn(
+                    "px-2 py-0.5 text-[11px] font-medium transition-colors cursor-pointer flex items-center gap-1",
+                    isPixelTheme ? "rounded-xs" : "rounded-md",
+                    taskFilter === "standalone"
+                      ? "bg-background text-foreground font-semibold shadow-xs"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  <span>{isPixelTheme ? "🍃 仅独立" : "仅独立"}</span>
+                  <span className="opacity-75 tabular-nums">{standaloneTasksCount}</span>
+                </button>
+              </div>
             </div>
 
-            {dueTasks.length === 0 ? (
+            {filteredDueTasks.length === 0 ? (
               <div
                 className={cn(
                   "py-8 text-center text-xs text-muted-foreground bg-card/40 border",
@@ -467,7 +571,17 @@ export const TodayPanel: React.FC = () => {
                     : "rounded-xl border-border/60"
                 )}
               >
-                {isPixelTheme ? "今日暂无委托，休息一下吧" : "今天没有到期任务"}
+                {dueTasks.length === 0
+                  ? isPixelTheme
+                    ? "今日暂无委托，休息一下吧"
+                    : "今天没有到期任务"
+                  : taskFilter === "project"
+                  ? isPixelTheme
+                    ? "今日暂无公会项目委托"
+                    : "今天没有属于项目的到期任务"
+                  : isPixelTheme
+                  ? "今日暂无独立日常委托"
+                  : "今天没有独立的日常待办"}
               </div>
             ) : (
               <div className="flex flex-col gap-3.5">

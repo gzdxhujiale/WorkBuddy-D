@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Calendar,
   Check,
@@ -37,6 +37,7 @@ import { QUADRANT_DB_MAP } from "@/types/timeManagement";
 import { createProjectId, createProjectStageId, createProjectTemplateId } from "@/lib/entityIds";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { PixelShield, PixelSword } from "@/components/pixel/PixelIcons";
+import { useUiStore } from "@/stores/uiStore";
 
 const priorityClasses: Record<Priority, string> = {
   low: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700",
@@ -409,11 +410,19 @@ export function ProjectsPage() {
   const { data, isPending, error } = useProjectsData();
   const { saveProject, saveStage, saveTask, saveTemplate, createFromTemplate, deleteProject, deleteStage, deleteTask } = useProjectActions();
   const { confirm, dialogElement } = useConfirmDialog();
-  const [selectedId, setSelectedId] = useState<string>();
+  const activeProjectId = useUiStore((s) => s.activeProjectId);
+  const setActiveProjectId = useUiStore((s) => s.setActiveProjectId);
+  const [selectedId, setSelectedId] = useState<string | undefined>(activeProjectId ?? undefined);
   const [creating, setCreating] = useState(false);
   const [creatingTemplate, setCreatingTemplate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
+
+  useEffect(() => {
+    if (activeProjectId && activeProjectId !== selectedId) {
+      setSelectedId(activeProjectId);
+    }
+  }, [activeProjectId]);
 
   const rawProjects = data?.projects ?? [];
   const allTasks = data?.tasks ?? [];
@@ -508,7 +517,10 @@ export function ProjectsPage() {
               <button
                 key={project.id}
                 type="button"
-                onClick={() => setSelectedId(project.id)}
+                onClick={() => {
+                  setSelectedId(project.id);
+                  setActiveProjectId(project.id);
+                }}
                 className={`w-full ${isPixelTheme ? "rounded-xs font-mono" : "rounded-xl"} border p-3 text-left transition-all cursor-pointer select-none ${isCurrent
                     ? isPixelTheme
                       ? "border-2 border-amber-800 dark:border-amber-500 bg-amber-200/90 dark:bg-amber-950 shadow-[3px_3px_0px_rgba(0,0,0,0.18)]"

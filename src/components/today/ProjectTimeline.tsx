@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Calendar,
   ChevronLeft,
@@ -6,13 +7,18 @@ import {
   ChevronDown,
   FolderKanban,
 } from "lucide-react";
-import { useProjectsData } from "@/hooks/useProjects";
+import { useProjectsData, useProjectActions } from "@/hooks/useProjects";
 import { Button } from "@/components/ui/button";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { PixelScroll } from "@/components/pixel/PixelIcons";
-import type { ProjectStage, Project } from "@/types/projects";
+import { useUiStore } from "@/stores/uiStore";
+import { createTaskId } from "@/lib/entityIds";
+import { openQuickEditWindow } from "@/services/quickEditWindow";
+import { StageTaskPopover } from "./StageTaskPopover";
+import type { ProjectStage, Project, ProjectTask } from "@/types/projects";
+import type { Task } from "@/types/timeManagement";
 
 export type TimelineViewMode = "week" | "biweekly" | "month";
 
@@ -90,8 +96,13 @@ function formatShortDate(d: Date): string {
 }
 
 export const ProjectTimeline: React.FC = () => {
+  const navigate = useNavigate();
   const { isPixelTheme } = useAppThemeStyle();
   const { data: projectsData } = useProjectsData();
+  const { saveTask } = useProjectActions();
+  const hoveredStageId = useUiStore((s) => s.hoveredStageId);
+  const setActiveProjectId = useUiStore((s) => s.setActiveProjectId);
+
   const projects = projectsData?.projects ?? [];
   const stages = projectsData?.stages ?? [];
   const tasks = projectsData?.tasks ?? [];
@@ -100,6 +111,21 @@ export const ProjectTimeline: React.FC = () => {
   const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false);
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
+
+  // Active popover stage state
+  const [popoverStage, setPopoverStage] = useState<{
+    stage: {
+      id: string;
+      projectId: string;
+      name: string;
+      projectName: string;
+      computedStart: Date;
+      computedEnd: Date;
+      startDate?: string;
+      endDate?: string;
+    };
+    rect: DOMRect;
+  } | null>(null);
 
   // Active anchor reference date
   const [anchorDate, setAnchorDate] = useState<Date>(() => {
@@ -122,6 +148,108 @@ export const ProjectTimeline: React.FC = () => {
     d.setHours(0, 0, 0, 0);
     return d;
   }, []);
+
+  // Popover handlers
+  const handleStageClick = (
+    stage: {
+      id: string;
+      projectId: string;
+      name: string;
+      projectName: string;
+      computedStart: Date;
+      computedEnd: Date;
+      startDate?: string;
+      endDate?: string;
+    },
+    e: React.MouseEvent<HTMLElement>
+  ) => {
+    e.stopPropagation();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setPopoverStage({ stage, rect });
+  };
+
+  const handleStageDoubleClick = (
+    stage: {
+      id: string;
+      projectId: string;
+      name: string;
+      projectName: string;
+      computedStart: Date;
+      computedEnd: Date;
+    },
+    e: React.MouseEvent
+  ) => {
+    e.stopPropagation();
+    setPopoverStage(null);
+    setActiveProjectId(stage.projectId);
+    void navigate({ to: "/projects" });
+  };
+
+  const handleToggleTask = async (task: ProjectTask) => {
+    await saveTask({ ...task, completed: !task.completed } as Task);
+  };
+
+  const handleQuickAddTask = async (title: string) => {
+    if (!popoverStage) return;
+    const s = popoverStage.stage;
+    await saveTask({
+      id: createTaskId(),
+      title,
+      completed: false,
+      projectId: s.projectId,
+      projectStageId: s.id,
+      quadrant: "Q2",
+      priority: "high",
+      scheduledStartAt: s.computedStart.getTime(),
+      scheduledEndAt: s.computedEnd.getTime(),
+      scheduleMode: "range",
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+  };
+
+  const handleTrackCellClick = (
+    stage: {
+      id: string;
+      projectId: string;
+      name: string;
+      projectName: string;
+      computedStart: Date;
+      computedEnd: Date;
+    },
+    dayDate: Date,
+    e: React.MouseEvent<HTMLElement>
+  ) => {
+    e.stopPropagation();
+    const cellStart = new Date(dayDate);
+    cellStart.setHours(9, 0, 0, 0);
+    const cellEnd = new Date(dayDate);
+    cellEnd.setHours(18, 0, 0, 0);
+
+    void openQuickEditWindow({
+      anchorEl: e.currentTarget,
+      quadrant: "Q2",
+      onCreate: (_quadrant, draftData) => {
+        void saveTask({
+          id: createTaskId(),
+          title: draftData.title,
+          description: draftData.description,
+          quadrant: draftData.quadrant || "Q2",
+          priority: draftData.priority || "high",
+          completed: false,
+          projectId: stage.projectId,
+          projectStageId: stage.id,
+          scheduleMode: "range",
+          scheduledStartAt: cellStart.getTime(),
+          scheduledEndAt: cellEnd.getTime(),
+          reminder: draftData.reminder,
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        });
+      },
+      onClosed: () => {},
+    });
+  };
 
   // Compute window start date and total days based on current viewMode & anchorDate
   const { windowStartDate, totalDays, windowEndDate } = useMemo(() => {
@@ -555,6 +683,11 @@ export const ProjectTimeline: React.FC = () => {
                 const wStartTime = windowStartDate.getTime();
                 const dayMs = 86400000;
 
+                const stageTasks = tasks.filter((t) => t.projectStageId === stage.id);
+                const stageDoneCount = stageTasks.filter((t) => t.completed).length;
+                const isHoveredAura = hoveredStageId === stage.id;
+                const isPopoverOpen = popoverStage?.stage.id === stage.id;
+
                 // Calculate relative day offsets in window
                 const startOffsetDays = (sTime - wStartTime) / dayMs;
                 const endOffsetDays = (eTime - wStartTime) / dayMs + 1; // inclusive
@@ -565,7 +698,7 @@ export const ProjectTimeline: React.FC = () => {
 
                 const leftPct = (clampedStart / totalDays) * 100;
                 const widthPct = Math.max(
-                  viewMode === "month" ? 2.5 : 4,
+                  viewMode === "month" ? 3 : 5,
                   ((clampedEnd - clampedStart) / totalDays) * 100
                 );
 
@@ -583,44 +716,94 @@ export const ProjectTimeline: React.FC = () => {
                   barClass = "bg-muted/70 text-muted-foreground border border-border/80";
                 }
 
+                if (isHoveredAura) {
+                  barClass =
+                    "bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold ring-2 ring-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.95)] z-30 scale-[1.02] animate-pulse";
+                } else if (isPopoverOpen) {
+                  barClass += " ring-2 ring-sky-400 shadow-md z-30";
+                }
+
                 const displayName =
                   selectedProjectId === "all"
                     ? `${stage.projectName}-${stage.name}`
                     : stage.name;
 
                 return (
-                  <div key={stage.id} className="flex items-center text-xs group">
+                  <div
+                    key={stage.id}
+                    className={cn(
+                      "flex items-center text-xs group transition-colors rounded-xs py-0.5",
+                      isHoveredAura && "bg-amber-500/10"
+                    )}
+                  >
                     {/* Stage Name */}
-                    <div className="w-36 shrink-0 flex items-center gap-1.5 pr-2 truncate text-foreground font-medium">
-                      <span className="size-1.5 rounded-full bg-muted-foreground/60 shrink-0" />
-                      <span className="truncate text-xs" title={displayName}>
-                        {displayName}
-                      </span>
+                    <div
+                      onClick={(e) => handleStageClick(stage, e)}
+                      onDoubleClick={(e) => handleStageDoubleClick(stage, e)}
+                      className={cn(
+                        "w-36 shrink-0 flex items-center gap-1.5 pr-2 truncate cursor-pointer transition-colors select-none",
+                        isHoveredAura
+                          ? "text-amber-600 dark:text-amber-400 font-bold"
+                          : "text-foreground font-medium hover:text-emerald-600 dark:hover:text-emerald-400"
+                      )}
+                      title={`单击查看阶段任务浮层 · 双击在项目中心打开 (${displayName})`}
+                    >
+                      <span
+                        className={cn(
+                          "size-1.5 rounded-full shrink-0 transition-all",
+                          isHoveredAura ? "bg-amber-500 size-2" : "bg-muted-foreground/60"
+                        )}
+                      />
+                      <span className="truncate text-xs">{displayName}</span>
                     </div>
 
                     {/* Track */}
                     <div className="flex-1 h-6 rounded-none bg-muted/20 dark:bg-slate-900/60 border border-border/30 relative flex items-center overflow-hidden">
-                      {/* Grid background dashes */}
+                      {/* Grid background dashes with click-to-schedule */}
                       <div
-                        className="absolute inset-0 grid pointer-events-none opacity-20"
+                        className="absolute inset-0 grid pointer-events-none opacity-25"
                         style={{ gridTemplateColumns: `repeat(${totalDays}, minmax(0, 1fr))` }}
                       >
-                        {Array.from({ length: totalDays }).map((_, idx) => (
-                          <div key={idx} className="border-r border-border/40 h-full" />
+                        {dateList.map((d, idx) => (
+                          <div
+                            key={idx}
+                            onClick={(e) => handleTrackCellClick(stage, d, e)}
+                            className="border-r border-border/40 h-full pointer-events-auto hover:bg-emerald-500/10 cursor-pointer transition-colors"
+                            title={`点击在 ${formatShortDate(d)} 为「${stage.name}」创建排期任务`}
+                          />
                         ))}
                       </div>
 
                       {/* Bar */}
                       {isVisible && (
                         <div
-                          className={`absolute h-5 rounded-none px-2 flex items-center justify-between text-[11px] transition-all duration-300 z-10 select-none ${barClass}`}
+                          onClick={(e) => handleStageClick(stage, e)}
+                          onDoubleClick={(e) => handleStageDoubleClick(stage, e)}
+                          className={cn(
+                            "absolute h-5 rounded-none px-2 flex items-center justify-between text-[11px] transition-all duration-200 z-10 select-none cursor-pointer",
+                            barClass
+                          )}
                           style={{
                             left: `${leftPct}%`,
                             width: `${widthPct}%`,
                           }}
-                          title={`${displayName} (${formatShortDate(stage.computedStart)} - ${formatShortDate(stage.computedEnd)})`}
+                          title={`【${displayName}】\n📅 周期：${formatShortDate(stage.computedStart)} - ${formatShortDate(stage.computedEnd)}\n📝 任务进度：${stageDoneCount}/${stageTasks.length} 项\n💡 单击展开任务清单 · 双击跳转项目中心`}
                         >
-                          <span className="truncate font-medium pr-1">{displayName}</span>
+                          <div className="flex items-center gap-1 min-w-0 truncate pr-1">
+                            <span className="truncate font-medium">{displayName}</span>
+                            {stageTasks.length > 0 && (
+                              <span
+                                className={cn(
+                                  "px-1 py-0.2 text-[9px] font-mono font-bold shrink-0",
+                                  isPixelTheme
+                                    ? "rounded-xs bg-black/40 border border-white/20"
+                                    : "rounded-full bg-black/20"
+                                )}
+                              >
+                                {stageDoneCount}/{stageTasks.length}
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] opacity-85 tabular-nums whitespace-nowrap hidden md:inline shrink-0">
                             {formatShortDate(stage.computedStart)} - {formatShortDate(stage.computedEnd)}
                           </span>
@@ -633,6 +816,33 @@ export const ProjectTimeline: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Stage Task Snapshot Popover (Dimension 1) */}
+      {popoverStage && (
+        <StageTaskPopover
+          project={projects.find((p) => p.id === popoverStage.stage.projectId)}
+          stage={
+            stages.find((s) => s.id === popoverStage.stage.id) ?? {
+              id: popoverStage.stage.id,
+              projectId: popoverStage.stage.projectId,
+              name: popoverStage.stage.name,
+              sortOrder: 0,
+              startDate: popoverStage.stage.startDate,
+              endDate: popoverStage.stage.endDate,
+            }
+          }
+          tasks={tasks.filter((t) => t.projectStageId === popoverStage.stage.id)}
+          anchorRect={popoverStage.rect}
+          onClose={() => setPopoverStage(null)}
+          onToggleTask={handleToggleTask}
+          onAddTask={handleQuickAddTask}
+          onNavigateToProject={() => {
+            setActiveProjectId(popoverStage.stage.projectId);
+            setPopoverStage(null);
+            void navigate({ to: "/projects" });
+          }}
+        />
       )}
     </section>
   );
