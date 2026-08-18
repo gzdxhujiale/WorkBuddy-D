@@ -1,5 +1,4 @@
 # Product specifications
-# Product specifications
 
 | Area | Shipped behavior |
 | --- | --- |

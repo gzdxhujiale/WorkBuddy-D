@@ -60,6 +60,13 @@ Key reusable primitives in `src/components/ui/`:
 - `toast.tsx` — application-wide toast notification system mounted globally in `AppLayout.tsx`.
 - `popconfirm.tsx` — inline confirmation popovers for destructive and critical actions.
 
+### Theme style system and multi-window IPC synchronization
+
+The application supports dual design systems: `modern` (Modern Vector) and `pixel` (Retro Pixel 8-Bit), coordinated through:
+- **Hook & Preferences API**: `useAppThemeStyle()` in `src/hooks/useAppThemeStyle.ts` and `getAppThemeStyle()`, `setAppThemeStyle()`, `applyAppThemeStyle()` in `src/lib/preferences.ts`.
+- **Tauri IPC Global Broadcast**: Setting the theme emits `emit("workbuddy:theme-style-change", { style })`. All independent Webviews (`main`, `task-quick-edit`, `focus-assistant`) listen to this event and call `applyAppThemeStyle(style)` to synchronously toggle `.theme-retro-pixel` on `document.documentElement`.
+- **Pixel Icons System**: `src/components/pixel/PixelIcons.tsx` provides hand-crafted 8-bit SVG icons (`PixelSword`, `PixelScroll`, `PixelSparkle`, `PixelCalendar`, `PixelFlame`, `PixelLeaf`, `PixelBolt`, `PixelDrop`, `PixelBadge`, etc.) for rich retro game aesthetics.
+
 ### Drag and drop coordination
 
 Drag and drop across the application (including knowledge-base sidebar ordering, note sorting/moving across knowledge folders and groups in `src/components/knowledge/KnowledgePanel.tsx`, and project task boards) is centrally coordinated via `@dnd-kit`. Do not implement custom HTML5 drag listeners or parallel drag libraries.
