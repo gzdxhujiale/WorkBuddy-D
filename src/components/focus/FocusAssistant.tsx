@@ -13,6 +13,7 @@ import {
   Moon,
   Layers,
   StopCircle,
+  Coffee,
 } from "lucide-react";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { useFocusTaskOptions } from "@/hooks/useTimeManagement";
@@ -34,7 +35,8 @@ interface SelectedTarget {
   name: string;
 }
 
-const clamp = (val: number, min = 5, max = 180) => Math.max(min, Math.min(max, Number.isFinite(val) ? Math.floor(val) : min));
+const REST_MINUTES = 5;
+const clamp = (val: number, min = 1, max = 180) => Math.max(min, Math.min(max, Number.isFinite(val) ? Math.floor(val) : min));
 
 async function setWindowGeometry(width: number, height: number) {
   try {
@@ -55,6 +57,11 @@ export function FocusAssistant() {
   const [focusMinutes, setFocusMinutes] = useState<number>(() => {
     const saved = localStorage.getItem("workbuddy.focusAssistant.minutes");
     return saved ? clamp(Number(saved)) : 25;
+  });
+
+  const [restMinutes, setRestMinutes] = useState<number>(() => {
+    const saved = localStorage.getItem("workbuddy.focusAssistant.restMinutes");
+    return saved ? clamp(Number(saved), 1, 60) : 5;
   });
 
   const [selectedTarget, setSelectedTarget] = useState<SelectedTarget>(() => {
@@ -85,19 +92,21 @@ export function FocusAssistant() {
   // State
   const [activeModal, setActiveModal] = useState<ActiveModal>("none");
   const [status, setStatus] = useState<Status>("ready");
-  const [, setSessionType] = useState<FocusSessionType>("focus");
+  const [sessionType, setSessionType] = useState<FocusSessionType>("focus");
   const [secondsLeft, setSecondsLeft] = useState(focusMinutes * 60);
   const [session, setSession] = useState<FocusSession | null>(null);
   const [stats, setStats] = useState<FocusStats>({ todayMinutes: 0, weekMinutes: 0 });
 
   // Modal Temp States
-  const [editMinutesInput, setEditMinutesInput] = useState<string>(String(focusMinutes));
+  const [editFocusInput, setEditFocusInput] = useState<string>(String(focusMinutes));
+  const [editRestInput, setEditRestInput] = useState<string>(String(restMinutes));
   const [selectorTab, setSelectorTab] = useState<"task" | "habit">("task");
   const [searchQuery, setSearchQuery] = useState("");
 
   const startedAt = useRef<number | null>(null);
   const remainingRef = useRef(secondsLeft);
   const sessionRef = useRef<FocusSession | null>(null);
+  const sessionTypeRef = useRef<FocusSessionType>(sessionType);
   const isCompletingRef = useRef(false);
 
   useEffect(() => {
@@ -107,6 +116,10 @@ export function FocusAssistant() {
   useEffect(() => {
     sessionRef.current = session;
   }, [session]);
+
+  useEffect(() => {
+    sessionTypeRef.current = sessionType;
+  }, [sessionType]);
 
   // Load stats
   const refreshStats = async () => {
@@ -128,7 +141,7 @@ export function FocusAssistant() {
     if (activeModal === "task-selector") {
       setWindowGeometry(200, 280);
     } else if (activeModal === "time-editor") {
-      setWindowGeometry(200, 150);
+      setWindowGeometry(200, 180);
     } else if (activeModal === "menu" || activeModal === "style-menu") {
       setWindowGeometry(200, 210);
     } else if (showStats) {
@@ -149,7 +162,7 @@ export function FocusAssistant() {
           if (activeModal === "task-selector") {
             await win.setSize(new LogicalSize(200, 280)).catch(() => undefined);
           } else if (activeModal === "time-editor") {
-            await win.setSize(new LogicalSize(200, 150)).catch(() => undefined);
+            await win.setSize(new LogicalSize(200, 180)).catch(() => undefined);
           } else if (activeModal === "menu" || activeModal === "style-menu") {
             await win.setSize(new LogicalSize(200, 210)).catch(() => undefined);
           } else if (showStats) {
@@ -169,10 +182,11 @@ export function FocusAssistant() {
   }, [isPinned, activeModal, showStats]);
 
   // Actions
-  const start = async () => {
+  const startFocus = async () => {
     isCompletingRef.current = false;
     const minutes = focusMinutes;
     setSessionType("focus");
+    sessionTypeRef.current = "focus";
     setSecondsLeft(minutes * 60);
     remainingRef.current = minutes * 60;
     startedAt.current = Date.now();
@@ -194,57 +208,174 @@ export function FocusAssistant() {
     }
   };
 
+  const startRest = async (cycleId?: string, taskId?: string | null) => {
+    isCompletingRef.current = false;
+    const minutes = restMinutes;
+    setSessionType("rest");
+    sessionTypeRef.current = "rest";
+    setSecondsLeft(minutes * 60);
+    remainingRef.current = minutes * 60;
+    startedAt.current = Date.now();
+    setStatus("running");
+
+    try {
+      const created = await focusAssistantApi.create({
+        cycleId: cycleId || createFocusCycleId(),
+        taskId: taskId ?? (selectedTarget.type === "task" && selectedTarget.id ? selectedTarget.id : null),
+        type: "rest",
+        status: "running",
+        plannedMinutes: minutes,
+        activeSeconds: 0,
+        restCompleted: false,
+      });
+      setSession(created);
+    } catch (e) {
+      console.error("Failed to start rest session", e);
+    }
+  };
+
   const pause = async () => {
     if (!session) return;
-    const activeSec = Math.max(0, focusMinutes * 60 - remainingRef.current);
+    const totalPlannedSec = (sessionTypeRef.current === "rest" ? restMinutes : focusMinutes) * 60;
+    const activeSec = Math.max(0, totalPlannedSec - remainingRef.current);
     startedAt.current = null;
     setStatus("paused");
-    await focusAssistantApi.update(session.id, { status: "paused", activeSeconds: activeSec });
-    setSession({ ...session, status: "paused", activeSeconds: activeSec });
+    try {
+      await focusAssistantApi.update(session.id, { status: "paused", activeSeconds: activeSec });
+      setSession({ ...session, status: "paused", activeSeconds: activeSec });
+    } catch (e) {
+      console.error("Failed to pause session", e);
+    }
   };
 
   const resume = async () => {
     if (!session) return;
     startedAt.current = Date.now();
     setStatus("running");
-    await focusAssistantApi.update(session.id, { status: "running" });
-    setSession({ ...session, status: "running" });
+    try {
+      await focusAssistantApi.update(session.id, { status: "running" });
+      setSession({ ...session, status: "running" });
+    } catch (e) {
+      console.error("Failed to resume session", e);
+    }
   };
 
-  const stop = async () => {
-    isCompletingRef.current = false;
-    if (session) {
-      const activeSec = Math.max(0, focusMinutes * 60 - remainingRef.current);
-      await focusAssistantApi.update(session.id, {
-        status: "interrupted",
-        activeSeconds: activeSec,
-      });
+  const stopFocusAndStartRest = async () => {
+    if (isCompletingRef.current) return;
+    isCompletingRef.current = true;
+    const cur = sessionRef.current;
+    const activeSec = Math.max(0, focusMinutes * 60 - remainingRef.current);
+    const cycleId = cur?.cycleId || createFocusCycleId();
+    const taskId = cur?.taskId ?? (selectedTarget.type === "task" && selectedTarget.id ? selectedTarget.id : null);
+
+    if (cur) {
+      try {
+        await focusAssistantApi.update(cur.id, {
+          status: activeSec >= 60 ? "completed" : "interrupted",
+          activeSeconds: activeSec,
+        });
+      } catch (e) {
+        console.error("Failed to stop focus session", e);
+      }
     }
+
+    void sendDesktopNotification(
+      "专注结束",
+      `本次专注已结束，开始 ${restMinutes} 分钟休息时段。`
+    );
+
+    refreshStats();
+    void startRest(cycleId, taskId);
+  };
+
+  const completeFocusAndStartRest = async () => {
+    if (isCompletingRef.current) return;
+    const cur = sessionRef.current;
+    isCompletingRef.current = true;
+
+    const cycleId = cur?.cycleId || createFocusCycleId();
+    const taskId = cur?.taskId ?? (selectedTarget.type === "task" && selectedTarget.id ? selectedTarget.id : null);
+
+    if (cur) {
+      try {
+        await focusAssistantApi.update(cur.id, {
+          status: "completed",
+          activeSeconds: cur.plannedMinutes * 60,
+        });
+      } catch (e) {
+        console.error("Failed to complete focus session", e);
+      }
+    }
+
+    void sendDesktopNotification(
+      "专注完成",
+      `🎉 恭喜！已完成「${selectedTarget.name || "专注"}」时段，开始 ${restMinutes} 分钟休息放松一下吧！`
+    );
+
+    refreshStats();
+    void startRest(cycleId, taskId);
+  };
+
+  const completeRest = async () => {
+    if (isCompletingRef.current) return;
+    const cur = sessionRef.current;
+    isCompletingRef.current = true;
+
+    if (cur) {
+      try {
+        await focusAssistantApi.update(cur.id, {
+          status: "completed",
+          activeSeconds: restMinutes * 60,
+          restCompleted: true,
+        });
+      } catch (e) {
+        console.error("Failed to complete rest session", e);
+      }
+    }
+
+    void sendDesktopNotification(
+      "休息结束",
+      `☕ ${restMinutes} 分钟休息时段已结束，准备好开始新的专注了吗？`
+    );
+
     setSession(null);
+    setSessionType("focus");
+    sessionTypeRef.current = "focus";
     setStatus("ready");
     setSecondsLeft(focusMinutes * 60);
+    remainingRef.current = focusMinutes * 60;
     startedAt.current = null;
+    isCompletingRef.current = false;
     refreshStats();
   };
 
-  const complete = async () => {
-    if (isCompletingRef.current) return;
+  const skipRest = async () => {
+    isCompletingRef.current = false;
     const cur = sessionRef.current;
-    if (!cur) return;
-    isCompletingRef.current = true;
-    setStatus("paused");
+    if (cur) {
+      const activeSec = Math.max(0, restMinutes * 60 - remainingRef.current);
+      try {
+        await focusAssistantApi.update(cur.id, {
+          status: "interrupted",
+          activeSeconds: activeSec,
+        });
+      } catch (e) {
+        console.error("Failed to interrupt rest session", e);
+      }
+    }
 
-    await focusAssistantApi.update(cur.id, {
-      status: "completed",
-      activeSeconds: cur.plannedMinutes * 60,
-    });
+    void sendDesktopNotification(
+      "已跳过休息",
+      "休息时段已跳过，已恢复专注就绪状态。"
+    );
 
-    void sendDesktopNotification("专注完成", `恭喜！已完成 ${selectedTarget.name} 的专注时段。`);
     setSession(null);
+    setSessionType("focus");
+    sessionTypeRef.current = "focus";
     setStatus("ready");
     setSecondsLeft(focusMinutes * 60);
+    remainingRef.current = focusMinutes * 60;
     startedAt.current = null;
-    isCompletingRef.current = false;
     refreshStats();
   };
 
@@ -253,8 +384,15 @@ export function FocusAssistant() {
     if (status !== "running") return;
     const timer = window.setInterval(() => {
       const next = Math.max(0, remainingRef.current - 1);
+      remainingRef.current = next;
       setSecondsLeft(next);
-      if (next === 0) void complete();
+      if (next === 0) {
+        if (sessionTypeRef.current === "focus") {
+          void completeFocusAndStartRest();
+        } else {
+          void completeRest();
+        }
+      }
     }, 1000);
     return () => window.clearInterval(timer);
   }, [status]);
@@ -264,14 +402,15 @@ export function FocusAssistant() {
     return () => {
       const cur = sessionRef.current;
       if (cur && (cur.status === "running" || cur.status === "paused")) {
-        const activeSec = Math.max(0, (cur.plannedMinutes || 25) * 60 - remainingRef.current);
+        const planned = cur.plannedMinutes || (cur.type === "rest" ? restMinutes : 25);
+        const activeSec = Math.max(0, planned * 60 - remainingRef.current);
         void focusAssistantApi.update(cur.id, {
           status: "interrupted",
           activeSeconds: activeSec,
         });
       }
     };
-  }, []);
+  }, [restMinutes, focusMinutes]);
 
   const hideWindow = () => {
     void getCurrentWindow().hide().catch(() => undefined);
@@ -304,9 +443,10 @@ export function FocusAssistant() {
   };
 
   // Progress Calculation
-  const totalSeconds = focusMinutes * 60;
+  const totalSeconds = (sessionType === "rest" ? restMinutes : focusMinutes) * 60;
   const progressRatio = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
   const strokeDashoffset = 113.1 * (1 - progressRatio); // 2 * PI * 18 ≈ 113.1
+
 
   // Filtered Task & Habit list
   const filteredTasks = useMemo(() => {
@@ -514,15 +654,24 @@ export function FocusAssistant() {
   }
 
   // ============================================================================
-  // Modal: Time Editor (Image 4)
+  // Modal: Time Editor
   // ============================================================================
   if (activeModal === "time-editor") {
     const handleSaveTime = () => {
-      const num = clamp(Number(editMinutesInput) || 25, 5, 180);
-      setFocusMinutes(num);
-      localStorage.setItem("workbuddy.focusAssistant.minutes", String(num));
+      const fNum = clamp(Number(editFocusInput) || 25, 1, 180);
+      const rNum = clamp(Number(editRestInput) || 5, 1, 60);
+      setFocusMinutes(fNum);
+      setRestMinutes(rNum);
+      localStorage.setItem("workbuddy.focusAssistant.minutes", String(fNum));
+      localStorage.setItem("workbuddy.focusAssistant.restMinutes", String(rNum));
       if (status === "ready") {
-        setSecondsLeft(num * 60);
+        if (sessionType === "focus") {
+          setSecondsLeft(fNum * 60);
+          remainingRef.current = fNum * 60;
+        } else {
+          setSecondsLeft(rNum * 60);
+          remainingRef.current = rNum * 60;
+        }
       }
       setActiveModal("none");
     };
@@ -530,7 +679,7 @@ export function FocusAssistant() {
     return (
       <div
         className={cn(
-          "w-[200px] h-[150px] p-3 flex flex-col justify-between rounded-2xl select-none text-xs border-0 outline-none",
+          "w-[200px] h-[180px] p-2.5 flex flex-col justify-between rounded-2xl select-none text-xs border-0 outline-none",
           getThemeClasses()
         )}
         onMouseDown={(e) => {
@@ -538,8 +687,8 @@ export function FocusAssistant() {
         }}
       >
         <div>
-          <div className="flex items-center justify-between pb-2 text-slate-700 dark:text-slate-300 font-semibold">
-            <span>设置专注时间</span>
+          <div className="flex items-center justify-between pb-1 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-100 dark:border-slate-800">
+            <span>时间设置</span>
             <button
               onClick={() => setActiveModal("none")}
               className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5 rounded"
@@ -548,29 +697,51 @@ export function FocusAssistant() {
             </button>
           </div>
 
-          <div className="flex items-center gap-2 mt-1">
-            <input
-              type="number"
-              min={5}
-              max={180}
-              autoFocus
-              value={editMinutesInput}
-              onChange={(e) => setEditMinutesInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") handleSaveTime();
-                if (e.key === "Escape") setActiveModal("none");
-              }}
-              className="w-16 px-2 py-1 border-2 border-blue-500 rounded-lg text-sm font-bold text-center text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 outline-none"
-            />
-            <span className="text-slate-600 dark:text-slate-300 font-medium">分钟</span>
-          </div>
+          <div className="space-y-2 py-2">
+            {/* Focus time row */}
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-slate-600 dark:text-slate-300 font-medium">专注时间</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={180}
+                  autoFocus
+                  value={editFocusInput}
+                  onChange={(e) => setEditFocusInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveTime();
+                    if (e.key === "Escape") setActiveModal("none");
+                  }}
+                  className="w-13 px-1.5 py-0.5 border border-blue-500 rounded-md text-xs font-bold text-center text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 outline-none"
+                />
+                <span className="text-slate-500 dark:text-slate-400 text-[11px]">分钟</span>
+              </div>
+            </div>
 
-          <div className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-            可选范围：5~180分钟
+            {/* Rest time row */}
+            <div className="flex items-center justify-between px-0.5">
+              <span className="text-slate-600 dark:text-slate-300 font-medium">休息时间</span>
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  max={60}
+                  value={editRestInput}
+                  onChange={(e) => setEditRestInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleSaveTime();
+                    if (e.key === "Escape") setActiveModal("none");
+                  }}
+                  className="w-13 px-1.5 py-0.5 border border-emerald-500 rounded-md text-xs font-bold text-center text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 outline-none"
+                />
+                <span className="text-slate-500 dark:text-slate-400 text-[11px]">分钟</span>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 pt-2">
+        <div className="flex items-center gap-2 pt-1">
           <button
             onClick={handleSaveTime}
             className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
@@ -649,16 +820,30 @@ export function FocusAssistant() {
               {showStats && <Check size={13} className="text-blue-500" />}
             </button>
 
-            {/* Stop current focus if running/paused */}
-            {status !== "ready" && (
+            {/* Stop current focus if running/paused (Focus mode) */}
+            {sessionType === "focus" && status !== "ready" && (
               <button
                 onClick={() => {
-                  void stop();
+                  void stopFocusAndStartRest();
                   setActiveModal("none");
                 }}
                 className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer text-left font-medium"
               >
-                <span>结束本次专注</span>
+                <span>结束专注并休息</span>
+                <StopCircle size={13} />
+              </button>
+            )}
+
+            {/* Skip rest if in rest mode */}
+            {sessionType === "rest" && (
+              <button
+                onClick={() => {
+                  void skipRest();
+                  setActiveModal("none");
+                }}
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors cursor-pointer text-left font-medium"
+              >
+                <span>跳过休息 / 重新专注</span>
                 <StopCircle size={13} />
               </button>
             )}
@@ -666,7 +851,9 @@ export function FocusAssistant() {
             {/* Reset Timer */}
             <button
               onClick={() => {
-                setSecondsLeft(focusMinutes * 60);
+                const resetSec = (sessionType === "rest" ? REST_MINUTES : focusMinutes) * 60;
+                setSecondsLeft(resetSec);
+                remainingRef.current = resetSec;
                 setActiveModal("none");
               }}
               className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left"
@@ -789,7 +976,10 @@ export function FocusAssistant() {
                 cy="22"
                 r="18"
                 fill="none"
-                className="stroke-blue-500 transition-all duration-300"
+                className={cn(
+                  "transition-all duration-300",
+                  sessionType === "rest" ? "stroke-emerald-500" : "stroke-blue-500"
+                )}
                 strokeWidth="3"
                 strokeLinecap="round"
                 strokeDasharray="113.1"
@@ -807,10 +997,23 @@ export function FocusAssistant() {
                   e.stopPropagation();
                   void resume();
                 }}
-                className="flex-1 h-full flex items-center justify-center text-blue-600 hover:text-blue-700 dark:text-blue-400 cursor-pointer hover:scale-110 active:scale-95 transition-transform"
-                title="继续专注"
+                className={cn(
+                  "flex-1 h-full flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-transform",
+                  sessionType === "rest"
+                    ? "text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                    : "text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                )}
+                title={sessionType === "rest" ? "继续休息" : "继续专注"}
               >
-                <Play size={10} className="fill-blue-600 dark:fill-blue-400 ml-0.5" />
+                <Play
+                  size={10}
+                  className={cn(
+                    "ml-0.5",
+                    sessionType === "rest"
+                      ? "fill-emerald-600 dark:fill-emerald-400"
+                      : "fill-blue-600 dark:fill-blue-400"
+                  )}
+                />
               </button>
 
               {/* Vertical Divider */}
@@ -820,10 +1023,14 @@ export function FocusAssistant() {
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  void stop();
+                  if (sessionType === "rest") {
+                    void skipRest();
+                  } else {
+                    void stopFocusAndStartRest();
+                  }
                 }}
                 className="flex-1 h-full flex items-center justify-center text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer hover:scale-110 active:scale-95 transition-transform"
-                title="结束专注"
+                title={sessionType === "rest" ? "跳过休息" : "结束专注并开始休息"}
               >
                 <div className="size-2.5 rounded-[1.5px] bg-slate-600 dark:bg-slate-300 hover:bg-slate-800 dark:hover:bg-slate-100" />
               </button>
@@ -833,16 +1040,29 @@ export function FocusAssistant() {
               onClick={(e) => {
                 e.stopPropagation();
                 if (status === "ready") {
-                  void start();
+                  void startFocus();
                 } else if (status === "running") {
                   void pause();
                 }
               }}
               className="absolute inset-0 m-auto size-8 rounded-full bg-slate-50 dark:bg-slate-800/90 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform cursor-pointer"
-              title={status === "running" ? "暂停专注" : "开始专注"}
+              title={
+                status === "running"
+                  ? sessionType === "rest"
+                    ? "暂停休息"
+                    : "暂停专注"
+                  : "开始专注"
+              }
             >
               {status === "running" ? (
-                <Pause size={14} className="text-blue-600 dark:text-blue-400 fill-blue-600 dark:fill-blue-400" />
+                <Pause
+                  size={14}
+                  className={cn(
+                    sessionType === "rest"
+                      ? "text-emerald-600 dark:text-emerald-400 fill-emerald-600 dark:fill-emerald-400"
+                      : "text-blue-600 dark:text-blue-400 fill-blue-600 dark:fill-blue-400"
+                  )}
+                />
               ) : (
                 <Play size={14} className="text-blue-600 dark:text-blue-400 fill-blue-600 dark:fill-blue-400 ml-0.5" />
               )}
@@ -852,29 +1072,45 @@ export function FocusAssistant() {
 
         {/* Center: Title & Timer */}
         <div className="flex flex-col justify-center ml-2.5 flex-1 min-w-0" data-drag="true">
-          {/* Target Title (Clickable) */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setSearchQuery("");
-              setActiveModal("task-selector");
-            }}
-            className="flex items-center gap-0.5 text-xs text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 font-medium cursor-pointer select-none max-w-[85px] truncate text-left"
-            title="点击选择关联任务/习惯"
-          >
-            <span className="truncate">{selectedTarget.name || "专注"}</span>
-            <ChevronRight size={11} className="shrink-0 text-slate-400" />
-          </button>
+          {/* Target Title (Clickable in focus mode, status indicator in rest mode) */}
+          {sessionType === "rest" ? (
+            <div
+              className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-semibold select-none max-w-[85px] truncate"
+              title="休息时段"
+            >
+              <Coffee size={12} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <span className="truncate">休息时段</span>
+            </div>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setSearchQuery("");
+                setActiveModal("task-selector");
+              }}
+              className="flex items-center gap-0.5 text-xs text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 font-medium cursor-pointer select-none max-w-[85px] truncate text-left"
+              title="点击选择关联任务/习惯"
+            >
+              <span className="truncate">{selectedTarget.name || "专注"}</span>
+              <ChevronRight size={11} className="shrink-0 text-slate-400" />
+            </button>
+          )}
 
-          {/* Digital Timer (Clickable) */}
+          {/* Digital Timer */}
           <button
             onClick={(e) => {
               e.stopPropagation();
-              setEditMinutesInput(String(focusMinutes));
+              setEditFocusInput(String(focusMinutes));
+              setEditRestInput(String(restMinutes));
               setActiveModal("time-editor");
             }}
-            className="text-[22px] font-bold tracking-tight text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400 leading-none cursor-pointer select-none text-left mt-0.5"
-            title="点击修改专注时间"
+            className={cn(
+              "text-[22px] font-bold tracking-tight leading-none cursor-pointer select-none text-left mt-0.5",
+              sessionType === "rest"
+                ? "text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
+                : "text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400"
+            )}
+            title="点击修改时间设置"
           >
             {formatTime(secondsLeft)}
           </button>
@@ -950,3 +1186,4 @@ export function FocusAssistant() {
     </div>
   );
 }
+
