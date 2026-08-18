@@ -45,17 +45,22 @@ WorkBuddy-D 支持在「设置 - 通用设置」中全局切换视觉风格体�
 | --- | --- | --- |
 | Desktop chrome | Window controls and persistent tool navigation | `src/components/layout/AppLayout.tsx` |
 | Route canvas | Active task, habit, knowledge, or review work | `src/router.tsx`, `src/pages/` |
-| Today Panel | 2-tier daily workspace: Top (Tasks + Habits & Review) and Bottom (Full-width Project Gantt Timeline) | `src/components/today/TodayPanel.tsx`, `ProjectTimeline.tsx` |
+| Today Panel | 2-tier daily workspace: Top (Tasks + Habits & Review) and Bottom (Full-width Project Gantt Timeline with default all-projects view, single-line stage names, and active window date range filtering) | `src/components/today/TodayPanel.tsx`, `ProjectTimeline.tsx` |
 | Task Center | 4 Quadrants (`🔥 紧急讨伐`, `🌿 核心修炼`, `⚡ 突发委托`, `💧 支线见闻`) and period grouping | `src/components/time-management/DailyQuadrants.tsx`, `TimeManagementPanel.tsx` |
+| Project Center | Priority- and progress-sorted projects list, vertical stage quadrant cards with schedule grouping, and full quick-edit integration | `src/pages/ProjectsPage.tsx`, `ProjectStageBoard.tsx` |
 | Cards and panels | Group related information and actions | `src/components/ui/card.tsx`, feature panels |
 | Dialogs, modals, and drawers | Focused editing, settings, and standard dialogs | `src/components/ui/modal.tsx` (Arco Modal), `dialog.tsx`, `popconfirm.tsx` |
 | Floating menus and toasts | Transient actions and global feedback | `src/components/ui/dropdown-menu.tsx`, `src/components/ui/toast.tsx` |
-| Secondary webviews | Quick task editing and focus assistant companions | `quick-edit.html`, `focus-assistant.html` |
+| Secondary webviews | Quick task editing (with priority flag switcher) and focus assistant companions (with 3-tab target binding & tree picker) | `quick-edit.html`, `focus-assistant.html` |
 
 ## Interaction and accessibility expectations
 
 - Use semantic controls where available. Existing UI uses native buttons plus `aria-label`, `aria-checked`, `aria-expanded`, dialogs, alerts, navigation labels, and polite live regions.
-- **Task item action switching**: When a task has description content, the detail indicator (`AlignLeft`) is displayed in its normal static state; upon mouse hover, the detail indicator smoothly transitions into the destructive delete button (`X`).
+- **Task item action switching & height stability**:
+  - The right action slot is statically dimensioned at `24×24px` (`size-6`);
+  - When a task has description content, the detail indicator (`AlignLeft`) is displayed statically; when hovering, it smoothly transitions into the destructive delete button (`X`);
+  - When a task has no description content, an invisible `size-6` placeholder element occupies the slot, ensuring row height remains rock-solid without layout jitter on hover.
+- **Priority Flag Switcher**: In the Task Quick Edit window, clicking the top-right flag icon opens a dropdown to switch among the 4 priority quadrants (`urgent`/`high`/`medium`/`low`), immediately updating both quadrant and priority.
 - Preserve keyboard focus and accessible labels when composing or replacing an existing dialog, toolbar, switch, listbox, or navigation control.
 - Reuse the Lucide icon system already used by the shell or the dedicated `PixelIcons` system in pixel mode; an icon-only control needs a text label for assistive technology.
 - Do not claim a formal accessibility conformance level: none is configured or audited in this repository.

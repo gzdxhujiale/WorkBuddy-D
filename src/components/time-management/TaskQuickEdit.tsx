@@ -23,6 +23,7 @@ import {
   ChevronRight,
   Circle,
   CalendarDays,
+  Check,
 } from "lucide-react";
 import dayjs from "dayjs";
 import {
@@ -43,16 +44,19 @@ import { PixelScroll } from "@/components/pixel/PixelIcons";
 
 // ==========================================
 // TaskQuickEdit — Tailwind v4 规范精简 3-Layer 快捷编辑浮层
-// 第一层：标题/描述 + 「日期与提醒」字段 + 象限旗标
+// 第一层：标题/描述 + 「日期与提醒」字段 + 象限/优先级旗标
 // 第二层：快捷日期 + 月历 + 时间/提醒入口
 // 第三层：时间下拉 / 提醒设置
 // ==========================================
 
-const QUADRANT_META: Record<QuadrantType, { name: string; color: string }> = {
-  Q1: { name: "重要且紧急", color: "#d32f2f" },
-  Q2: { name: "重要不紧急", color: "#25845a" },
-  Q3: { name: "紧急不重要", color: "#d97706" },
-  Q4: { name: "不重要不紧急", color: "#697381" },
+const QUADRANT_META: Record<
+  QuadrantType,
+  { name: string; pixelName: string; color: string; priority: "urgent" | "high" | "medium" | "low" }
+> = {
+  Q1: { name: "重要且紧急", pixelName: "🔥 紧急讨伐", color: "#d32f2f", priority: "urgent" },
+  Q2: { name: "重要不紧急", pixelName: "🌿 核心修炼", color: "#25845a", priority: "high" },
+  Q3: { name: "紧急不重要", pixelName: "⚡ 突发委托", color: "#d97706", priority: "medium" },
+  Q4: { name: "不重要不紧急", pixelName: "💧 支线见闻", color: "#697381", priority: "low" },
 };
 
 const L1_WIDTH = 420;
@@ -118,7 +122,13 @@ export const TaskQuickEditPopover = memo(
     ({ task, quadrant, anchorRect, onCommit, onCreate, onClose }, handleRef) => {
       const { isPixelTheme } = useAppThemeStyle();
       const isCreate = !task;
-      const meta = QUADRANT_META[task?.quadrant ?? quadrant ?? "Q2"];
+      const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantType>(
+        task?.quadrant ?? quadrant ?? "Q2"
+      );
+      const [flagMenuOpen, setFlagMenuOpen] = useState(false);
+      const flagRef = useRef<HTMLButtonElement>(null);
+      const flagMenuRef = useRef<HTMLDivElement>(null);
+      const meta = QUADRANT_META[selectedQuadrant];
 
       // ---------- 标题 / 描述 ----------
       const [title, setTitle] = useState(task?.title ?? "");
@@ -250,6 +260,7 @@ export const TaskQuickEditPopover = memo(
         rangeEndTime,
         rangeAllDay,
         appliedReminder,
+        selectedQuadrant,
       });
       useEffect(() => {
         draftRef.current = {
@@ -262,8 +273,20 @@ export const TaskQuickEditPopover = memo(
           rangeEndTime,
           rangeAllDay,
           appliedReminder,
+          selectedQuadrant,
         };
-      }, [dateSel, timeSel, scheduleMode, rangeStartDate, rangeStartTime, rangeEndDate, rangeEndTime, rangeAllDay, appliedReminder]);
+      }, [
+        dateSel,
+        timeSel,
+        scheduleMode,
+        rangeStartDate,
+        rangeStartTime,
+        rangeEndDate,
+        rangeEndTime,
+        rangeAllDay,
+        appliedReminder,
+        selectedQuadrant,
+      ]);
 
       const submitCreate = () => {
         const t = latestTitle.current.trim();
@@ -280,9 +303,12 @@ export const TaskQuickEditPopover = memo(
             ? composeDeadline(draft.dateSel, draft.timeSel)
             : undefined;
         if (isRange && (!scheduledStartAt || !scheduledEndAt || scheduledEndAt <= scheduledStartAt)) return;
+        const q = draft.selectedQuadrant;
         onCreate?.({
           title: t,
           description: hasTaskDescription(finalDesc) ? finalDesc : undefined,
+          quadrant: q,
+          priority: QUADRANT_META[q].priority,
           scheduleMode: scheduledEndAt ? draft.scheduleMode : undefined,
           scheduledStartAt,
           scheduledEndAt,
@@ -304,11 +330,14 @@ export const TaskQuickEditPopover = memo(
             : undefined;
         if (isRange && (!scheduledStartAt || !scheduledEndAt || scheduledEndAt <= scheduledStartAt)) return;
 
+        const q = draft.selectedQuadrant;
         const next: Partial<Task> = {
           title: latestTitle.current.trim() || task.title,
           description: hasTaskDescription(latestDescription.current)
             ? latestDescription.current
             : undefined,
+          quadrant: q,
+          priority: QUADRANT_META[q].priority,
           scheduleMode: scheduledEndAt ? draft.scheduleMode : undefined,
           scheduledStartAt,
           scheduledEndAt,
@@ -395,15 +424,12 @@ export const TaskQuickEditPopover = memo(
         setL3Pos({ top, left });
       }, [third, customMode]);
 
-      useEffect(() => {
-        if (third === "time") {
-          const sel = timeListRef.current?.querySelector(".sel");
-          sel?.scrollIntoView({ block: "center" });
-        }
-      }, [third]);
-
       // ---------- 分层关闭 ----------
       const closeOneLayer = () => {
+        if (flagMenuOpen) {
+          setFlagMenuOpen(false);
+          return;
+        }
         if (third) {
           setThird(null);
           return;
@@ -432,6 +458,11 @@ export const TaskQuickEditPopover = memo(
           // DatePicker / DateRangePicker portals are mounted directly under document.body
           if (t instanceof Element && t.closest?.("[class*='fixed z-[2000]']")) return;
 
+          if (flagMenuRef.current?.contains(t) || flagRef.current?.contains(t)) return;
+          if (flagMenuOpen) {
+            setFlagMenuOpen(false);
+          }
+
           if (timePopRef.current?.contains(t) || remindPopRef.current?.contains(t)) return;
           if (third) {
             setThird(null);
@@ -449,29 +480,31 @@ export const TaskQuickEditPopover = memo(
           if (e.key !== "Escape") return;
           closeOneLayer();
         };
-        document.addEventListener("mousedown", onMouseDown);
-        document.addEventListener("keydown", onKeyDown);
+        window.addEventListener("mousedown", onMouseDown, true);
+        window.addEventListener("keydown", onKeyDown);
         return () => {
-          document.removeEventListener("mousedown", onMouseDown);
-          document.removeEventListener("keydown", onKeyDown);
+          window.removeEventListener("mousedown", onMouseDown, true);
+          window.removeEventListener("keydown", onKeyDown);
         };
-      }, [third, dateOpen, task?.id]);
+      }, [third, dateOpen, flagMenuOpen, task?.id]);
 
-      // ---------- 字段文本 ----------
+      // ---------- 辅助计算 ----------
       const fieldText = useMemo(() => {
         if (scheduleMode === "range") {
-          const start = dayjs(rangeStartDate).format("M月D日");
-          const end = dayjs(rangeEndDate).format("M月D日");
-          const time = rangeAllDay ? "全天" : `${rangeStartTime}–${rangeEndTime}`;
-          return `${start}–${end} ${time}`;
+          const s = rangeStartDate
+            ? `${rangeStartDate}${rangeAllDay ? "" : ` ${rangeStartTime}`}`
+            : "";
+          const e = rangeEndDate
+            ? `${rangeEndDate}${rangeAllDay ? "" : ` ${rangeEndTime}`}`
+            : "";
+          if (s && e) return `${s} ~ ${e}`;
+          if (e) return `截至 ${e}`;
+          return "选择时间段";
         }
-        if (!dateSel) return "日期与提醒";
-        const d = dayjs(dateSel);
-        let text = `${d.month() + 1}月${d.date()}日`;
-        if (timeSel) text += ` ${timeSel}`;
-        if (appliedReminder) text += ` · ${reminderLabel(appliedReminder)}提醒`;
-        return text;
-      }, [scheduleMode, rangeStartDate, rangeEndDate, rangeStartTime, rangeEndTime, rangeAllDay, dateSel, timeSel, appliedReminder]);
+        if (!dateSel) return "选择日期与提醒";
+        if (timeSel) return `${dateSel} ${timeSel}`;
+        return dateSel;
+      }, [dateSel, timeSel, scheduleMode, rangeStartDate, rangeStartTime, rangeEndDate, rangeEndTime, rangeAllDay]);
 
       // ---------- 月历 ----------
       const calendarCells = useMemo(() => {
@@ -552,7 +585,7 @@ export const TaskQuickEditPopover = memo(
                 : "fixed z-[1050] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none overflow-hidden"
             }
           >
-            {/* 顶栏：日期与提醒入口 + 象限 Flag */}
+            {/* 顶栏：日期与提醒入口 + 象限 / 优先级 Flag */}
             <div className={`flex items-center gap-2.5 px-3.5 py-3 border-b ${isPixelTheme ? "border-border bg-muted/30" : "border-slate-200/60 dark:border-slate-800/80"}`}>
               <button
                 ref={dateFieldRef}
@@ -570,23 +603,79 @@ export const TaskQuickEditPopover = memo(
                 }`}
                 onClick={() => {
                   setThird(null);
+                  setFlagMenuOpen(false);
                   setDateOpen((v) => !v);
                 }}
               >
                 {isPixelTheme ? <PixelScroll size={16} className="flex-shrink-0" /> : <CalendarDays size={17} className="flex-shrink-0" />}
                 <span className="truncate">{fieldText}</span>
               </button>
-              <button
-                type="button"
-                className={`p-1 flex-shrink-0 grid place-items-center cursor-default ${
-                  isPixelTheme ? "rounded-xs border border-border/60 bg-muted/40 shadow-[1px_1px_0px_#000]" : "rounded-lg"
-                }`}
-                title={`所属象限：${meta.name}`}
-                aria-label={`所属象限：${meta.name}`}
-                style={{ color: meta.color }}
-              >
-                <Flag size={17} fill="currentColor" />
-              </button>
+
+              <div className="relative">
+                <button
+                  ref={flagRef}
+                  type="button"
+                  onClick={() => {
+                    setDateOpen(false);
+                    setThird(null);
+                    setFlagMenuOpen((v) => !v);
+                  }}
+                  className={`p-1 flex-shrink-0 grid place-items-center cursor-pointer transition-colors ${
+                    isPixelTheme
+                      ? "rounded-xs border border-border/60 bg-muted/40 hover:bg-muted shadow-[1px_1px_0px_#000]"
+                      : "rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                  title={`优先级 / 所属象限：${isPixelTheme ? meta.pixelName : meta.name} (点击修改)`}
+                  aria-label={`优先级 / 所属象限：${meta.name}`}
+                  style={{ color: meta.color }}
+                >
+                  <Flag size={17} fill="currentColor" />
+                </button>
+
+                {flagMenuOpen && (
+                  <div
+                    ref={flagMenuRef}
+                    className={`absolute right-0 top-full mt-1.5 z-50 min-w-44 p-1 shadow-xl animate-in fade-in zoom-in-95 ${
+                      isPixelTheme
+                        ? "bg-card border-2 border-border rounded-xs shadow-[3px_3px_0px_#000] font-mono"
+                        : "bg-popover border border-border rounded-xl shadow-lg"
+                    }`}
+                  >
+                    <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground">
+                      修改优先级 / 象限
+                    </div>
+                    {(["Q1", "Q2", "Q3", "Q4"] as QuadrantType[]).map((q) => {
+                      const qMeta = QUADRANT_META[q];
+                      const isSelected = selectedQuadrant === q;
+                      return (
+                        <button
+                          key={q}
+                          type="button"
+                          onClick={() => {
+                            setSelectedQuadrant(q);
+                            setFlagMenuOpen(false);
+                          }}
+                          className={`w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-left cursor-pointer transition-colors ${
+                            isPixelTheme ? "rounded-xs" : "rounded-lg"
+                          } ${
+                            isSelected
+                              ? isPixelTheme
+                                ? "bg-muted font-bold text-foreground border border-border/60"
+                                : "bg-accent font-semibold text-foreground"
+                              : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                          }`}
+                        >
+                          <Flag size={14} fill="currentColor" style={{ color: qMeta.color }} />
+                          <span className="flex-1 truncate">
+                            {isPixelTheme ? qMeta.pixelName : qMeta.name}
+                          </span>
+                          {isSelected && <Check size={12} className="text-foreground shrink-0" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* 编辑主体：标题 + 描述 */}

@@ -76,8 +76,8 @@ async function installListeners(): Promise<void> {
     }),
     listen<{ session: string; draft: TaskDraft }>('tqe:create', (e) => {
       if (e.payload?.session !== current?.session) return;
-      const q = current?.opts.quadrant;
-      if (q) current?.opts.onCreate?.(q, e.payload.draft);
+      const q = e.payload.draft.quadrant || current?.opts.quadrant || 'Q2';
+      current?.opts.onCreate?.(q, e.payload.draft);
     }),
     listen<{ session: string }>('tqe:closed', (e) => {
       endSession(e.payload?.session ?? '');

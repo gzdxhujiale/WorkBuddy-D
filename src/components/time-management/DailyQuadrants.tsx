@@ -432,14 +432,19 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
               )}
             </div>
 
-            <div className="flex items-center justify-end flex-shrink-0 ml-2 min-w-[24px]">
-              {hasContent && (
+            <div className="flex items-center justify-end flex-shrink-0 ml-2 size-6">
+              {hasContent ? (
                 <span
                   title="包含任务详情"
                   className="flex items-center justify-center size-6 text-muted-foreground group-hover:hidden transition-all"
                 >
                   <AlignLeft size={13} />
                 </span>
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="size-6 invisible group-hover:hidden pointer-events-none"
+                />
               )}
               <Button
                 variant="ghost"

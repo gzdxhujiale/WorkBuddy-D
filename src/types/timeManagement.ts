@@ -32,6 +32,8 @@ export interface Task {
 export interface TaskDraft {
   title: string;
   description?: string;
+  quadrant?: QuadrantType;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
   scheduleMode?: ScheduleMode;
   scheduledStartAt?: number;
   scheduledEndAt?: number;

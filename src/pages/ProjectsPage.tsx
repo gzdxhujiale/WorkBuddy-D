@@ -373,7 +373,38 @@ export function ProjectsPage() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
 
-  const projects = data?.projects ?? [];
+  const rawProjects = data?.projects ?? [];
+  const allTasks = data?.tasks ?? [];
+
+  const projects = useMemo(() => {
+    const PRIORITY_WEIGHT: Record<Priority, number> = {
+      urgent: 4,
+      high: 3,
+      medium: 2,
+      low: 1,
+    };
+
+    return [...rawProjects].sort((a, b) => {
+      // 1. 先按项目优先级排序（紧急 > 高 > 中 > 低）
+      const pDiff = (PRIORITY_WEIGHT[b.priority] ?? 0) - (PRIORITY_WEIGHT[a.priority] ?? 0);
+      if (pDiff !== 0) return pDiff;
+
+      // 2. 再按项目完成进度排序（完成度高 -> 完成度低）
+      const tasksA = allTasks.filter((t) => t.projectId === a.id);
+      const doneA = tasksA.filter((t) => t.completed).length;
+      const progressA = tasksA.length > 0 ? doneA / tasksA.length : 0;
+
+      const tasksB = allTasks.filter((t) => t.projectId === b.id);
+      const doneB = tasksB.filter((t) => t.completed).length;
+      const progressB = tasksB.length > 0 ? doneB / tasksB.length : 0;
+
+      if (progressB !== progressA) return progressB - progressA;
+
+      // 3. 兜底按更新时间降序
+      return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
+    });
+  }, [rawProjects, allTasks]);
+
   const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
   const selectedStages = useMemo(
     () => (data?.stages ?? []).filter((stage) => stage.projectId === selected?.id).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -428,7 +459,7 @@ export function ProjectsPage() {
         </div>
         <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-3">
           {projects.map((project) => {
-            const taskSet = (data?.tasks ?? []).filter((task) => task.projectId === project.id);
+            const taskSet = allTasks.filter((task) => task.projectId === project.id);
             const done = taskSet.filter((task) => task.completed).length;
             const isCurrent = selected?.id === project.id;
             return (
@@ -450,7 +481,12 @@ export function ProjectsPage() {
                       <span className="truncate text-sm font-semibold text-foreground">{project.name}</span>
                       <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                     </div>
-                    <div className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                      <span
+                        className={`inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold border ${priorityClasses[project.priority]}`}
+                      >
+                        {PRIORITY_LABELS[project.priority]}
+                      </span>
                       <span className="shrink-0">{PROJECT_STATUS_LABELS[project.status]}</span>
                       {(project.startDate || project.endDate) && (
                         <span className="truncate">
