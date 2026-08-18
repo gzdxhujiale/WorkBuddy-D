@@ -26,18 +26,22 @@ export function useFocusTaskOptions() {
   const { userId } = useAuth();
   const QUERY_KEY = queryKeys.focusAssistantTasks(userId);
 
-  return useQuery<Array<Pick<Task, "id" | "title">>>({
+  return useQuery<Array<Pick<Task, "id" | "title" | "projectId">>>({
     queryKey: QUERY_KEY,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("time_management_tasks")
-        .select("id, title")
+        .select("id, title, project_id")
         .eq("user_id", userId)
         .is("deleted_at", null)
         .eq("completed", false)
         .order("created_at", { ascending: false });
       throwOnPostgrestError(error, "加载可专注任务");
-      return data ?? [];
+      return (data ?? []).map((row) => ({
+        id: row.id,
+        title: row.title,
+        projectId: row.project_id || undefined,
+      }));
     },
     staleTime: 5_000,
   });

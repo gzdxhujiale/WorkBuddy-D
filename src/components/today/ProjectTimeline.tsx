@@ -97,7 +97,7 @@ export const ProjectTimeline: React.FC = () => {
   const tasks = projectsData?.tasks ?? [];
 
   const [viewMode, setViewMode] = useState<TimelineViewMode>("biweekly");
-  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("all");
   const [viewDropdownOpen, setViewDropdownOpen] = useState(false);
   const [projectDropdownOpen, setProjectDropdownOpen] = useState(false);
 
@@ -108,13 +108,12 @@ export const ProjectTimeline: React.FC = () => {
     return d;
   });
 
-  // Active project selection
+  // Active project selection (when a specific project is selected)
   const currentProject: Project | undefined = useMemo(() => {
-    if (selectedProjectId) {
-      const found = projects.find((p) => p.id === selectedProjectId);
-      if (found) return found;
+    if (selectedProjectId && selectedProjectId !== "all") {
+      return projects.find((p) => p.id === selectedProjectId);
     }
-    return projects.find((p) => p.status === "in_progress") ?? projects[0];
+    return undefined;
   }, [projects, selectedProjectId]);
 
   const todayStr = todayYMD();
@@ -195,55 +194,89 @@ export const ProjectTimeline: React.FC = () => {
     return dateList.findIndex((d) => formatDateYMD(d) === todayStr);
   }, [dateList, todayStr]);
 
-  // Project stages for active project
-  const projectStages: ProjectStage[] = useMemo(() => {
-    if (!currentProject) return [];
-    return stages
-      .filter((s) => s.projectId === currentProject.id)
-      .sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [stages, currentProject]);
+  interface TimelineStageItem extends ProjectStage {
+    projectName: string;
+    computedStart: Date;
+    computedEnd: Date;
+  }
 
-  // If stages have no dates, derive or generate sensible timeline dates
-  const timelineStages = useMemo(() => {
-    if (!currentProject) return [];
+  // Filter and compute stages whose schedule strictly intersects the visible window
+  const timelineStages = useMemo<TimelineStageItem[]>(() => {
+    const targetProjects =
+      selectedProjectId === "all"
+        ? projects.filter((p) => p.status !== "archived")
+        : projects.filter((p) => p.id === selectedProjectId);
 
-    return projectStages.map((stage, index) => {
+    if (targetProjects.length === 0) return [];
+
+    const projectMap = new Map(targetProjects.map((p) => [p.id, p]));
+    const targetProjectIds = new Set(targetProjects.map((p) => p.id));
+
+    const relevantStages = stages
+      .filter((s) => targetProjectIds.has(s.projectId))
+      .sort((a, b) => {
+        if (selectedProjectId === "all" && a.projectId !== b.projectId) {
+          return a.projectId.localeCompare(b.projectId);
+        }
+        return a.sortOrder - b.sortOrder;
+      });
+
+    const windowStart = windowStartDate.getTime();
+    const windowEnd = windowEndDate.getTime() + 86400000 - 1; // inclusive end of day
+
+    const results: TimelineStageItem[] = [];
+
+    for (const stage of relevantStages) {
+      const proj = projectMap.get(stage.projectId);
+      if (!proj) continue;
+
       let start = parseDateStr(stage.startDate);
       let end = parseDateStr(stage.endDate);
 
-      // Try inferring from tasks if stage dates are not set
+      // Infer from tasks if stage dates are missing
       if (!start || !end) {
         const stageTasks = tasks.filter((t) => t.projectStageId === stage.id);
-        const taskEndDates = stageTasks
-          .map((t) => t.scheduledEndAt)
+        const taskStartTimes = stageTasks
+          .map((t) => t.scheduledStartAt || t.scheduledEndAt)
           .filter((t): t is number => Boolean(t));
-        if (taskEndDates.length > 0) {
-          const minTime = Math.min(...taskEndDates);
-          const maxTime = Math.max(...taskEndDates);
-          if (!start) start = new Date(minTime);
-          if (!end) end = new Date(maxTime);
+        const taskEndTimes = stageTasks
+          .map((t) => t.scheduledEndAt || t.scheduledStartAt)
+          .filter((t): t is number => Boolean(t));
+
+        if (taskStartTimes.length > 0 && !start) {
+          start = new Date(Math.min(...taskStartTimes));
+        }
+        if (taskEndTimes.length > 0 && !end) {
+          end = new Date(Math.max(...taskEndTimes));
         }
       }
 
-      // Fallback: If still no dates, stagger stages relative to project start or today
-      if (!start || !end) {
-        const base = parseDateStr(currentProject.startDate) ?? addDays(todayDate, -2);
-        const stageStart = addDays(base, index * 4);
-        const stageEnd = addDays(stageStart, 5);
-        start = start ?? stageStart;
-        end = end ?? stageEnd;
-      }
+      // If one date is present, default the other to the same date
+      if (start && !end) end = new Date(start);
+      if (!start && end) start = new Date(end);
 
-      // Ensure start <= end
+      // If still no date, stage is not scheduled; do NOT force synthetic dates
+      if (!start || !end) continue;
+
       if (end < start) end = start;
 
-      return {
+      const stageStart = start.getTime();
+      const stageEnd = end.getTime() + 86400000 - 1;
+
+      // Only include stages whose date range intersects the current visible window
+      const isOverlapping = stageEnd >= windowStart && stageStart <= windowEnd;
+      if (!isOverlapping) continue;
+
+      results.push({
         ...stage,
+        projectName: proj.name,
         computedStart: start,
         computedEnd: end,
-      };
-    });
-  }, [currentProject, projectStages, tasks, todayDate]);
+      });
+    }
+
+    return results;
+  }, [projects, stages, tasks, selectedProjectId, windowStartDate, windowEndDate]);
 
   return (
     <section
@@ -310,58 +343,74 @@ export const ProjectTimeline: React.FC = () => {
             </div>
           </div>
 
-          {/* Project Switcher Dropdown (if multiple projects exist) */}
-          {projects.length > 0 && (
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => {
-                  setProjectDropdownOpen(!projectDropdownOpen);
-                  setViewDropdownOpen(false);
-                }}
-                className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
-                  isPixelTheme
-                    ? "rounded-xs border border-border bg-muted/60 hover:bg-muted"
-                    : "rounded-lg border border-border/70 bg-muted/20 hover:bg-accent"
-                )}
-              >
-                <FolderKanban className="size-3.5 text-sky-500" />
-                <span className="max-w-[120px] truncate">{currentProject?.name ?? "选择项目"}</span>
-                <ChevronDown className="size-3 opacity-60" />
-              </button>
-
-              {projectDropdownOpen && (
-                <div
-                  className={cn(
-                    "absolute left-0 top-full mt-1.5 z-50 min-w-44 border border-border bg-popover p-1 shadow-lg animate-in fade-in zoom-in-95",
-                    isPixelTheme ? "rounded-xs shadow-[3px_3px_0px_#000]" : "rounded-xl"
-                  )}
-                  onMouseLeave={() => setProjectDropdownOpen(false)}
-                >
-                  {projects.map((proj) => (
-                    <button
-                      key={proj.id}
-                      type="button"
-                      onClick={() => {
-                        setSelectedProjectId(proj.id);
-                        setProjectDropdownOpen(false);
-                      }}
-                      className={cn(
-                        "w-full text-left px-2.5 py-1.5 text-xs transition-colors flex items-center justify-between cursor-pointer",
-                        isPixelTheme ? "rounded-xs" : "rounded-lg",
-                        currentProject?.id === proj.id
-                          ? "bg-accent font-semibold text-foreground"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      )}
-                    >
-                      <span className="truncate">{proj.name}</span>
-                    </button>
-                  ))}
-                </div>
+          {/* Project Switcher Dropdown */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setProjectDropdownOpen(!projectDropdownOpen);
+                setViewDropdownOpen(false);
+              }}
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
+                isPixelTheme
+                  ? "rounded-xs border border-border bg-muted/60 hover:bg-muted"
+                  : "rounded-lg border border-border/70 bg-muted/20 hover:bg-accent"
               )}
-            </div>
-          )}
+            >
+              <FolderKanban className="size-3.5 text-sky-500" />
+              <span className="max-w-[120px] truncate">
+                {selectedProjectId === "all" ? "全部项目" : currentProject?.name ?? "选择项目"}
+              </span>
+              <ChevronDown className="size-3 opacity-60" />
+            </button>
+
+            {projectDropdownOpen && (
+              <div
+                className={cn(
+                  "absolute left-0 top-full mt-1.5 z-50 min-w-44 border border-border bg-popover p-1 shadow-lg animate-in fade-in zoom-in-95",
+                  isPixelTheme ? "rounded-xs shadow-[3px_3px_0px_#000]" : "rounded-xl"
+                )}
+                onMouseLeave={() => setProjectDropdownOpen(false)}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedProjectId("all");
+                    setProjectDropdownOpen(false);
+                  }}
+                  className={cn(
+                    "w-full text-left px-2.5 py-1.5 text-xs transition-colors flex items-center justify-between cursor-pointer",
+                    isPixelTheme ? "rounded-xs" : "rounded-lg",
+                    selectedProjectId === "all"
+                      ? "bg-accent font-semibold text-foreground"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                  )}
+                >
+                  <span className="truncate font-medium">全部项目</span>
+                </button>
+                {projects.map((proj) => (
+                  <button
+                    key={proj.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedProjectId(proj.id);
+                      setProjectDropdownOpen(false);
+                    }}
+                    className={cn(
+                      "w-full text-left px-2.5 py-1.5 text-xs transition-colors flex items-center justify-between cursor-pointer",
+                      isPixelTheme ? "rounded-xs" : "rounded-lg",
+                      selectedProjectId === proj.id
+                        ? "bg-accent font-semibold text-foreground"
+                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                    )}
+                  >
+                    <span className="truncate">{proj.name}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right: View Switcher (周视图 / 双周视图 / 月视图) + "今天" Button */}
@@ -432,7 +481,7 @@ export const ProjectTimeline: React.FC = () => {
       {timelineStages.length === 0 ? (
         <div className="py-10 text-center text-xs text-muted-foreground">
           <FolderKanban className="mx-auto mb-2 size-7 opacity-40 text-muted-foreground" />
-          当前项目暂无阶段。可在「项目中心」配置阶段与时间周期。
+          当前时间视图（{VIEW_MODE_LABELS[viewMode]}）内暂无排期阶段。可在「项目中心」为阶段配置时间周期。
         </div>
       ) : (
         <div className="mt-4 overflow-x-auto min-w-0">
@@ -440,7 +489,9 @@ export const ProjectTimeline: React.FC = () => {
             {/* Column Headers */}
             <div className="flex items-center text-xs text-muted-foreground select-none pb-1 border-b border-border/40">
               {/* Stage label column */}
-              <div className="w-28 shrink-0 font-semibold pl-1 text-muted-foreground text-xs">阶段</div>
+              <div className="w-36 shrink-0 font-semibold pl-1 text-muted-foreground text-xs">
+                {selectedProjectId === "all" ? "项目-阶段" : "阶段"}
+              </div>
 
               {/* Day Axis */}
               <div
@@ -490,7 +541,7 @@ export const ProjectTimeline: React.FC = () => {
                 <div
                   className="absolute top-0 bottom-0 pointer-events-none z-20"
                   style={{
-                    left: `calc(112px + ${(todayIndex + 0.5) * (100 / totalDays)}% * ((100% - 112px) / 100))`,
+                    left: `calc(144px + ${(todayIndex + 0.5) * (100 / totalDays)}% * ((100% - 144px) / 100))`,
                     width: "1.5px",
                   }}
                 >
@@ -513,7 +564,10 @@ export const ProjectTimeline: React.FC = () => {
                 const isVisible = clampedEnd > 0 && clampedStart < totalDays;
 
                 const leftPct = (clampedStart / totalDays) * 100;
-                const widthPct = Math.max(viewMode === "month" ? 2.5 : 4, ((clampedEnd - clampedStart) / totalDays) * 100);
+                const widthPct = Math.max(
+                  viewMode === "month" ? 2.5 : 4,
+                  ((clampedEnd - clampedStart) / totalDays) * 100
+                );
 
                 // Is active / highlighted bar
                 const isTodayActive =
@@ -529,13 +583,18 @@ export const ProjectTimeline: React.FC = () => {
                   barClass = "bg-muted/70 text-muted-foreground border border-border/80";
                 }
 
+                const displayName =
+                  selectedProjectId === "all"
+                    ? `${stage.projectName}-${stage.name}`
+                    : stage.name;
+
                 return (
                   <div key={stage.id} className="flex items-center text-xs group">
                     {/* Stage Name */}
-                    <div className="w-28 shrink-0 flex items-center gap-1.5 pr-2 truncate text-foreground font-medium">
+                    <div className="w-36 shrink-0 flex items-center gap-1.5 pr-2 truncate text-foreground font-medium">
                       <span className="size-1.5 rounded-full bg-muted-foreground/60 shrink-0" />
-                      <span className="truncate" title={stage.name}>
-                        {stage.name}
+                      <span className="truncate text-xs" title={displayName}>
+                        {displayName}
                       </span>
                     </div>
 
@@ -559,9 +618,9 @@ export const ProjectTimeline: React.FC = () => {
                             left: `${leftPct}%`,
                             width: `${widthPct}%`,
                           }}
-                          title={`${stage.name} (${formatShortDate(stage.computedStart)} - ${formatShortDate(stage.computedEnd)})`}
+                          title={`${displayName} (${formatShortDate(stage.computedStart)} - ${formatShortDate(stage.computedEnd)})`}
                         >
-                          <span className="truncate font-medium pr-1">{stage.name}</span>
+                          <span className="truncate font-medium pr-1">{displayName}</span>
                           <span className="text-[10px] opacity-85 tabular-nums whitespace-nowrap hidden md:inline shrink-0">
                             {formatShortDate(stage.computedStart)} - {formatShortDate(stage.computedEnd)}
                           </span>

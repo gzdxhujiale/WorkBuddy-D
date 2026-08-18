@@ -5,9 +5,10 @@ import {
   X,
   MoreHorizontal,
   ChevronRight,
-  Search,
+  ChevronDown,
   Check,
   RotateCcw,
+  RotateCw,
   Sparkles,
   Sun,
   Gamepad2,
@@ -16,10 +17,13 @@ import {
   Cat,
   Dog,
   Bot,
+  FolderKanban,
+  Layers,
 } from "lucide-react";
 import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
 import { useFocusTaskOptions } from "@/hooks/useTimeManagement";
 import { useHabitData } from "@/hooks/useHabits";
+import { useProjectsData } from "@/hooks/useProjects";
 import { focusAssistantApi, FocusStats } from "@/services/focusAssistantService";
 import { sendDesktopNotification } from "@/services/notificationService";
 import { useAuth } from "@/lib/auth";
@@ -43,10 +47,22 @@ export type StyleTheme =
   | "vector"
   | "vector-pure";
 
-interface SelectedTarget {
-  type: "none" | "task" | "habit";
+export type FocusTargetType =
+  | "none"
+  | "project"
+  | "project-stage"
+  | "project-task"
+  | "task"
+  | "habit";
+
+export interface SelectedTarget {
+  type: FocusTargetType;
   id: string;
   name: string;
+  projectId?: string;
+  projectName?: string;
+  stageId?: string;
+  stageName?: string;
 }
 
 const clamp = (val: number, min = 1, max = 180) => Math.max(min, Math.min(max, Number.isFinite(val) ? Math.floor(val) : min));
@@ -62,9 +78,34 @@ async function setWindowGeometry(width: number, height: number) {
 
 export function FocusAssistant() {
   const { userId } = useAuth();
-  const { data: tasks = [] } = useFocusTaskOptions();
-  const { data: habitData } = useHabitData();
+  const { data: tasks = [], refetch: refetchTasks, isFetching: isFetchingTasks } = useFocusTaskOptions();
+  const { data: habitData, refetch: refetchHabits, isFetching: isFetchingHabits } = useHabitData();
   const habits = habitData?.habits ?? [];
+  const { data: projectData, refetch: refetchProjects, isFetching: isFetchingProjects } = useProjectsData();
+  const projects = projectData?.projects ?? [];
+  const stages = projectData?.stages ?? [];
+  const projectTasks = projectData?.tasks ?? [];
+
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+
+  const handleRefreshData = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsManualRefreshing(true);
+    try {
+      await Promise.all([
+        refetchTasks(),
+        refetchHabits(),
+        refetchProjects(),
+      ]);
+    } catch {
+      // Ignore
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  };
+
+  const isDataRefreshing =
+    isManualRefreshing || isFetchingTasks || isFetchingHabits || isFetchingProjects;
 
   // Persistent preferences
   const [focusMinutes, setFocusMinutes] = useState<number>(() => {
@@ -128,8 +169,9 @@ export function FocusAssistant() {
   // Modal Temp States
   const [editFocusInput, setEditFocusInput] = useState<string>(String(focusMinutes));
   const [editRestInput, setEditRestInput] = useState<string>(String(restMinutes));
-  const [selectorTab, setSelectorTab] = useState<"task" | "habit">("task");
-  const [searchQuery, setSearchQuery] = useState("");
+  const [selectorTab, setSelectorTab] = useState<"project" | "task" | "habit">("project");
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+  const [expandedStages, setExpandedStages] = useState<Record<string, boolean>>({});
 
   const startedAt = useRef<number | null>(null);
   const remainingRef = useRef(secondsLeft);
@@ -351,7 +393,7 @@ export function FocusAssistant() {
   // Handle window sizing according to active state/modal
   useEffect(() => {
     if (activeModal === "task-selector") {
-      setWindowGeometry(210, 290);
+      setWindowGeometry(210, 260);
     } else if (activeModal === "time-editor") {
       setWindowGeometry(210, 190);
     } else if (activeModal === "menu" || activeModal === "style-menu") {
@@ -374,7 +416,7 @@ export function FocusAssistant() {
         await win.setAlwaysOnTop(isPinned);
         unlisten = await win.onScaleChanged(async () => {
           if (activeModal === "task-selector") {
-            await win.setSize(new LogicalSize(210, 290)).catch(() => undefined);
+            await win.setSize(new LogicalSize(210, 260)).catch(() => undefined);
           } else if (activeModal === "time-editor") {
             await win.setSize(new LogicalSize(210, 190)).catch(() => undefined);
           } else if (activeModal === "menu" || activeModal === "style-menu") {
@@ -428,9 +470,14 @@ export function FocusAssistant() {
     void sendDesktopNotification(notificationTitle, text);
 
     try {
+      const taskId =
+        (selectedTarget.type === "task" || selectedTarget.type === "project-task") &&
+        selectedTarget.id
+          ? selectedTarget.id
+          : null;
       const created = await focusAssistantApi.create({
         cycleId: createFocusCycleId(),
-        taskId: selectedTarget.type === "task" && selectedTarget.id ? selectedTarget.id : null,
+        taskId,
         type: "focus",
         status: "running",
         plannedMinutes: minutes,
@@ -686,18 +733,45 @@ export function FocusAssistant() {
   const progressRatio = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
   const strokeDashoffset = 113.1 * (1 - progressRatio); // 2 * PI * 18 ≈ 113.1
 
-  // Filtered Task & Habit list
+  // Filtered Standalone Tasks (excluding project tasks) & Habits
   const filteredTasks = useMemo(() => {
-    if (!searchQuery.trim()) return tasks;
-    const q = searchQuery.toLowerCase();
-    return tasks.filter((t) => t.title.toLowerCase().includes(q));
-  }, [tasks, searchQuery]);
+    return tasks.filter((t) => !t.projectId);
+  }, [tasks]);
 
-  const filteredHabits = useMemo(() => {
-    if (!searchQuery.trim()) return habits;
-    const q = searchQuery.toLowerCase();
-    return habits.filter((h) => h.name.toLowerCase().includes(q));
-  }, [habits, searchQuery]);
+  const filteredHabits = habits;
+
+  const projectsTree = useMemo(() => {
+    return projects.map((p) => {
+      const pStages = stages
+        .filter((s) => s.projectId === p.id)
+        .sort((a, b) => a.sortOrder - b.sortOrder);
+      const pTasks = projectTasks.filter((t) => t.projectId === p.id && !t.completed);
+      return {
+        project: p,
+        stages: pStages,
+        tasks: pTasks,
+      };
+    });
+  }, [projects, stages, projectTasks]);
+
+  const toggleProject = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedProjects((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const toggleStage = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedStages((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const getTargetLabel = () => {
+    if (selectedTarget.type === "project") return `📁 ${selectedTarget.name}`;
+    if (selectedTarget.type === "project-stage") return `📑 ${selectedTarget.name}`;
+    if (selectedTarget.type === "project-task") return `📋 ${selectedTarget.name}`;
+    if (selectedTarget.type === "task") return `📋 ${selectedTarget.name}`;
+    if (selectedTarget.type === "habit") return `✨ ${selectedTarget.name}`;
+    return selectedTarget.name || "专注";
+  };
 
   // Window Background and Card Themes for Modals / Cards
   const getThemeClasses = () => {
@@ -715,13 +789,13 @@ export function FocusAssistant() {
   };
 
   // ============================================================================
-  // Modal: Task / Habit Selector
+  // Modal: Task / Habit / Project Tree Selector
   // ============================================================================
   if (activeModal === "task-selector") {
     return (
       <div
         className={cn(
-          "w-[200px] h-[280px] p-2.5 flex flex-col rounded-2xl select-none overflow-hidden text-xs border-0 outline-none",
+          "w-[210px] h-[260px] p-2 flex flex-col rounded-2xl select-none overflow-hidden text-xs border-0 outline-none",
           getThemeClasses()
         )}
         onMouseDown={(e) => {
@@ -730,13 +804,33 @@ export function FocusAssistant() {
       >
         {/* Header Segmented Pill Tabs */}
         <div className="flex items-center justify-between pb-1.5 shrink-0">
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-full mx-auto">
+          <div
+            className={cn(
+              "flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-full mx-auto text-[11px]",
+              theme.startsWith("pixel") && "bg-amber-100/90 border border-amber-900/40 rounded-xs font-mono"
+            )}
+          >
+            <button
+              onClick={() => setSelectorTab("project")}
+              className={cn(
+                "px-2.5 py-0.5 rounded-full transition-colors font-medium cursor-pointer",
+                selectorTab === "project"
+                  ? theme.startsWith("pixel")
+                    ? "bg-amber-900 text-amber-50 font-bold rounded-xs shadow-xs"
+                    : "bg-blue-50 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400 font-semibold shadow-xs"
+                  : "text-slate-500 dark:text-slate-400 hover:text-slate-800"
+              )}
+            >
+              项目
+            </button>
             <button
               onClick={() => setSelectorTab("task")}
               className={cn(
-                "px-3 py-0.5 rounded-full text-xs transition-colors font-medium cursor-pointer",
+                "px-2.5 py-0.5 rounded-full transition-colors font-medium cursor-pointer",
                 selectorTab === "task"
-                  ? "bg-blue-50 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400 font-semibold shadow-xs"
+                  ? theme.startsWith("pixel")
+                    ? "bg-amber-900 text-amber-50 font-bold rounded-xs shadow-xs"
+                    : "bg-blue-50 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400 font-semibold shadow-xs"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-800"
               )}
             >
@@ -745,63 +839,73 @@ export function FocusAssistant() {
             <button
               onClick={() => setSelectorTab("habit")}
               className={cn(
-                "px-3 py-0.5 rounded-full text-xs transition-colors font-medium cursor-pointer",
+                "px-2.5 py-0.5 rounded-full transition-colors font-medium cursor-pointer",
                 selectorTab === "habit"
-                  ? "bg-blue-50 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400 font-semibold shadow-xs"
+                  ? theme.startsWith("pixel")
+                    ? "bg-amber-900 text-amber-50 font-bold rounded-xs shadow-xs"
+                    : "bg-blue-50 text-blue-600 dark:bg-blue-950/80 dark:text-blue-400 font-semibold shadow-xs"
                   : "text-slate-500 dark:text-slate-400 hover:text-slate-800"
               )}
             >
               习惯
             </button>
           </div>
-          <button
-            onClick={() => {
-              setActiveModal("none");
-              setSearchQuery("");
-            }}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded cursor-pointer ml-1"
-          >
-            <X size={13} />
-          </button>
-        </div>
-
-        {/* Search Input */}
-        <div className="flex items-center gap-1.5 px-2 py-1 bg-slate-100/90 dark:bg-slate-800/80 rounded-lg mb-2 shrink-0">
-          <Search size={12} className="text-slate-400 shrink-0" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="搜索"
-            className="bg-transparent text-xs outline-none w-full text-slate-800 dark:text-slate-200 placeholder:text-slate-400"
-          />
-        </div>
-
-        {/* Section Tag */}
-        <div className="flex items-center gap-1 text-[11px] font-semibold text-slate-700 dark:text-slate-300 px-1 pb-1 shrink-0">
-          <span>{selectorTab === "task" ? "📅 今日待办" : "📅 今日习惯"}</span>
+          <div className="flex items-center gap-0.5 ml-1">
+            <button
+              onClick={handleRefreshData}
+              disabled={isDataRefreshing}
+              className={cn(
+                "text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 p-0.5 rounded cursor-pointer transition-colors",
+                theme.startsWith("pixel") && "hover:text-amber-900",
+                isDataRefreshing && "opacity-70 cursor-not-allowed"
+              )}
+              title="刷新同步项目任务与习惯"
+            >
+              <RotateCw
+                size={12}
+                className={cn(
+                  "transition-transform",
+                  isDataRefreshing && "animate-spin text-blue-500"
+                )}
+              />
+            </button>
+            <button
+              onClick={() => setActiveModal("none")}
+              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-0.5 rounded cursor-pointer"
+              title="关闭"
+            >
+              <X size={13} />
+            </button>
+          </div>
         </div>
 
         {/* Scrollable list */}
-        <div className="flex-1 overflow-y-auto no-scrollbar space-y-0.5 pr-0.5">
-          {/* Option: No association (pure focus) */}
+        <div className="flex-1 overflow-y-auto no-scrollbar space-y-0.5 pr-0.5 pt-0.5">
+          {/* Universal Option: No association (pure focus) */}
           <div
             onClick={() => {
               const target: SelectedTarget = { type: "none", id: "", name: "专注" };
               setSelectedTarget(target);
               localStorage.setItem("workbuddy.focusAssistant.target", JSON.stringify(target));
               setActiveModal("none");
-              setSearchQuery("");
             }}
             className={cn(
               "flex items-center gap-2 px-1.5 py-1.5 rounded-md cursor-pointer transition-colors text-xs hover:bg-slate-100 dark:hover:bg-slate-800",
-              selectedTarget.type === "none" && "bg-blue-50/60 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-medium"
+              theme.startsWith("pixel") && "hover:bg-amber-100/80 rounded-xs",
+              selectedTarget.type === "none" &&
+                (theme.startsWith("pixel")
+                  ? "bg-amber-200/80 text-amber-950 font-bold"
+                  : "bg-blue-50/60 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-medium")
             )}
           >
             <div
               className={cn(
                 "size-3 rounded-full border flex items-center justify-center shrink-0",
-                selectedTarget.type === "none" ? "border-blue-500 bg-blue-500 text-white" : "border-slate-300 dark:border-slate-600"
+                selectedTarget.type === "none"
+                  ? theme.startsWith("pixel")
+                    ? "border-amber-900 bg-amber-900 text-white"
+                    : "border-blue-500 bg-blue-500 text-white"
+                  : "border-slate-300 dark:border-slate-600"
               )}
             >
               {selectedTarget.type === "none" && <div className="size-1 bg-white rounded-full" />}
@@ -809,11 +913,353 @@ export function FocusAssistant() {
             <span className="truncate">纯专注 (无关联)</span>
           </div>
 
-          {/* Tab 1: Tasks */}
+          {/* ======================================================== */}
+          {/* Tab 1: Project Tree (Projects -> Stages -> Tasks)         */}
+          {/* ======================================================== */}
+          {selectorTab === "project" && (
+            <>
+              {projectsTree.length === 0 ? (
+                <div className="text-center py-6 text-slate-400 text-[11px]">暂无项目</div>
+              ) : (
+                projectsTree.map(({ project: p, stages: pStages, tasks: pTasks }) => {
+                  const isProjectExpanded = Boolean(expandedProjects[p.id]);
+                  const isProjectSelected =
+                    selectedTarget.type === "project" && selectedTarget.id === p.id;
+                  const unassignedTasks = pTasks.filter((t) => !t.projectStageId);
+                  const hasChildren = pStages.length > 0 || unassignedTasks.length > 0;
+
+                  return (
+                    <div key={p.id} className="space-y-0.5">
+                      {/* Project Row */}
+                      <div
+                        className={cn(
+                          "group flex items-center justify-between px-1.5 py-1 rounded-md cursor-pointer transition-colors text-xs hover:bg-slate-100 dark:hover:bg-slate-800",
+                          theme.startsWith("pixel") && "hover:bg-amber-100/80 rounded-xs",
+                          isProjectSelected &&
+                            (theme.startsWith("pixel")
+                              ? "bg-amber-200/90 text-amber-950 font-bold"
+                              : "bg-blue-50/70 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 font-medium")
+                        )}
+                      >
+                        <div
+                          className="flex items-center gap-1 min-w-0 flex-1"
+                          onClick={() => {
+                            const target: SelectedTarget = {
+                              type: "project",
+                              id: p.id,
+                              name: p.name,
+                              projectId: p.id,
+                              projectName: p.name,
+                            };
+                            setSelectedTarget(target);
+                            localStorage.setItem(
+                              "workbuddy.focusAssistant.target",
+                              JSON.stringify(target)
+                            );
+                            setActiveModal("none");
+                          }}
+                        >
+                          {hasChildren ? (
+                            <button
+                              type="button"
+                              onClick={(e) => toggleProject(p.id, e)}
+                              className="p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors shrink-0"
+                            >
+                              {isProjectExpanded ? (
+                                <ChevronDown size={11} />
+                              ) : (
+                                <ChevronRight size={11} />
+                              )}
+                            </button>
+                          ) : (
+                            <span className="w-3 shrink-0" />
+                          )}
+                          <FolderKanban
+                            size={12}
+                            className={cn(
+                              "shrink-0",
+                              theme.startsWith("pixel") ? "text-amber-800" : "text-blue-500"
+                            )}
+                          />
+                          <span className="truncate flex-1 font-medium text-[11px]">{p.name}</span>
+                        </div>
+
+                        {/* Project Select Radio */}
+                        <div
+                          onClick={() => {
+                            const target: SelectedTarget = {
+                              type: "project",
+                              id: p.id,
+                              name: p.name,
+                              projectId: p.id,
+                              projectName: p.name,
+                            };
+                            setSelectedTarget(target);
+                            localStorage.setItem(
+                              "workbuddy.focusAssistant.target",
+                              JSON.stringify(target)
+                            );
+                            setActiveModal("none");
+                          }}
+                          className={cn(
+                            "size-3 rounded-full border flex items-center justify-center shrink-0 ml-1 cursor-pointer",
+                            isProjectSelected
+                              ? theme.startsWith("pixel")
+                                ? "border-amber-900 bg-amber-900 text-white"
+                                : "border-blue-500 bg-blue-500 text-white"
+                              : "border-slate-300 dark:border-slate-600 hover:border-blue-400"
+                          )}
+                          title="关联整个项目"
+                        >
+                          {isProjectSelected && <div className="size-1 bg-white rounded-full" />}
+                        </div>
+                      </div>
+
+                      {/* Expanded Stages & Tasks */}
+                      {isProjectExpanded && hasChildren && (
+                        <div className="pl-2 space-y-0.5 border-l border-slate-200/70 dark:border-slate-700/70 ml-2">
+                          {/* Stages */}
+                          {pStages.map((s) => {
+                            const sTasks = pTasks.filter((t) => t.projectStageId === s.id);
+                            const isStageExpanded = Boolean(expandedStages[s.id]);
+                            const isStageSelected =
+                              selectedTarget.type === "project-stage" &&
+                              selectedTarget.id === s.id;
+
+                            return (
+                              <div key={s.id} className="space-y-0.5">
+                                {/* Stage Row */}
+                                <div
+                                  className={cn(
+                                    "flex items-center justify-between px-1 py-0.5 rounded-md cursor-pointer transition-colors text-xs hover:bg-slate-100 dark:hover:bg-slate-800",
+                                    theme.startsWith("pixel") && "hover:bg-amber-100/80 rounded-xs",
+                                    isStageSelected &&
+                                      (theme.startsWith("pixel")
+                                        ? "bg-amber-200/90 text-amber-950 font-bold"
+                                        : "bg-purple-50/70 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 font-medium")
+                                  )}
+                                >
+                                  <div
+                                    className="flex items-center gap-1 min-w-0 flex-1"
+                                    onClick={() => {
+                                      const target: SelectedTarget = {
+                                        type: "project-stage",
+                                        id: s.id,
+                                        name: `${p.name} · ${s.name}`,
+                                        projectId: p.id,
+                                        projectName: p.name,
+                                        stageId: s.id,
+                                        stageName: s.name,
+                                      };
+                                      setSelectedTarget(target);
+                                      localStorage.setItem(
+                                        "workbuddy.focusAssistant.target",
+                                        JSON.stringify(target)
+                                      );
+                                      setActiveModal("none");
+                                    }}
+                                  >
+                                    {sTasks.length > 0 ? (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => toggleStage(s.id, e)}
+                                        className="p-0.5 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors shrink-0"
+                                      >
+                                        {isStageExpanded ? (
+                                          <ChevronDown size={10} />
+                                        ) : (
+                                          <ChevronRight size={10} />
+                                        )}
+                                      </button>
+                                    ) : (
+                                      <span className="w-2.5 shrink-0" />
+                                    )}
+                                    <Layers
+                                      size={11}
+                                      className={cn(
+                                        "shrink-0",
+                                        theme.startsWith("pixel")
+                                          ? "text-amber-700"
+                                          : "text-purple-500"
+                                      )}
+                                    />
+                                    <span className="truncate flex-1 text-[10.5px]">
+                                      {s.name}
+                                    </span>
+                                    <span className="text-[9px] text-slate-400 font-mono">
+                                      ({sTasks.length})
+                                    </span>
+                                  </div>
+
+                                  {/* Stage Select Radio */}
+                                  <div
+                                    onClick={() => {
+                                      const target: SelectedTarget = {
+                                        type: "project-stage",
+                                        id: s.id,
+                                        name: `${p.name} · ${s.name}`,
+                                        projectId: p.id,
+                                        projectName: p.name,
+                                        stageId: s.id,
+                                        stageName: s.name,
+                                      };
+                                      setSelectedTarget(target);
+                                      localStorage.setItem(
+                                        "workbuddy.focusAssistant.target",
+                                        JSON.stringify(target)
+                                      );
+                                      setActiveModal("none");
+                                    }}
+                                    className={cn(
+                                      "size-2.5 rounded-full border flex items-center justify-center shrink-0 ml-1 cursor-pointer",
+                                      isStageSelected
+                                        ? theme.startsWith("pixel")
+                                          ? "border-amber-900 bg-amber-900 text-white"
+                                          : "border-purple-500 bg-purple-500 text-white"
+                                        : "border-slate-300 dark:border-slate-600 hover:border-purple-400"
+                                    )}
+                                    title="关联此阶段"
+                                  >
+                                    {isStageSelected && (
+                                      <div className="size-0.5 bg-white rounded-full" />
+                                    )}
+                                  </div>
+                                </div>
+
+                                {/* Stage Tasks */}
+                                {isStageExpanded && sTasks.length > 0 && (
+                                  <div className="pl-3 space-y-0.5 border-l border-slate-200/50 dark:border-slate-700/50 ml-1.5">
+                                    {sTasks.map((t) => {
+                                      const isTaskSelected =
+                                        selectedTarget.type === "project-task" &&
+                                        selectedTarget.id === t.id;
+                                      return (
+                                        <div
+                                          key={t.id}
+                                          onClick={() => {
+                                            const target: SelectedTarget = {
+                                              type: "project-task",
+                                              id: t.id,
+                                              name: t.title,
+                                              projectId: p.id,
+                                              projectName: p.name,
+                                              stageId: s.id,
+                                              stageName: s.name,
+                                            };
+                                            setSelectedTarget(target);
+                                            localStorage.setItem(
+                                              "workbuddy.focusAssistant.target",
+                                              JSON.stringify(target)
+                                            );
+                                            setActiveModal("none");
+                                          }}
+                                          className={cn(
+                                            "flex items-center gap-1.5 px-1 py-0.5 rounded-md cursor-pointer transition-colors text-xs hover:bg-slate-100 dark:hover:bg-slate-800",
+                                            theme.startsWith("pixel") && "hover:bg-amber-100/80 rounded-xs",
+                                            isTaskSelected &&
+                                              (theme.startsWith("pixel")
+                                                ? "bg-amber-200/90 text-amber-950 font-bold"
+                                                : "bg-emerald-50/70 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 font-medium")
+                                          )}
+                                        >
+                                          <div
+                                            className={cn(
+                                              "size-2 rounded-full border flex items-center justify-center shrink-0",
+                                              isTaskSelected
+                                                ? theme.startsWith("pixel")
+                                                  ? "border-amber-900 bg-amber-900 text-white"
+                                                  : "border-emerald-500 bg-emerald-500 text-white"
+                                                : "border-slate-300 dark:border-slate-600"
+                                            )}
+                                          >
+                                            {isTaskSelected && (
+                                              <div className="size-0.5 bg-white rounded-full" />
+                                            )}
+                                          </div>
+                                          <span className="truncate flex-1 text-[10px]">
+                                            {t.title}
+                                          </span>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+
+                          {/* Unassigned Tasks in Project */}
+                          {unassignedTasks.length > 0 && (
+                            <div className="pl-1 space-y-0.5">
+                              {unassignedTasks.map((t) => {
+                                const isTaskSelected =
+                                  selectedTarget.type === "project-task" &&
+                                  selectedTarget.id === t.id;
+                                return (
+                                  <div
+                                    key={t.id}
+                                    onClick={() => {
+                                      const target: SelectedTarget = {
+                                        type: "project-task",
+                                        id: t.id,
+                                        name: t.title,
+                                        projectId: p.id,
+                                        projectName: p.name,
+                                      };
+                                      setSelectedTarget(target);
+                                      localStorage.setItem(
+                                        "workbuddy.focusAssistant.target",
+                                        JSON.stringify(target)
+                                      );
+                                      setActiveModal("none");
+                                    }}
+                                    className={cn(
+                                      "flex items-center gap-1.5 px-1 py-0.5 rounded-md cursor-pointer transition-colors text-xs hover:bg-slate-100 dark:hover:bg-slate-800",
+                                      theme.startsWith("pixel") && "hover:bg-amber-100/80 rounded-xs",
+                                      isTaskSelected &&
+                                        (theme.startsWith("pixel")
+                                          ? "bg-amber-200/90 text-amber-950 font-bold"
+                                          : "bg-emerald-50/70 dark:bg-emerald-950/50 text-emerald-600 dark:text-emerald-400 font-medium")
+                                    )}
+                                  >
+                                    <div
+                                      className={cn(
+                                        "size-2 rounded-full border flex items-center justify-center shrink-0",
+                                        isTaskSelected
+                                          ? theme.startsWith("pixel")
+                                            ? "border-amber-900 bg-amber-900 text-white"
+                                            : "border-emerald-500 bg-emerald-500 text-white"
+                                          : "border-slate-300 dark:border-slate-600"
+                                      )}
+                                    >
+                                      {isTaskSelected && (
+                                        <div className="size-0.5 bg-white rounded-full" />
+                                      )}
+                                    </div>
+                                    <span className="truncate flex-1 text-[10px]">
+                                      {t.title}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </>
+          )}
+
+          {/* ======================================================== */}
+          {/* Tab 2: Standalone Tasks                                  */}
+          {/* ======================================================== */}
           {selectorTab === "task" && (
             <>
               {filteredTasks.length === 0 ? (
-                <div className="text-center py-4 text-slate-400 text-[11px]">暂无待办任务</div>
+                <div className="text-center py-6 text-slate-400 text-[11px]">暂无独立待办任务</div>
               ) : (
                 filteredTasks.map((t) => {
                   const isSelected = selectedTarget.type === "task" && selectedTarget.id === t.id;
@@ -823,24 +1269,34 @@ export function FocusAssistant() {
                       onClick={() => {
                         const target: SelectedTarget = { type: "task", id: t.id, name: t.title };
                         setSelectedTarget(target);
-                        localStorage.setItem("workbuddy.focusAssistant.target", JSON.stringify(target));
+                        localStorage.setItem(
+                          "workbuddy.focusAssistant.target",
+                          JSON.stringify(target)
+                        );
                         setActiveModal("none");
-                        setSearchQuery("");
                       }}
                       className={cn(
                         "flex items-center gap-2 px-1.5 py-1.5 rounded-md cursor-pointer transition-colors text-xs hover:bg-slate-100 dark:hover:bg-slate-800",
-                        isSelected && "bg-blue-50/60 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-medium"
+                        theme.startsWith("pixel") && "hover:bg-amber-100/80 rounded-xs",
+                        isSelected &&
+                          (theme.startsWith("pixel")
+                            ? "bg-amber-200/90 text-amber-950 font-bold"
+                            : "bg-blue-50/60 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-medium")
                       )}
                     >
                       <div
                         className={cn(
                           "size-3 rounded-full border flex items-center justify-center shrink-0",
-                          isSelected ? "border-blue-500 bg-blue-500 text-white" : "border-slate-300 dark:border-slate-600"
+                          isSelected
+                            ? theme.startsWith("pixel")
+                              ? "border-amber-900 bg-amber-900 text-white"
+                              : "border-blue-500 bg-blue-500 text-white"
+                            : "border-slate-300 dark:border-slate-600"
                         )}
                       >
                         {isSelected && <div className="size-1 bg-white rounded-full" />}
                       </div>
-                      <span className="truncate flex-1">{t.title}</span>
+                      <span className="truncate flex-1 text-[11px]">{t.title}</span>
                     </div>
                   );
                 })
@@ -848,11 +1304,13 @@ export function FocusAssistant() {
             </>
           )}
 
-          {/* Tab 2: Habits */}
+          {/* ======================================================== */}
+          {/* Tab 3: Habits                                            */}
+          {/* ======================================================== */}
           {selectorTab === "habit" && (
             <>
               {filteredHabits.length === 0 ? (
-                <div className="text-center py-4 text-slate-400 text-[11px]">暂无习惯</div>
+                <div className="text-center py-6 text-slate-400 text-[11px]">暂无习惯</div>
               ) : (
                 filteredHabits.map((h) => {
                   const isSelected = selectedTarget.type === "habit" && selectedTarget.id === h.id;
@@ -862,24 +1320,34 @@ export function FocusAssistant() {
                       onClick={() => {
                         const target: SelectedTarget = { type: "habit", id: h.id, name: h.name };
                         setSelectedTarget(target);
-                        localStorage.setItem("workbuddy.focusAssistant.target", JSON.stringify(target));
+                        localStorage.setItem(
+                          "workbuddy.focusAssistant.target",
+                          JSON.stringify(target)
+                        );
                         setActiveModal("none");
-                        setSearchQuery("");
                       }}
                       className={cn(
                         "flex items-center gap-2 px-1.5 py-1.5 rounded-md cursor-pointer transition-colors text-xs hover:bg-slate-100 dark:hover:bg-slate-800",
-                        isSelected && "bg-blue-50/60 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-medium"
+                        theme.startsWith("pixel") && "hover:bg-amber-100/80 rounded-xs",
+                        isSelected &&
+                          (theme.startsWith("pixel")
+                            ? "bg-amber-200/90 text-amber-950 font-bold"
+                            : "bg-blue-50/60 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 font-medium")
                       )}
                     >
                       <div
                         className={cn(
                           "size-3 rounded-full border flex items-center justify-center shrink-0",
-                          isSelected ? "border-blue-500 bg-blue-500 text-white" : "border-slate-300 dark:border-slate-600"
+                          isSelected
+                            ? theme.startsWith("pixel")
+                              ? "border-amber-900 bg-amber-900 text-white"
+                              : "border-blue-500 bg-blue-500 text-white"
+                            : "border-slate-300 dark:border-slate-600"
                         )}
                       >
                         {isSelected && <div className="size-1 bg-white rounded-full" />}
                       </div>
-                      <span className="truncate flex-1">{h.name}</span>
+                      <span className="truncate flex-1 text-[11px]">{h.name}</span>
                     </div>
                   );
                 })
@@ -1313,10 +1781,10 @@ export function FocusAssistant() {
                 {status === "running" ? <Pause size={10} className="fill-current" /> : <Play size={10} className="fill-current ml-0.5" />}
               </button>
               <button
-                onClick={(e) => { e.stopPropagation(); setSearchQuery(""); setActiveModal("task-selector"); }}
+                onClick={(e) => { e.stopPropagation(); setActiveModal("task-selector"); }}
                 className="px-1.5 py-0.5 text-[10px] text-slate-600 dark:text-slate-300 hover:text-blue-500 max-w-[65px] truncate cursor-pointer font-medium"
               >
-                {selectedTarget.name || "专注"}
+                {getTargetLabel()}
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setActiveModal("menu"); }}
@@ -1560,7 +2028,6 @@ export function FocusAssistant() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                setSearchQuery("");
                 setActiveModal("task-selector");
               }}
               className={cn(
@@ -1571,7 +2038,7 @@ export function FocusAssistant() {
               )}
               title="点击选择关联任务/习惯"
             >
-              <span className="truncate">{selectedTarget.name || "专注"}</span>
+              <span className="truncate">{getTargetLabel()}</span>
               <ChevronRight size={11} className="shrink-0 opacity-70" />
             </button>
           )}
