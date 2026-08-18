@@ -12,6 +12,7 @@ import {
   Users,
 } from "lucide-react";
 import { ProjectStageBoard } from "@/components/projects/ProjectStageBoard";
+import { TemplateEditorModal } from "@/components/projects/TemplateEditorModal";
 import { useConfirmDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { useProjectActions, useProjectsData } from "@/hooks/useProjects";
 import { Button } from "@/components/ui/button";
@@ -31,12 +32,10 @@ import {
   type Project,
   type ProjectStatus,
   type ProjectTemplate,
-  type ProjectTemplateDefinition,
 } from "@/types/projects";
-import { QUADRANT_DB_MAP } from "@/types/timeManagement";
-import { createProjectId, createProjectStageId, createProjectTemplateId } from "@/lib/entityIds";
+import { createProjectId, createProjectStageId } from "@/lib/entityIds";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
-import { PixelShield, PixelSword } from "@/components/pixel/PixelIcons";
+import { PixelShield } from "@/components/pixel/PixelIcons";
 import { useUiStore } from "@/stores/uiStore";
 
 const priorityClasses: Record<Priority, string> = {
@@ -255,155 +254,7 @@ function CreateProjectDialog({
   );
 }
 
-function CreateTemplateDialog({
-  open,
-  onOpenChange,
-  onCreate,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onCreate: (template: ProjectTemplate) => Promise<void>;
-}) {
-  const { isPixelTheme } = useAppThemeStyle();
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
-  const [stages, setStages] = useState("需求评审:产品,开发:开发,测试:测试,上线:产品");
-  const [tasks, setTasks] = useState(
-    "需求评审 | 评审需求 | 产品 | high\n开发 | 完成开发 | 开发 | high\n测试 | 测试验收 | 测试 | medium\n上线 | 发布上线 | 产品 | high"
-  );
-  const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
 
-  const submit = async () => {
-    if (!name.trim()) return setError("请填写模板名称");
-    const stageItems = stages
-      .split(",")
-      .map((part) => part.trim())
-      .filter(Boolean)
-      .map((part) => {
-        const [stageName, assignee] = part.split(":").map((item) => item.trim());
-        return { key: stageName, name: stageName, defaultAssigneeName: assignee || undefined };
-      });
-    if (stageItems.some((stage) => !stage.name)) return setError("阶段格式为：阶段名称:默认负责人");
-    const definition: ProjectTemplateDefinition = {
-      stages: stageItems,
-      tasks: tasks
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((line) => {
-          const [stageKey, title, assigneeName, rawPriority, descriptionText] = line.split("|").map((item) => item.trim());
-          return {
-            stageKey,
-            title,
-            assigneeName: assigneeName || undefined,
-            priority: (["low", "medium", "high", "urgent"].includes(rawPriority) ? rawPriority : "medium") as Priority,
-            description: descriptionText || undefined,
-            quadrant: QUADRANT_DB_MAP.Q2,
-          };
-        }),
-    };
-    if (definition.tasks.some((task) => !task.title)) return setError("每条任务至少需要阶段和标题");
-    setSaving(true);
-    setError("");
-    try {
-      await onCreate({
-        id: createProjectTemplateId(),
-        name: name.trim(),
-        description: description.trim() || undefined,
-        definition,
-        updatedAt: 0,
-      });
-      setName("");
-      onOpenChange(false);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "保存模板失败");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={`max-w-2xl ${isPixelTheme ? "font-mono border-2 border-border" : ""}`} onClose={() => onOpenChange(false)}>
-        <DialogHeader>
-          <DialogTitle className={isPixelTheme ? "font-mono flex items-center gap-2" : ""}>
-            {isPixelTheme && <PixelSword size={18} />}
-            {isPixelTheme ? "配置公会冒险模板" : "配置项目模板"}
-          </DialogTitle>
-          <DialogDescription>
-            {isPixelTheme
-              ? "阶段可配置默认负责人；创建项目时任务会以未完成委托生成，不复制具体日期。"
-              : "阶段可配置默认负责人；创建项目时任务会以未完成状态生成，不复制具体日期。"}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3">
-          <label className="grid gap-1.5 text-sm font-medium">
-            模板名称
-            <input
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className={`h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none ${
-                isPixelTheme ? "rounded-xs border-2" : ""
-              }`}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            说明
-            <input
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              className={`h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none ${
-                isPixelTheme ? "rounded-xs border-2" : ""
-              }`}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            阶段（逗号分隔，格式：阶段:默认负责人）
-            <input
-              value={stages}
-              onChange={(event) => setStages(event.target.value)}
-              className={`h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none ${
-                isPixelTheme ? "rounded-xs border-2" : ""
-              }`}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            待生成任务（每行：阶段 | 标题 | 负责人 | 优先级 | 说明）
-            <textarea
-              value={tasks}
-              onChange={(event) => setTasks(event.target.value)}
-              className={`min-h-32 rounded-lg border border-border bg-background p-3 font-mono text-xs outline-none ${
-                isPixelTheme ? "rounded-xs border-2" : ""
-              }`}
-            />
-          </label>
-        </div>
-        {error && (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
-          </p>
-        )}
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => onOpenChange(false)}
-            className={isPixelTheme ? "rounded-xs border-2 shadow-[1px_1px_0px_#000]" : ""}
-          >
-            取消
-          </Button>
-          <Button
-            disabled={saving}
-            onClick={() => void submit()}
-            className={isPixelTheme ? "rounded-xs border-2 shadow-[1px_1px_0px_#000]" : ""}
-          >
-            {saving ? "保存中…" : "保存模板"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 export function ProjectsPage() {
   const { isPixelTheme } = useAppThemeStyle();
@@ -851,7 +702,7 @@ export function ProjectsPage() {
       )}
 
       <CreateProjectDialog open={creating} templates={data?.templates ?? []} onOpenChange={setCreating} onCreate={createProject} />
-      <CreateTemplateDialog open={creatingTemplate} onOpenChange={setCreatingTemplate} onCreate={saveTemplate} />
+      <TemplateEditorModal open={creatingTemplate} onOpenChange={setCreatingTemplate} onSave={saveTemplate} />
       {dialogElement}
     </div>
   );
