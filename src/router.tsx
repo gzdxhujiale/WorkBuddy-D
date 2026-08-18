@@ -6,7 +6,7 @@ const TodayPage = lazy(() => import("@/pages/TodayPage").then(m => ({ default: m
 const FourQuadrantsPage = lazy(() => import("@/pages/FourQuadrantsPage").then(m => ({ default: m.FourQuadrantsPage })));
 const HabitPage = lazy(() => import("@/pages/HabitPage").then(m => ({ default: m.HabitPage })));
 const DailyReviewPage = lazy(() => import("@/pages/DailyReviewPage").then(m => ({ default: m.DailyReviewPage })));
-const ListsPage = lazy(() => import("@/pages/ListsPage").then(m => ({ default: m.ListsPage })));
+const KnowledgePage = lazy(() => import("@/pages/KnowledgePage").then(m => ({ default: m.KnowledgePage })));
 const ProjectsPage = lazy(() => import("@/pages/ProjectsPage").then(m => ({ default: m.ProjectsPage })));
 
 const rootRoute = createRootRoute({
@@ -48,7 +48,7 @@ const dailyReviewRoute = createRoute({
 const listsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/lists",
-  component: ListsPage,
+  component: KnowledgePage,
 });
 
 const projectsRoute = createRoute({

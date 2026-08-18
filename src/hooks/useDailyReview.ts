@@ -5,6 +5,7 @@ import { DailyReviewItem } from "@/types/dailyReview";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
 import { queryKeys } from "@/lib/syncEngine";
 import { useAuth } from "@/lib/auth";
+import { createDailyReviewId } from "@/lib/entityIds";
 
 export function isReviewEmpty(content: string): boolean {
   if (!content) return true;
@@ -97,7 +98,7 @@ export function useReviewActions() {
             baseUpdatedAt: existing.baseUpdatedAt,
           }
         : {
-            id: crypto.randomUUID(),
+            id: createDailyReviewId(),
             date,
             content,
             createdAt: Date.now(),

@@ -375,23 +375,26 @@ export function Popconfirm({
 
   // Clone children to attach ref and click listener
   const triggerElement = isValidElement(children) ? (
-    cloneElement(children as React.ReactElement<any>, {
+    (() => {
+      const trigger = children as React.ReactElement<{ ref?: React.Ref<HTMLElement>; onClick?: React.MouseEventHandler }>;
+      const childRef = trigger.props.ref;
+      return cloneElement(trigger, {
       ref: (node: HTMLElement | null) => {
         triggerRef.current = node;
-        const { ref } = children as any;
-        if (typeof ref === "function") {
-          ref(node);
-        } else if (ref) {
-          ref.current = node;
+        if (typeof childRef === "function") {
+          childRef(node);
+        } else if (childRef) {
+          childRef.current = node;
         }
       },
       onClick: (e: React.MouseEvent) => {
         if (!disabled) {
           setVisible(!isVisible);
         }
-        (children.props as any)?.onClick?.(e);
+        trigger.props.onClick?.(e);
       },
-    })
+      });
+    })()
   ) : (
     <span
       ref={(el) => {
@@ -407,7 +410,7 @@ export function Popconfirm({
       {triggerElement}
       {isVisible &&
         createPortal(
-          <div className="fixed inset-0 z-[1050] select-none">
+          <div className="fixed inset-0 z-[1050] select-none" data-dropdown-menu-overlay>
             {/* Transparent backdrop for outside dismiss */}
             <div
               className="fixed inset-0 bg-transparent"

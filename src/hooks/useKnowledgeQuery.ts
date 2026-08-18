@@ -9,20 +9,22 @@ import {
   logSilent,
 } from '@/lib/syncEngine';
 import { useDebouncedMutation } from '@/hooks/useDebouncedMutation';
-import * as listsService from '@/services/listsService';
-import type { List, Folder, Note, NoteGroup } from '@/types/lists';
-import { getNoteGroups as selectNoteGroups, getNotesByListId as selectNotesByListId } from '@/utils/listsSelectors';
+import * as knowledgeService from '@/services/knowledgeService';
+import type { KnowledgeFolder, KnowledgeBase, Note, NoteGroup } from '@/types/knowledge';
+import { getNoteGroups as selectNoteGroups, getNotesByFolderId as selectNotesByFolderId } from '@/utils/knowledgeSelectors';
 import { useAuth } from '@/lib/auth';
-
-function genId(_prefix: string): string {
-  return crypto.randomUUID();
-}
+import {
+  createKnowledgeBaseId,
+  createKnowledgeFolderId,
+  createNoteGroupId,
+  createNoteId,
+} from '@/lib/entityIds';
 
 /**
- * useListsQuery — the Lists feature's async-data seam on TanStack Query.
+ * useKnowledgeQuery — the knowledge feature's async-data seam on TanStack Query.
  *
- * `useListsData` owns fetching/caching of the four entity collections; components
- * derive views via `listsSelectors`. `useListsActions` is the write path:
+ * `useKnowledgeData` owns fetching/caching of the four entity collections; components
+ * derive views via `knowledgeSelectors`. `useKnowledgeActions` is the write path:
  * synchronous optimistic cache updates + debounced persistence through
  * `sharedSyncEngine` (`list:` completions are refetched by useSyncQueryInvalidator).
  * Cross-window note sync (registered once per window) patches the same cache.
@@ -32,7 +34,7 @@ function genId(_prefix: string): string {
 // BroadcastChannel does not cross Tauri windows on macOS WKWebView, so note
 // changes fan out over Tauri events. `emit` echoes back to the sender window;
 // the instance id filters out self-echo.
-const SYNC_SOURCE_ID = genId('win');
+const SYNC_SOURCE_ID = crypto.randomUUID();
 const NOTE_UPDATED_EVENT = 'lists:note-updated';
 const NOTE_DELETED_EVENT = 'lists:note-deleted';
 const NOTES_REORDERED_EVENT = 'lists:notes-reordered';
@@ -51,33 +53,33 @@ interface NotesReorderPayload {
 
 function broadcastNoteUpdate(noteId: string, updates: Partial<Note>) {
   emit(NOTE_UPDATED_EVENT, { source: SYNC_SOURCE_ID, noteId, updates } satisfies NoteSyncPayload)
-    .catch(e => logSilent('useListsQuery', 'note sync broadcast failed', e));
+    .catch(e => logSilent('useKnowledgeQuery', 'note sync broadcast failed', e));
 }
 
 function broadcastNoteDelete(noteId: string) {
   emit(NOTE_DELETED_EVENT, { source: SYNC_SOURCE_ID, noteId } satisfies NoteSyncPayload)
-    .catch(e => logSilent('useListsQuery', 'note sync broadcast failed', e));
+    .catch(e => logSilent('useKnowledgeQuery', 'note sync broadcast failed', e));
 }
 
 function broadcastNotesReorder(items: Array<[string, number]>) {
   if (items.length === 0) return;
   emit(NOTES_REORDERED_EVENT, { source: SYNC_SOURCE_ID, items } satisfies NotesReorderPayload)
-    .catch(e => logSilent('useListsQuery', 'note sync broadcast failed', e));
+    .catch(e => logSilent('useKnowledgeQuery', 'note sync broadcast failed', e));
 }
 
 // ── Query data ──────────────────────────────────────────────────────────────
 
-export interface ListsQueryData {
-  lists: List[];
-  folders: Folder[];
+export interface KnowledgeQueryData {
+  lists: KnowledgeFolder[];
+  folders: KnowledgeBase[];
   noteGroups: NoteGroup[];
   notes: Note[];
 }
 
-const EMPTY_DATA: ListsQueryData = { lists: [], folders: [], noteGroups: [], notes: [] };
+const EMPTY_DATA: KnowledgeQueryData = { lists: [], folders: [], noteGroups: [], notes: [] };
 
-async function fetchListsData(): Promise<ListsQueryData> {
-  const allData = await listsService.loadAll();
+async function fetchListsData(): Promise<KnowledgeQueryData> {
+  const allData = await knowledgeService.loadAll();
   return {
     folders: allData.folders.map(f => ({ ...f })),
     lists: allData.lists.map(l => ({ ...l })),
@@ -86,17 +88,17 @@ async function fetchListsData(): Promise<ListsQueryData> {
   };
 }
 
-function getData(queryClient: QueryClient, userId: string): ListsQueryData {
-  return queryClient.getQueryData<ListsQueryData>(queryKeys.lists.all(userId)) ?? EMPTY_DATA;
+function getData(queryClient: QueryClient, userId: string): KnowledgeQueryData {
+  return queryClient.getQueryData<KnowledgeQueryData>(queryKeys.lists.all(userId)) ?? EMPTY_DATA;
 }
 
-async function fetchListContents(listId: string): Promise<Pick<ListsQueryData, 'noteGroups' | 'notes'>> {
-  const contents = await listsService.loadListContents(listId);
+async function fetchKnowledgeFolderContents(folderId: string): Promise<Pick<KnowledgeQueryData, 'noteGroups' | 'notes'>> {
+  const contents = await knowledgeService.loadKnowledgeFolderContents(folderId);
   return { noteGroups: contents.noteGroups, notes: contents.notes };
 }
 
-function setData(queryClient: QueryClient, userId: string, updater: (prev: ListsQueryData) => ListsQueryData) {
-  queryClient.setQueryData<ListsQueryData>(queryKeys.lists.all(userId), prev => updater(prev ?? EMPTY_DATA));
+function setData(queryClient: QueryClient, userId: string, updater: (prev: KnowledgeQueryData) => KnowledgeQueryData) {
+  queryClient.setQueryData<KnowledgeQueryData>(queryKeys.lists.all(userId), prev => updater(prev ?? EMPTY_DATA));
 }
 
 // Register the cross-window listeners exactly once per window. Each Tauri window
@@ -117,7 +119,7 @@ function registerCrossWindowSync(queryClient: QueryClient, userId: string) {
       newNotes[index] = { ...newNotes[index], ...updates, updatedAt: Date.now() };
       return { ...data, notes: newNotes };
     });
-  }).catch(e => logSilent('useListsQuery', 'note sync listen failed', e));
+  }).catch(e => logSilent('useKnowledgeQuery', 'note sync listen failed', e));
 
   void listen<NoteSyncPayload>(NOTE_DELETED_EVENT, (event) => {
     const { source, noteId } = event.payload;
@@ -126,7 +128,7 @@ function registerCrossWindowSync(queryClient: QueryClient, userId: string) {
       ...data,
       notes: data.notes.filter(n => n.id !== noteId),
     }));
-  }).catch(e => logSilent('useListsQuery', 'note sync listen failed', e));
+  }).catch(e => logSilent('useKnowledgeQuery', 'note sync listen failed', e));
 
   void listen<NotesReorderPayload>(NOTES_REORDERED_EVENT, (event) => {
     const { source, items } = event.payload;
@@ -136,14 +138,14 @@ function registerCrossWindowSync(queryClient: QueryClient, userId: string) {
       ...data,
       notes: data.notes.map(n => (orderMap.has(n.id) ? { ...n, sortOrder: orderMap.get(n.id)! } : n)),
     }));
-  }).catch(e => logSilent('useListsQuery', 'note sync listen failed', e));
+  }).catch(e => logSilent('useKnowledgeQuery', 'note sync listen failed', e));
 }
 
 /**
- * Fetches only the module shell. Use `useListContents` after the user selects
+ * Fetches only the module shell. Use `useKnowledgeFolderContents` after the user selects
  * a list; templates and note bodies have their own on-demand queries.
  */
-export function useListsData() {
+export function useKnowledgeData() {
   const queryClient = useQueryClient();
   const { userId } = useAuth();
 
@@ -160,18 +162,18 @@ export function useListsData() {
 
 // ── Write path ───────────────────────────────────────────────────────────────
 
-export interface ListsActions {
-  addList: (list: Omit<List, 'id'>) => List;
-  updateList: (id: string, updates: Partial<List>) => void;
-  deleteList: (id: string) => void;
-  duplicateList: (list: List) => List;
-  reorderLists: (orderedIds: string[]) => void;
-  moveList: (listId: string, folderId: string | null, targetIndex?: number) => void;
+export interface KnowledgeActions {
+  addList: (list: Omit<KnowledgeFolder, 'id'>) => KnowledgeFolder;
+  updateList: (id: string, updates: Partial<KnowledgeFolder>) => void;
+  deleteKnowledgeFolder: (id: string) => void;
+  duplicateKnowledgeFolder: (list: KnowledgeFolder) => KnowledgeFolder;
+  reorderKnowledgeFolders: (orderedIds: string[]) => void;
+  moveKnowledgeFolder: (folderId: string, knowledgeBaseId: string | null, targetIndex?: number) => void;
 
-  addFolder: (name: string) => Folder;
-  updateFolder: (id: string, updates: Partial<Folder>) => void;
-  reorderFolders: (orderedIds: string[]) => void;
-  deleteFolder: (id: string) => void;
+  addFolder: (name: string) => KnowledgeBase;
+  updateFolder: (id: string, updates: Partial<KnowledgeBase>) => void;
+  reorderKnowledgeBases: (orderedIds: string[]) => void;
+  deleteKnowledgeBase: (id: string) => void;
 
   addNote: (note: Omit<Note, 'id' | 'createdAt' | 'updatedAt' | 'sortOrder'>) => Note;
   updateNote: (id: string, updates: Partial<Note>) => void;
@@ -180,48 +182,48 @@ export interface ListsActions {
   moveNoteToList: (noteId: string, targetListId: string, targetGroupId?: string | null) => void;
   reorderNotes: (orderedIds: string[]) => void;
 
-  addGroup: (listId: string, name: string) => NoteGroup;
+  addGroup: (folderId: string, name: string) => NoteGroup;
   updateGroup: (id: string, updates: Partial<NoteGroup>) => void;
   deleteGroup: (id: string) => void;
   flushNote: (id: string) => Promise<void>;
 }
 
-export function useListContents(listId: string | null) {
+export function useKnowledgeFolderContents(folderId: string | null) {
   const queryClient = useQueryClient();
   const { userId } = useAuth();
   const query = useQuery({
-    queryKey: queryKeys.lists.contents(userId, listId ?? 'none'),
-    queryFn: () => fetchListContents(listId!),
-    enabled: Boolean(listId),
+    queryKey: queryKeys.lists.contents(userId, folderId ?? 'none'),
+    queryFn: () => fetchKnowledgeFolderContents(folderId!),
+    enabled: Boolean(folderId),
   });
   useEffect(() => {
-    if (!listId || !query.data) return;
+    if (!folderId || !query.data) return;
     setData(queryClient, userId, (current) => ({
       ...current,
-      noteGroups: [...current.noteGroups.filter(group => group.listId !== listId), ...query.data.noteGroups],
-      notes: [...current.notes.filter(note => note.listId !== listId), ...query.data.notes],
+      noteGroups: [...current.noteGroups.filter(group => group.folderId !== folderId), ...query.data.noteGroups],
+      notes: [...current.notes.filter(note => note.folderId !== folderId), ...query.data.notes],
     }));
-  }, [listId, query.data, queryClient, userId]);
+  }, [folderId, query.data, queryClient, userId]);
   return query;
 }
 
-export function useListsActions(): ListsActions {
+export function useKnowledgeActions(): KnowledgeActions {
   const queryClient = useQueryClient();
   const { userId } = useAuth();
   const debouncedSync = useDebouncedMutation();
 
-  return useMemo<ListsActions>(() => {
+  return useMemo<KnowledgeActions>(() => {
     // ── Lists ──
-    const addList: ListsActions['addList'] = (list) => {
+    const addList: KnowledgeActions['addList'] = (list) => {
       const data = getData(queryClient, userId);
-      const newList: List = {
+      const newList: KnowledgeFolder = {
         ...list,
-        id: genId('list'),
+        id: createKnowledgeFolderId(),
         sortOrder: data.lists.length,
       };
       setData(queryClient, userId, () => ({ ...data, lists: [...data.lists, newList] }));
       debouncedSync.schedule(`list:${newList.id}`, async () => {
-        const savedSortOrder = await listsService.upsertList(newList);
+        const savedSortOrder = await knowledgeService.upsertKnowledgeFolder(newList);
         if (savedSortOrder === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
@@ -231,7 +233,7 @@ export function useListsActions(): ListsActions {
       return newList;
     };
 
-    const updateList: ListsActions['updateList'] = (id, updates) => {
+    const updateList: KnowledgeActions['updateList'] = (id, updates) => {
       const data = getData(queryClient, userId);
       const index = data.lists.findIndex(l => l.id === id);
       if (index === -1) return;
@@ -239,22 +241,22 @@ export function useListsActions(): ListsActions {
       newLists[index] = { ...newLists[index], ...updates };
       const list = newLists[index];
       setData(queryClient, userId, () => ({ ...data, lists: newLists }));
-      debouncedSync.schedule(`list:${id}`, async () => { await listsService.upsertList(list); }, HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`list:${id}`, async () => { await knowledgeService.upsertKnowledgeFolder(list); }, HIGH_FREQ_DELAY);
     };
 
-    const deleteList: ListsActions['deleteList'] = (id) => {
+    const deleteKnowledgeFolder: KnowledgeActions['deleteKnowledgeFolder'] = (id) => {
       const data = getData(queryClient, userId);
       setData(queryClient, userId, () => ({
         ...data,
         lists: data.lists.filter(l => l.id !== id),
-        notes: data.notes.filter(n => n.listId !== id),
-        noteGroups: data.noteGroups.filter(g => g.listId !== id),
+        notes: data.notes.filter(n => n.folderId !== id),
+        noteGroups: data.noteGroups.filter(g => g.folderId !== id),
       }));
       debouncedSync.cancel(`list:${id}`);
-      listsService.deleteList(id).catch(() => {});
+      knowledgeService.deleteKnowledgeFolder(id).catch(() => {});
     };
 
-    const reorderLists: ListsActions['reorderLists'] = (orderedIds) => {
+    const reorderKnowledgeFolders: KnowledgeActions['reorderKnowledgeFolders'] = (orderedIds) => {
       const data = getData(queryClient, userId);
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
       const items: Array<[string, number]> = [];
@@ -267,20 +269,20 @@ export function useListsActions(): ListsActions {
         return l;
       });
       setData(queryClient, userId, () => ({ ...data, lists: newLists }));
-      debouncedSync.schedule('reorder:lists', () => listsService.reorderLists(items), LOW_FREQ_DELAY);
+      debouncedSync.schedule('reorder:lists', () => knowledgeService.reorderKnowledgeFolders(items), LOW_FREQ_DELAY);
     };
 
-    const moveList: ListsActions['moveList'] = (listId, folderId, targetIndex) => {
+    const moveKnowledgeFolder: KnowledgeActions['moveKnowledgeFolder'] = (folderId, knowledgeBaseId, targetIndex) => {
       const data = getData(queryClient, userId);
-      const listIndex = data.lists.findIndex(l => l.id === listId);
+      const listIndex = data.lists.findIndex(l => l.id === folderId);
       if (listIndex === -1) return;
 
-      const list = { ...data.lists[listIndex], folderId };
+      const list = { ...data.lists[listIndex], knowledgeBaseId };
       let newLists = [...data.lists];
       newLists[listIndex] = list;
 
       const siblingLists = newLists
-        .filter(l => l.folderId === folderId && l.id !== listId)
+        .filter(l => l.knowledgeBaseId === knowledgeBaseId && l.id !== folderId)
         .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 
       if (targetIndex !== undefined) {
@@ -294,26 +296,26 @@ export function useListsActions(): ListsActions {
 
       newLists = newLists.map(l => (orderMap.has(l.id) ? { ...l, sortOrder: orderMap.get(l.id) } : l));
       setData(queryClient, userId, () => ({ ...data, lists: newLists }));
-      const updatedList = newLists.find(l => l.id === listId);
+      const updatedList = newLists.find(l => l.id === folderId);
       debouncedSync.schedule(
-        `list:${listId}`,
-        () => listsService.moveList(listId, folderId, updatedList?.sortOrder || 0),
+        `list:${folderId}`,
+        () => knowledgeService.moveKnowledgeFolder(folderId, knowledgeBaseId, updatedList?.sortOrder || 0),
         LOW_FREQ_DELAY
       );
     };
 
     // ── Note Groups ──
-    const addGroup: ListsActions['addGroup'] = (listId, name) => {
+    const addGroup: KnowledgeActions['addGroup'] = (folderId, name) => {
       const data = getData(queryClient, userId);
       const newGroup: NoteGroup = {
-        id: genId('group'),
-        listId,
+        id: createNoteGroupId(),
+        folderId,
         name,
-        sortOrder: data.noteGroups.filter(g => g.listId === listId).length,
+        sortOrder: data.noteGroups.filter(g => g.folderId === folderId).length,
       };
       setData(queryClient, userId, () => ({ ...data, noteGroups: [...data.noteGroups, newGroup] }));
       debouncedSync.schedule(`group:${newGroup.id}`, async () => {
-        const savedSortOrder = await listsService.upsertGroup(newGroup);
+        const savedSortOrder = await knowledgeService.upsertGroup(newGroup);
         if (savedSortOrder === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
@@ -323,7 +325,7 @@ export function useListsActions(): ListsActions {
       return newGroup;
     };
 
-    const updateGroup: ListsActions['updateGroup'] = (id, updates) => {
+    const updateGroup: KnowledgeActions['updateGroup'] = (id, updates) => {
       const data = getData(queryClient, userId);
       const index = data.noteGroups.findIndex(g => g.id === id);
       if (index === -1) return;
@@ -331,10 +333,10 @@ export function useListsActions(): ListsActions {
       newGroups[index] = { ...newGroups[index], ...updates };
       const group = newGroups[index];
       setData(queryClient, userId, () => ({ ...data, noteGroups: newGroups }));
-      debouncedSync.schedule(`group:${id}`, async () => { await listsService.upsertGroup(group); }, HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`group:${id}`, async () => { await knowledgeService.upsertGroup(group); }, HIGH_FREQ_DELAY);
     };
 
-    const deleteGroup: ListsActions['deleteGroup'] = (id) => {
+    const deleteGroup: KnowledgeActions['deleteGroup'] = (id) => {
       const data = getData(queryClient, userId);
       setData(queryClient, userId, () => ({
         ...data,
@@ -342,23 +344,23 @@ export function useListsActions(): ListsActions {
         notes: data.notes.map(n => (n.groupId === id ? { ...n, groupId: null } : n)),
       }));
       debouncedSync.cancel(`group:${id}`);
-      listsService.deleteGroup(id).catch(() => {});
+      knowledgeService.deleteGroup(id).catch(() => {});
     };
 
     // ── Notes ──
-    const addNote: ListsActions['addNote'] = (note) => {
+    const addNote: KnowledgeActions['addNote'] = (note) => {
       const data = getData(queryClient, userId);
-      const siblingNotes = data.notes.filter(n => n.listId === note.listId && n.groupId === note.groupId);
+      const siblingNotes = data.notes.filter(n => n.folderId === note.folderId && n.groupId === note.groupId);
       const newNote: Note = {
         ...note,
-        id: genId('note'),
+        id: createNoteId(),
         sortOrder: siblingNotes.length,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       };
       setData(queryClient, userId, () => ({ ...data, notes: [...data.notes, newNote] }));
       debouncedSync.schedule(`note:${newNote.id}`, async () => {
-        const saved = await listsService.upsertNote(newNote);
+        const saved = await knowledgeService.upsertNote(newNote);
         if (saved === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
@@ -372,7 +374,7 @@ export function useListsActions(): ListsActions {
       return newNote;
     };
 
-    const updateNote: ListsActions['updateNote'] = (id, updates) => {
+    const updateNote: KnowledgeActions['updateNote'] = (id, updates) => {
       const delay = updates.title !== undefined || updates.content !== undefined
         ? NOTE_EDIT_DELAY
         : HIGH_FREQ_DELAY;
@@ -382,7 +384,7 @@ export function useListsActions(): ListsActions {
         // Defensive fallback if note is not yet loaded in query cache.
         broadcastNoteUpdate(id, updates);
         debouncedSync.schedule(`note:${id}`, async () => {
-          const savedUpdatedAt = await listsService.patchNote({
+          const savedUpdatedAt = await knowledgeService.patchNote({
             id,
             ...updates,
           });
@@ -404,6 +406,10 @@ export function useListsActions(): ListsActions {
         contentLoaded: newNotes[index].contentLoaded || updates.content !== undefined,
         baseUpdatedAt: newNotes[index].baseUpdatedAt,
       };
+      // Content writes must retain this complete snapshot. A folder-content
+      // refetch contains note metadata only and can replace the cache entry
+      // before the debounce expires.
+      const noteToSave = newNotes[index];
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       broadcastNoteUpdate(id, updates);
       debouncedSync.schedule(`note:${id}`, async () => {
@@ -411,14 +417,18 @@ export function useListsActions(): ListsActions {
         if (!latest) return;
         let savedUpdatedAt: number | undefined;
         let savedSortOrder: number | undefined;
-        if (latest.contentLoaded || updates.content !== undefined) {
-          const saved = await listsService.upsertNote(latest);
+        if (updates.content !== undefined) {
+          const saved = await knowledgeService.upsertNote(noteToSave);
+          savedUpdatedAt = saved?.updatedAt;
+          savedSortOrder = saved?.sortOrder;
+        } else if (latest.contentLoaded) {
+          const saved = await knowledgeService.upsertNote(latest);
           savedUpdatedAt = saved?.updatedAt;
           savedSortOrder = saved?.sortOrder;
         } else {
-          savedUpdatedAt = await listsService.patchNote({
+          savedUpdatedAt = await knowledgeService.patchNote({
             id,
-            listId: updates.listId,
+            folderId: updates.folderId,
             groupId: updates.groupId,
             title: updates.title,
             sortOrder: updates.sortOrder,
@@ -442,18 +452,18 @@ export function useListsActions(): ListsActions {
       }, delay);
     };
 
-    const deleteNote: ListsActions['deleteNote'] = (id) => {
+    const deleteNote: KnowledgeActions['deleteNote'] = (id) => {
       const data = getData(queryClient, userId);
       setData(queryClient, userId, () => ({
         ...data,
         notes: data.notes.filter(n => n.id !== id),
       }));
       debouncedSync.cancel(`note:${id}`);
-      listsService.deleteNote(id).catch(() => {});
+      knowledgeService.deleteNote(id).catch(() => {});
       broadcastNoteDelete(id);
     };
 
-    const moveNoteAndReorder: ListsActions['moveNoteAndReorder'] = (noteId, groupId, targetIndex) => {
+    const moveNoteAndReorder: KnowledgeActions['moveNoteAndReorder'] = (noteId, groupId, targetIndex) => {
       const data = getData(queryClient, userId);
       const noteIndex = data.notes.findIndex(n => n.id === noteId);
       if (noteIndex === -1) return;
@@ -463,7 +473,7 @@ export function useListsActions(): ListsActions {
       newNotes[noteIndex] = note;
 
       const siblingNotes = newNotes
-        .filter(n => n.listId === note.listId && n.groupId === groupId && n.id !== noteId)
+        .filter(n => n.folderId === note.folderId && n.groupId === groupId && n.id !== noteId)
         .sort((a, b) => {
           if (a.sortOrder !== b.sortOrder) return (a.sortOrder || 0) - (b.sortOrder || 0);
           return b.updatedAt - a.updatedAt;
@@ -488,9 +498,9 @@ export function useListsActions(): ListsActions {
       debouncedSync.schedule(
         `note:${noteId}`,
         async () => {
-          const savedUpdatedAt = await listsService.moveNote(
+          const savedUpdatedAt = await knowledgeService.moveNote(
             noteId,
-            note.listId,
+            note.folderId,
             groupId,
             updatedNote?.sortOrder || 0,
             note.baseUpdatedAt,
@@ -512,33 +522,33 @@ export function useListsActions(): ListsActions {
       );
     };
 
-    const moveNoteToList: ListsActions['moveNoteToList'] = (noteId, targetListId, targetGroupId = null) => {
+    const moveNoteToList: KnowledgeActions['moveNoteToList'] = (noteId, targetListId, targetGroupId = null) => {
       const data = getData(queryClient, userId);
       const noteIndex = data.notes.findIndex(n => n.id === noteId);
       if (noteIndex === -1) return;
 
       const oldNote = data.notes[noteIndex];
-      if (oldNote.listId === targetListId && oldNote.groupId === targetGroupId) return;
+      if (oldNote.folderId === targetListId && oldNote.groupId === targetGroupId) return;
 
-      const targetListNotes = data.notes.filter(n => n.listId === targetListId);
+      const targetListNotes = data.notes.filter(n => n.folderId === targetListId);
       const maxSortOrder = targetListNotes.reduce((max, n) => Math.max(max, n.sortOrder || 0), -1);
       const newSortOrder = maxSortOrder + 1;
 
       const newNotes = [...data.notes];
       newNotes[noteIndex] = {
         ...oldNote,
-        listId: targetListId,
+        folderId: targetListId,
         groupId: targetGroupId,
         sortOrder: newSortOrder,
         updatedAt: Date.now(),
       };
 
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
-      broadcastNoteUpdate(noteId, { listId: targetListId, groupId: targetGroupId, sortOrder: newSortOrder });
+      broadcastNoteUpdate(noteId, { folderId: targetListId, groupId: targetGroupId, sortOrder: newSortOrder });
       debouncedSync.schedule(
         `note:${noteId}`,
         async () => {
-          const savedUpdatedAt = await listsService.moveNote(
+          const savedUpdatedAt = await knowledgeService.moveNote(
             noteId,
             targetListId,
             targetGroupId,
@@ -562,7 +572,7 @@ export function useListsActions(): ListsActions {
       );
     };
 
-    const reorderNotes: ListsActions['reorderNotes'] = (orderedIds) => {
+    const reorderNotes: KnowledgeActions['reorderNotes'] = (orderedIds) => {
       const data = getData(queryClient, userId);
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
       const items: Array<[string, number]> = [];
@@ -577,7 +587,7 @@ export function useListsActions(): ListsActions {
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       broadcastNotesReorder(items);
       debouncedSync.schedule('reorder:notes', async () => {
-        const savedVersions = await listsService.reorderNotes(items);
+        const savedVersions = await knowledgeService.reorderNotes(items);
         if (savedVersions === undefined) return;
         const versions = new Map(savedVersions);
         setData(queryClient, userId, (current) => ({
@@ -593,19 +603,19 @@ export function useListsActions(): ListsActions {
     };
 
     // ── Folders ──
-    const addFolder: ListsActions['addFolder'] = (name) => {
+    const addFolder: KnowledgeActions['addFolder'] = (name) => {
       const data = getData(queryClient, userId);
-      const newFolder: Folder = {
-        id: genId('folder'),
+      const newFolder: KnowledgeBase = {
+        id: createKnowledgeBaseId(),
         name,
         sortOrder: data.folders.length,
       };
       setData(queryClient, userId, () => ({ ...data, folders: [...data.folders, newFolder] }));
-      debouncedSync.schedule(`folder:${newFolder.id}`, () => listsService.upsertFolder(newFolder), LOW_FREQ_DELAY);
+      debouncedSync.schedule(`folder:${newFolder.id}`, () => knowledgeService.upsertKnowledgeBase(newFolder), LOW_FREQ_DELAY);
       return newFolder;
     };
 
-    const updateFolder: ListsActions['updateFolder'] = (id, updates) => {
+    const updateFolder: KnowledgeActions['updateFolder'] = (id, updates) => {
       const data = getData(queryClient, userId);
       const index = data.folders.findIndex(f => f.id === id);
       if (index === -1) return;
@@ -613,10 +623,10 @@ export function useListsActions(): ListsActions {
       newFolders[index] = { ...newFolders[index], ...updates };
       const folder = newFolders[index];
       setData(queryClient, userId, () => ({ ...data, folders: newFolders }));
-      debouncedSync.schedule(`folder:${id}`, () => listsService.upsertFolder(folder), HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`folder:${id}`, () => knowledgeService.upsertKnowledgeBase(folder), HIGH_FREQ_DELAY);
     };
 
-    const reorderFolders: ListsActions['reorderFolders'] = (orderedIds) => {
+    const reorderKnowledgeBases: KnowledgeActions['reorderKnowledgeBases'] = (orderedIds) => {
       const data = getData(queryClient, userId);
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
       const items: Array<[string, number]> = [];
@@ -629,22 +639,22 @@ export function useListsActions(): ListsActions {
         return f;
       });
       setData(queryClient, userId, () => ({ ...data, folders: newFolders }));
-      debouncedSync.schedule('reorder:folders', () => listsService.reorderFolders(items), LOW_FREQ_DELAY);
+      debouncedSync.schedule('reorder:folders', () => knowledgeService.reorderKnowledgeBases(items), LOW_FREQ_DELAY);
     };
 
-    const deleteFolder: ListsActions['deleteFolder'] = (id) => {
+    const deleteKnowledgeBase: KnowledgeActions['deleteKnowledgeBase'] = (id) => {
       const data = getData(queryClient, userId);
       setData(queryClient, userId, () => ({
         ...data,
         folders: data.folders.filter(f => f.id !== id),
-        lists: data.lists.map(l => (l.folderId === id ? { ...l, folderId: null } : l)),
+        lists: data.lists.map(l => (l.knowledgeBaseId === id ? { ...l, knowledgeBaseId: null } : l)),
       }));
       debouncedSync.cancel(`folder:${id}`);
-      listsService.deleteFolder(id).catch(() => {});
+      knowledgeService.deleteKnowledgeBase(id).catch(() => {});
     };
 
     // ── Duplicate (composes the primitives above) ──
-    const duplicateList: ListsActions['duplicateList'] = (list) => {
+    const duplicateKnowledgeFolder: KnowledgeActions['duplicateKnowledgeFolder'] = (list) => {
       const newList = addList({ ...list, name: list.name + ' (副本)' });
 
       const sourceGroups = selectNoteGroups(getData(queryClient, userId).noteGroups, list.id);
@@ -655,17 +665,18 @@ export function useListsActions(): ListsActions {
         groupMap.set(group.id, newGroup.id);
       });
 
-      const sourceNotes = selectNotesByListId(getData(queryClient, userId).notes, list.id);
+      const sourceNotes = selectNotesByFolderId(getData(queryClient, userId).notes, list.id);
       sourceNotes.forEach(note => {
         addNote({
-          listId: newList.id,
+          folderId: newList.id,
           groupId: note.groupId ? groupMap.get(note.groupId) || null : null,
           title: note.title,
           content: note.content,
+          contentLoaded: true,
         });
       });
 
-      listsService.duplicateList(list.id, newList).catch(() => {});
+      knowledgeService.duplicateKnowledgeFolder(list.id, newList).catch(() => {});
 
       return newList;
     };
@@ -677,14 +688,14 @@ export function useListsActions(): ListsActions {
     return {
       addList,
       updateList,
-      deleteList,
-      duplicateList,
-      reorderLists,
-      moveList,
+      deleteKnowledgeFolder,
+      duplicateKnowledgeFolder,
+      reorderKnowledgeFolders,
+      moveKnowledgeFolder,
       addFolder,
       updateFolder,
-      reorderFolders,
-      deleteFolder,
+      reorderKnowledgeBases,
+      deleteKnowledgeBase,
       addNote,
       updateNote,
       deleteNote,

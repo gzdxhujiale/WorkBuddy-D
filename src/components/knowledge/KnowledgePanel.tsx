@@ -10,14 +10,14 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-import { useListContents, useListsData, useListsActions } from '@/hooks/useListsQuery';
-import { sortLists, sortFolders } from '@/utils/listsSelectors';
-import { List, Folder, Note, NoteGroup, Template } from '@/types/lists';
+import { useKnowledgeFolderContents, useKnowledgeData, useKnowledgeActions } from '@/hooks/useKnowledgeQuery';
+import { sortKnowledgeFolders, sortKnowledgeBases } from '@/utils/knowledgeSelectors';
+import { KnowledgeFolder, KnowledgeBase, Note, NoteGroup, KnowledgeTemplate } from '@/types/knowledge';
 
 import { TemplateModal, useTemplateData, useTemplateActions } from '../templates';
-import * as listsService from '@/services/listsService';
+import * as knowledgeService from '@/services/knowledgeService';
 import { logSilent } from '@/lib/syncEngine';
-import { computeNoteReorder, computeListReorder } from '@/utils/listsReorder';
+import { computeNoteReorder, computeKnowledgeFolderReorder } from '@/utils/knowledgeReorder';
 import {
   ReactjsTiptapEditor,
   convertMarkdownToTipTapJson,
@@ -78,7 +78,7 @@ function DroppableArea({ id, data, children, className, style, onClick }: Droppa
 }
 
 interface SidebarListItemDroppableProps {
-  list: List;
+  list: KnowledgeFolder;
   activeListId: string | null;
   dragOverListId?: string | null;
   onSelectList: (id: string) => void;
@@ -89,7 +89,7 @@ interface SidebarListItemDroppableProps {
 const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo(({ list, activeListId, dragOverListId, onSelectList, isNested, children }) => {
   const { setNodeRef, isOver } = useDroppable({
     id: `sidebar-list-${list.id}`,
-    data: { type: 'sidebar-list', listId: list.id }
+    data: { type: 'sidebar-list', folderId: list.id }
   });
   const isTarget = isOver || dragOverListId === list.id;
   const isActive = activeListId === list.id;
@@ -116,19 +116,19 @@ const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo((
 // 2. ListsSidebar Component
 // ============================================================================
 interface ListsSidebarProps {
-  lists: List[];
-  folders: Folder[];
+  lists: KnowledgeFolder[];
+  folders: KnowledgeBase[];
   activeListId: string | null;
   loadingListId?: string | null;
   dragOverListId?: string | null;
   dragOverFolderId?: string | null;
   onSelectList: (id: string) => void;
-  onAddClick: (folderId?: string) => void;
-  onEditFolder: (folder: Folder) => void;
-  onDissolveFolder: (folder: Folder) => void;
-  onEditList: (list: List) => void;
-  onDuplicateList: (list: List) => void;
-  onDeleteList: (list: List) => void;
+  onAddClick: (knowledgeBaseId?: string) => void;
+  onEditFolder: (folder: KnowledgeBase) => void;
+  onDissolveFolder: (folder: KnowledgeBase) => void;
+  onEditList: (list: KnowledgeFolder) => void;
+  onDuplicateList: (list: KnowledgeFolder) => void;
+  onDeleteList: (list: KnowledgeFolder) => void;
   isCollapsed?: boolean;
 }
 
@@ -150,23 +150,23 @@ function ListsSidebar({
 }: ListsSidebarProps) {
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
 
-  const toggleFolder = (folderId: string) => {
+  const toggleFolder = (knowledgeBaseId: string) => {
     setCollapsedFolders(prev => ({
       ...prev,
-      [folderId]: !prev[folderId]
+      [knowledgeBaseId]: !prev[knowledgeBaseId]
     }));
   };
 
-  const standaloneLists = useMemo(() => lists.filter(l => !l.folderId), [lists]);
+  const standaloneLists = useMemo(() => lists.filter(l => !l.knowledgeBaseId), [lists]);
   const listsByFolder = useMemo(() => {
-    const acc: Record<string, List[]> = {};
+    const acc: Record<string, KnowledgeFolder[]> = {};
     folders.forEach(f => {
-      acc[f.id] = lists.filter(l => l.folderId === f.id);
+      acc[f.id] = lists.filter(l => l.knowledgeBaseId === f.id);
     });
     return acc;
   }, [folders, lists]);
 
-  const renderSidebarItem = (list: List, isNested: boolean) => (
+  const renderSidebarItem = (list: KnowledgeFolder, isNested: boolean) => (
     <SortableItem key={list.id} id={list.id}>
       <SidebarListItemDroppable
         list={list}
@@ -386,7 +386,7 @@ function NoteItem({ note, onClick, onDuplicate, onDelete }: NoteItemProps) {
 }
 
 interface NoteGroupViewProps {
-  group: { id: string; listId: string; name: string };
+  group: { id: string; folderId: string; name: string };
   notes: Note[];
   isUngrouped?: boolean;
   isDragOverTarget?: boolean;
@@ -559,7 +559,7 @@ function NoteDrawerContent({
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
 
   const isDirtyRef = useRef(false);
-  const latestDataRef = useRef({ title: note.title, content: note.content || '', note });
+  const latestDataRef = useRef({ title: note.title, content: note.content || '', note, contentLoaded: note.contentLoaded === true });
   const onUpdateRef = useRef(onUpdate);
 
   useEffect(() => {
@@ -571,18 +571,18 @@ function NoteDrawerContent({
     setContent(note.content || '');
     setSaveStatus('saved');
     isDirtyRef.current = false;
-    latestDataRef.current = { title: note.title, content: note.content || '', note };
+    latestDataRef.current = { title: note.title, content: note.content || '', note, contentLoaded: note.contentLoaded === true };
   }, [note.id, note.title, note.content]);
 
   useEffect(() => {
-    latestDataRef.current = { title, content, note };
+    latestDataRef.current = { title, content, note, contentLoaded: note.contentLoaded === true };
   }, [title, content, note]);
 
   useEffect(() => {
     return () => {
       if (isDirtyRef.current) {
-        const { note: currentNote, title: currentTitle, content: currentContent } = latestDataRef.current;
-        if (currentNote) {
+        const { note: currentNote, title: currentTitle, content: currentContent, contentLoaded } = latestDataRef.current;
+        if (currentNote && contentLoaded) {
           onUpdateRef.current(currentNote.id, currentTitle, currentContent);
         }
       }
@@ -590,7 +590,7 @@ function NoteDrawerContent({
   }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || note.contentLoaded !== true) return;
     if (title !== note.title || content !== note.content) {
       isDirtyRef.current = true;
       setSaveStatus('saving');
@@ -604,7 +604,7 @@ function NoteDrawerContent({
   }, [title, content, note.id, note.title, note.content, isOpen]);
 
   const handleImport = async () => {
-    const mdContent = await listsService.pickMarkdownFile();
+    const mdContent = await knowledgeService.pickMarkdownFile();
     if (mdContent) {
       const jsonStr = convertMarkdownToTipTapJson(mdContent);
       setContent(jsonStr);
@@ -615,7 +615,7 @@ function NoteDrawerContent({
   const handleExport = async () => {
     try {
       const exportText = convertTipTapJsonToMarkdown(content);
-      await listsService.saveMarkdownFile(`${title || '未命名笔记'}.md`, exportText);
+      await knowledgeService.saveMarkdownFile(`${title || '未命名笔记'}.md`, exportText);
       toast.success('导出成功！');
     } catch (err) {
     }
@@ -785,7 +785,7 @@ function NoteDrawer({
 // 5. Modal Components (KnowledgeBaseModal, FolderModal, ListSettingsModal, BatchExportModal)
 // ============================================================================
 interface FolderModalProps {
-  initialData?: Folder;
+  initialData?: KnowledgeBase;
   onClose: () => void;
   onSave: (name: string) => void;
 }
@@ -829,27 +829,27 @@ function FolderModal({ initialData, onClose, onSave }: FolderModalProps) {
 }
 
 interface AddListModalProps {
-  folders: Folder[];
+  folders: KnowledgeBase[];
   initialFolderId?: string;
-  initialData?: List;
+  initialData?: KnowledgeFolder;
   onClose: () => void;
-  onAdd: (data: { name: string; folderId: string | null }, newFolderName?: string) => void;
-  onAddFolder: (name: string) => Folder;
+  onAdd: (data: { name: string; knowledgeBaseId: string | null }, newFolderName?: string) => void;
+  onAddFolder: (name: string) => KnowledgeBase;
 }
 
 function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, onAddFolder }: AddListModalProps) {
   const [name, setName] = useState(initialData?.name || '');
-  const [folderId, setFolderId] = useState<string | null>(initialData?.folderId !== undefined ? initialData.folderId : (initialFolderId || null));
+  const [knowledgeBaseId, setFolderId] = useState<string | null>(initialData?.knowledgeBaseId !== undefined ? initialData.knowledgeBaseId : (initialFolderId || null));
   const [newFolderName, setNewFolderName] = useState('');
 
   const handleAdd = () => {
     if (!name.trim()) return;
-    onAdd({ name, folderId });
+    onAdd({ name, knowledgeBaseId });
   };
 
   const getFolderDisplay = () => {
-    if (!folderId) return '无';
-    const folder = folders.find(f => f.id === folderId);
+    if (!knowledgeBaseId) return '无';
+    const folder = folders.find(f => f.id === knowledgeBaseId);
     return folder ? folder.name : '无';
   };
 
@@ -900,7 +900,7 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
                   onClick={() => setFolderId(null)}
                 >
                   <span>无</span>
-                  {folderId === null && <Check size={14} className="text-primary" />}
+                  {knowledgeBaseId === null && <Check size={14} className="text-primary" />}
                 </DropdownMenuItem>
                 {folders.map(f => (
                   <DropdownMenuItem
@@ -909,7 +909,7 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
                     onClick={() => setFolderId(f.id)}
                   >
                     <span>{f.name}</span>
-                    {folderId === f.id && <Check size={14} className="text-primary" />}
+                    {knowledgeBaseId === f.id && <Check size={14} className="text-primary" />}
                   </DropdownMenuItem>
                 ))}
                 <div className="pt-1 border-t border-border flex items-center gap-1.5 px-2 py-1">
@@ -1045,15 +1045,15 @@ type DragOverTarget =
   | { type: 'standalone-area' }
   | null;
 
-const EMPTY_LISTS: List[] = [];
-const EMPTY_FOLDERS: Folder[] = [];
+const EMPTY_LISTS: KnowledgeFolder[] = [];
+const EMPTY_FOLDERS: KnowledgeBase[] = [];
 const EMPTY_NOTES: Note[] = [];
 const EMPTY_NOTE_GROUPS: NoteGroup[] = [];
 
-export function ListsPanel() {
+export function KnowledgePanel() {
   const { userId } = useAuth();
-  // Query-backed data + write actions (connected to listsService Supabase backend)
-  const { data } = useListsData();
+  // Query-backed data + write actions (connected to knowledgeService Supabase backend)
+  const { data } = useKnowledgeData();
   const rawLists = data?.lists ?? EMPTY_LISTS;
   const rawFolders = data?.folders ?? EMPTY_FOLDERS;
   const rawNotes = data?.notes ?? EMPTY_NOTES;
@@ -1063,43 +1063,43 @@ export function ListsPanel() {
     moveNoteToList,
     reorderNotes,
     moveNoteAndReorder,
-    reorderFolders,
-    reorderLists,
-    moveList,
+    reorderKnowledgeBases,
+    reorderKnowledgeFolders,
+    moveKnowledgeFolder,
     addFolder,
     updateFolder,
-    deleteFolder,
+    deleteKnowledgeBase,
     addList,
     updateList,
-    duplicateList,
-    deleteList,
+    duplicateKnowledgeFolder,
+    deleteKnowledgeFolder,
     addNote,
     updateNote,
     deleteNote,
     addGroup,
     updateGroup,
     deleteGroup,
-  } = useListsActions();
+  } = useKnowledgeActions();
   const { addTemplate, updateTemplate, deleteTemplate } = useTemplateActions();
 
-  const lists = useMemo(() => sortLists(rawLists), [rawLists]);
-  const folders = useMemo(() => sortFolders(rawFolders), [rawFolders]);
+  const lists = useMemo(() => sortKnowledgeFolders(rawLists), [rawLists]);
+  const folders = useMemo(() => sortKnowledgeBases(rawFolders), [rawFolders]);
 
-  const folderIdSet = useMemo(() => new Set(folders.map(f => f.id)), [folders]);
+  const knowledgeBaseIdSet = useMemo(() => new Set(folders.map(f => f.id)), [folders]);
   const listMap = useMemo(() => new Map(lists.map(l => [l.id, l])), [lists]);
 
   const activeListId = useUiStore((state) => state.activeListId);
   const setActiveListId = useUiStore((state) => state.setActiveListId);
   const isTemplateModalOpen = useUiStore((state) => state.isTemplateModalOpen);
   const setIsTemplateModalOpen = useUiStore((state) => state.setTemplateModalOpen);
-  const { isFetching: isListContentsFetching } = useListContents(activeListId);
+  const { isFetching: isListContentsFetching } = useKnowledgeFolderContents(activeListId);
   const noteMap = useMemo(() => new Map(rawNotes.map(n => [n.id, n])), [rawNotes]);
   const templates = useTemplateData(isTemplateModalOpen).data ?? [];
 
   const notes = useMemo(() => {
     if (!activeListId) return [];
     return rawNotes
-      .filter(n => n.listId === activeListId)
+      .filter(n => n.folderId === activeListId)
       .sort((a, b) => {
         if (a.sortOrder !== b.sortOrder) {
           return (a.sortOrder || 0) - (b.sortOrder || 0);
@@ -1111,7 +1111,7 @@ export function ListsPanel() {
   const noteGroups = useMemo(() => {
     if (!activeListId) return [];
     return rawNoteGroups
-      .filter(g => g.listId === activeListId)
+      .filter(g => g.folderId === activeListId)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
   }, [rawNoteGroups, activeListId]);
 
@@ -1153,7 +1153,7 @@ export function ListsPanel() {
   }, [noteMap, activeNoteId]);
   const { data: activeNoteDetail } = useQuery({
     queryKey: queryKeys.lists.note(userId, activeNoteId ?? 'none'),
-    queryFn: () => listsService.loadNote(activeNoteId!),
+    queryFn: () => knowledgeService.loadNote(activeNoteId!),
     enabled: isDrawerOpen && Boolean(activeNoteId) && !activeNote?.contentLoaded,
   });
   const drawerNote = activeNote?.contentLoaded ? activeNote : activeNoteDetail ?? null;
@@ -1170,7 +1170,7 @@ export function ListsPanel() {
     : null;
   const dragOverGroupId = dragOverTarget?.type === 'group' ? dragOverTarget.id : null;
 
-  // Template & Export state
+  // KnowledgeTemplate & Export state
   const [batchExportModalOpen, setBatchExportModalOpen] = useState(false);
 
   const didInitActiveList = useRef(false);
@@ -1187,7 +1187,7 @@ export function ListsPanel() {
     let defaultListId = lists[0].id;
     if (folders.length > 0) {
       const firstFolder = folders[0];
-      const folderLists = lists.filter(l => l.folderId === firstFolder.id);
+      const folderLists = lists.filter(l => l.knowledgeBaseId === firstFolder.id);
       if (folderLists.length > 0) {
         defaultListId = folderLists[0].id;
       }
@@ -1235,15 +1235,15 @@ export function ListsPanel() {
       return;
     }
     const overId = String(over.id);
-    const overData = over.data?.current as { type?: string; listId?: string } | undefined;
+    const overData = over.data?.current as { type?: string; folderId?: string } | undefined;
     const activeId = String(active.id);
 
     const isDraggingNote = noteMap.has(activeId);
 
     if (isDraggingNote) {
-      if (overData?.type === 'sidebar-list' && overData.listId) {
-        setDragOverTarget({ type: 'sidebar-list', id: overData.listId });
-      } else if (overData?.type === 'folder' || folderIdSet.has(overId)) {
+      if (overData?.type === 'sidebar-list' && overData.folderId) {
+        setDragOverTarget({ type: 'sidebar-list', id: overData.folderId });
+      } else if (overData?.type === 'folder' || knowledgeBaseIdSet.has(overId)) {
         setDragOverTarget({ type: 'folder', id: overId });
       } else if (overData?.type === 'group') {
         setDragOverTarget({ type: 'group', id: overId === 'ungrouped' ? 'ungrouped' : overId });
@@ -1256,19 +1256,19 @@ export function ListsPanel() {
         }
       }
     } else {
-      const activeFolder = folderIdSet.has(activeId);
+      const activeFolder = knowledgeBaseIdSet.has(activeId);
       if (activeFolder) {
         setDragOverTarget(null);
         return;
       }
       if (overId === 'standalone-area') {
         setDragOverTarget({ type: 'standalone-area' });
-      } else if (overData?.type === 'folder' || folderIdSet.has(overId)) {
+      } else if (overData?.type === 'folder' || knowledgeBaseIdSet.has(overId)) {
         setDragOverTarget({ type: 'folder', id: overId });
       } else {
         const overList = listMap.get(overId);
         if (overList) {
-          const fId = overList.folderId;
+          const fId = overList.knowledgeBaseId;
           setDragOverTarget(fId ? { type: 'folder', id: fId } : { type: 'standalone-area' });
         } else {
           setDragOverTarget(null);
@@ -1286,14 +1286,14 @@ export function ListsPanel() {
 
     const activeId = String(active.id);
     const overId = String(over.id);
-    const overData = over.data?.current as { type?: string; listId?: string } | undefined;
+    const overData = over.data?.current as { type?: string; folderId?: string } | undefined;
 
     const isDraggingNote = noteMap.has(activeId);
 
     if (isDraggingNote) {
       let targetListId: string | null = null;
-      if (overData?.type === 'sidebar-list' && overData.listId) {
-        targetListId = overData.listId;
+      if (overData?.type === 'sidebar-list' && overData.folderId) {
+        targetListId = overData.folderId;
       } else if (overId.startsWith('sidebar-list-')) {
         targetListId = overId.replace('sidebar-list-', '');
       } else if (listMap.has(overId)) {
@@ -1309,9 +1309,9 @@ export function ListsPanel() {
         return;
       }
 
-      if (overData?.type === 'folder' || folderIdSet.has(overId)) {
-        const folderId = overId;
-        const folderLists = lists.filter(l => l.folderId === folderId);
+      if (overData?.type === 'folder' || knowledgeBaseIdSet.has(overId)) {
+        const knowledgeBaseId = overId;
+        const folderLists = lists.filter(l => l.knowledgeBaseId === knowledgeBaseId);
         if (folderLists.length > 0) {
           const targetList = folderLists[0];
           moveNoteToList(activeId, targetList.id);
@@ -1348,10 +1348,10 @@ export function ListsPanel() {
     } else {
       let overType: 'folder' | 'standalone' | 'list' | 'other' = 'other';
       if (overId === 'standalone-area') overType = 'standalone';
-      else if (overData?.type === 'folder' || folderIdSet.has(overId)) overType = 'folder';
+      else if (overData?.type === 'folder' || knowledgeBaseIdSet.has(overId)) overType = 'folder';
       else if (listMap.has(overId)) overType = 'list';
 
-      const action = computeListReorder({
+      const action = computeKnowledgeFolderReorder({
         activeId,
         overId,
         lists,
@@ -1361,32 +1361,32 @@ export function ListsPanel() {
 
       switch (action.kind) {
         case 'reorder':
-          if (folderIdSet.has(activeId)) {
-            reorderFolders(action.newOrder);
+          if (knowledgeBaseIdSet.has(activeId)) {
+            reorderKnowledgeBases(action.newOrder);
           } else {
-            reorderLists(action.newOrder);
+            reorderKnowledgeFolders(action.newOrder);
           }
           break;
         case 'move':
-          moveList(activeId, action.targetGroup, action.targetIndex);
+          moveKnowledgeFolder(activeId, action.targetGroup, action.targetIndex);
           break;
       }
     }
   };
 
   // --- Handlers ---
-  const handleAddListClick = (folderId?: string) => {
+  const handleAddListClick = (knowledgeBaseId?: string) => {
     setEditListId(null);
-    setAddModalInitialFolderId(folderId);
+    setAddModalInitialFolderId(knowledgeBaseId);
     setIsAddModalOpen(true);
   };
 
-  const handleAddFolder = (name: string): Folder => {
+  const handleAddFolder = (name: string): KnowledgeBase => {
     return addFolder(name);
   };
 
-  const handleAddList = (data: { name: string; folderId: string | null; newFolderName?: string }) => {
-    let finalFolderId = data.folderId;
+  const handleAddList = (data: { name: string; knowledgeBaseId: string | null; newFolderName?: string }) => {
+    let finalFolderId = data.knowledgeBaseId;
     if (data.newFolderName) {
       const created = handleAddFolder(data.newFolderName);
       finalFolderId = created.id;
@@ -1395,12 +1395,12 @@ export function ListsPanel() {
     if (editListId) {
       updateList(editListId, {
         name: data.name,
-        folderId: finalFolderId,
+        knowledgeBaseId: finalFolderId,
       });
     } else {
       const newList = addList({
         name: data.name,
-        folderId: finalFolderId,
+        knowledgeBaseId: finalFolderId,
       });
       setActiveListId(newList.id);
     }
@@ -1408,7 +1408,7 @@ export function ListsPanel() {
     setEditListId(null);
   };
 
-  const handleEditFolder = (folder: Folder) => {
+  const handleEditFolder = (folder: KnowledgeBase) => {
     setEditFolderId(folder.id);
     setIsFolderModalOpen(true);
   };
@@ -1421,22 +1421,22 @@ export function ListsPanel() {
     setEditFolderId(null);
   };
 
-  const handleDissolveFolder = (folder: Folder) => {
-    deleteFolder(folder.id);
+  const handleDissolveFolder = (folder: KnowledgeBase) => {
+    deleteKnowledgeBase(folder.id);
   };
 
-  const handleEditList = (list: List) => {
+  const handleEditList = (list: KnowledgeFolder) => {
     setEditListId(list.id);
     setIsAddModalOpen(true);
   };
 
-  const handleDuplicateList = (list: List) => {
-    const newList = duplicateList(list);
+  const handleDuplicateList = (list: KnowledgeFolder) => {
+    const newList = duplicateKnowledgeFolder(list);
     setActiveListId(newList.id);
   };
 
-  const handleDeleteList = (list: List) => {
-    deleteList(list.id);
+  const handleDeleteList = (list: KnowledgeFolder) => {
+    deleteKnowledgeFolder(list.id);
     if (activeListId === list.id) setActiveListId(null);
   };
 
@@ -1449,9 +1449,10 @@ export function ListsPanel() {
   const handleAddNote = () => {
     if (!activeListId || !newNoteTitle.trim()) return;
     const newNote = addNote({
-      listId: activeListId,
+      folderId: activeListId,
       title: newNoteTitle.trim(),
       content: '',
+      contentLoaded: true,
     });
     setNewNoteTitle('');
     handleOpenNote(newNote.id, newNote.title);
@@ -1460,13 +1461,14 @@ export function ListsPanel() {
   const handleBatchImport = async () => {
     if (!activeListId) return;
     try {
-      const importedFiles = await listsService.pickMultipleMarkdownFiles();
+      const importedFiles = await knowledgeService.pickMultipleMarkdownFiles();
       for (const file of importedFiles) {
         const jsonContent = convertMarkdownToTipTapJson(file.content);
         addNote({
-          listId: activeListId,
+          folderId: activeListId,
           title: file.title,
           content: jsonContent,
+          contentLoaded: true,
         });
       }
       toast.success(`已成功导入 ${importedFiles.length} 条笔记！`);
@@ -1477,7 +1479,7 @@ export function ListsPanel() {
 
   const handleBatchExport = async (selectedNoteIds: string[]) => {
     try {
-      const count = await listsService.exportNotesToMarkdown(notes, selectedNoteIds, convertTipTapJsonToMarkdown);
+      const count = await knowledgeService.exportNotesToMarkdown(notes, selectedNoteIds, convertTipTapJsonToMarkdown);
       if (count > 0) {
         setBatchExportModalOpen(false);
         toast.success(`已成功导出 ${count} 条笔记！`);
@@ -1492,12 +1494,13 @@ export function ListsPanel() {
   };
 
   const handleDuplicateNote = async (note: Note) => {
-    const source = note.contentLoaded ? note : await listsService.loadNote(note.id);
+    const source = note.contentLoaded ? note : await knowledgeService.loadNote(note.id);
     if (!source) return;
     const newNote = addNote({
-      listId: source.listId,
+      folderId: source.folderId,
       title: source.title + ' (副本)',
       content: source.content,
+      contentLoaded: true,
     });
     handleOpenNote(newNote.id, newNote.title);
   };
@@ -1515,12 +1518,13 @@ export function ListsPanel() {
     toast.success('已成功保存为模板！');
   };
 
-  const handleSelectTemplate = (template: Template) => {
+  const handleSelectTemplate = (template: KnowledgeTemplate) => {
     if (!activeListId) return;
     const newNote = addNote({
-      listId: activeListId,
+      folderId: activeListId,
       title: template.name,
       content: template.content,
+      contentLoaded: true,
     });
     handleOpenNote(newNote.id, newNote.title);
     setIsTemplateModalOpen(false);
@@ -1679,7 +1683,7 @@ export function ListsPanel() {
                         {ungroupedNotes.length > 0 && (
                           <NoteGroupView
                             key="ungrouped"
-                            group={{ id: 'ungrouped', listId: activeListId!, name: '未分组' }}
+                            group={{ id: 'ungrouped', folderId: activeListId!, name: '未分组' }}
                             notes={ungroupedNotes}
                             isUngrouped={true}
                             isDragOverTarget={!!isUngroupedDragOverTarget}

@@ -18,7 +18,7 @@
 
 | 场景 | 调用位置 | 工具栏 | 持久化约定 |
 | --- | --- | --- | --- |
-| 知识笔记 | `src/components/lists/ListsPanel.tsx` | 显示 | `notes.content` 保存 Tiptap JSON 字符串。 |
+| 知识笔记 | `src/components/knowledge/KnowledgePanel.tsx` | 显示 | `notes.content` 保存 Tiptap JSON 字符串。 |
 | 每日复盘 | `src/components/daily-review/DailyReviewPanel.tsx` | 显示 | 编辑器内容为 JSON 字符串；服务层将其包装为 `daily_reviews.content` 的 `{ text }` JSONB 载荷。 |
 | 任务描述 | `src/components/time-management/TaskQuickEdit.tsx` | 隐藏 | `time_management_tasks.description` 保持 `text`，保存 Tiptap JSON 字符串。 |
 

@@ -22,6 +22,7 @@ import { sendDesktopNotification } from "@/services/notificationService";
 import { useAuth } from "@/lib/auth";
 import type { FocusSession, FocusSessionType } from "@/types/focusAssistant";
 import { cn } from "@/lib/utils";
+import { createFocusCycleId } from "@/lib/entityIds";
 
 type Status = "ready" | "running" | "paused";
 type ActiveModal = "none" | "task-selector" | "time-editor" | "menu" | "style-menu";
@@ -179,7 +180,7 @@ export function FocusAssistant() {
 
     try {
       const created = await focusAssistantApi.create({
-        cycleId: crypto.randomUUID(),
+        cycleId: createFocusCycleId(),
         taskId: selectedTarget.type === "task" && selectedTarget.id ? selectedTarget.id : null,
         type: "focus",
         status: "running",

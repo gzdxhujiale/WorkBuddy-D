@@ -1,11 +1,13 @@
-export interface List {
+/** A folder within a knowledge base. */
+export interface KnowledgeFolder {
   id: string;
   name: string;
-  folderId: string | null;
+  knowledgeBaseId: string | null;
   sortOrder?: number;
 }
 
-export interface Folder {
+/** The top-level container in the knowledge hierarchy. */
+export interface KnowledgeBase {
   id: string;
   name: string;
   sortOrder?: number;
@@ -13,14 +15,14 @@ export interface Folder {
 
 export interface NoteGroup {
   id: string;
-  listId: string;
+  folderId: string;
   name: string;
   sortOrder?: number;
 }
 
 export interface Note {
   id: string;
-  listId: string;
+  folderId: string;
   groupId?: string | null;
   title: string;
   content: string;
@@ -33,16 +35,16 @@ export interface Note {
   baseUpdatedAt?: number;
 }
 
-export interface Template {
+export interface KnowledgeTemplate {
   id: string;
   name: string;
   content: string;
 }
 
-export interface ListsData {
-  lists: List[];
-  folders: Folder[];
+export interface KnowledgeData {
+  knowledgeFolders: KnowledgeFolder[];
+  knowledgeBases: KnowledgeBase[];
   noteGroups: NoteGroup[];
   notes: Note[];
-  templates: Template[];
+  templates: KnowledgeTemplate[];
 }

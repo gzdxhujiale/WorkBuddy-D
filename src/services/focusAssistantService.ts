@@ -1,6 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type { FocusSession, FocusSessionStatus, FocusSessionType } from "@/types/focusAssistant";
 import { throwOnPostgrestError } from "@/lib/sync";
+import { createFocusSessionId } from "@/lib/entityIds";
 
 type CreateSession = Omit<FocusSession, "id" | "startedAt" | "endedAt">;
 
@@ -61,15 +62,15 @@ export const focusAssistantApi = {
     };
   },
   async create(input: CreateSession): Promise<FocusSession> {
-    const id = crypto.randomUUID();
+    const focusSessionId = createFocusSessionId();
     const { data, error } = await supabase.rpc("create_focus_session", {
-      p_id: id, p_cycle_id: input.cycleId, p_task_id: input.taskId,
+      p_id: focusSessionId, p_cycle_id: input.cycleId, p_task_id: input.taskId,
       p_type: input.type, p_status: input.status,
       p_planned_minutes: input.plannedMinutes, p_active_seconds: input.activeSeconds,
       p_rest_completed: input.restCompleted,
     });
     throwOnPostgrestError(error, "创建专注记录");
-    return { ...input, id, startedAt: data as string, endedAt: null };
+    return { ...input, id: focusSessionId, startedAt: data as string, endedAt: null };
   },
   async update(id: string, updates: Partial<Pick<FocusSession, "status" | "activeSeconds" | "restCompleted">>): Promise<void> {
     const { error } = await supabase.rpc("update_focus_session", {

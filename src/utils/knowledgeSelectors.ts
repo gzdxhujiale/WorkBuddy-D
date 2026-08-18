@@ -1,27 +1,27 @@
-import type { List, Folder, Note, NoteGroup } from "@/types/lists";
+import type { KnowledgeFolder, KnowledgeBase, Note, NoteGroup } from "@/types/knowledge";
 
 /**
  * listsSelectors — pure view derivations over the Lists query data.
  *
- * These functions take the raw entity arrays (from `useListsData`) as explicit
+ * These functions take the raw entity arrays (from `useKnowledgeData`) as explicit
  * arguments and never touch any store/cache, mirroring the sorting/filtering
  * rules that previously lived inside the Zustand store getters.
  */
 
 /** Ordered by sortOrder ascending. */
-export function sortLists(lists: List[]): List[] {
+export function sortKnowledgeFolders(lists: KnowledgeFolder[]): KnowledgeFolder[] {
   return [...lists].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 }
 
 /** Ordered by sortOrder ascending. */
-export function sortFolders(folders: Folder[]): Folder[] {
+export function sortKnowledgeBases(folders: KnowledgeBase[]): KnowledgeBase[] {
   return [...folders].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 }
 
 /** Notes for a list: sortOrder ascending, then most-recently-updated. */
-export function getNotesByListId(notes: Note[], listId: string): Note[] {
+export function getNotesByFolderId(notes: Note[], folderId: string): Note[] {
   return notes
-    .filter(n => n.listId === listId)
+    .filter(n => n.folderId === folderId)
     .sort((a, b) => {
       if (a.sortOrder !== b.sortOrder) {
         return (a.sortOrder || 0) - (b.sortOrder || 0);
@@ -31,8 +31,8 @@ export function getNotesByListId(notes: Note[], listId: string): Note[] {
 }
 
 /** Groups for a list, ordered by sortOrder ascending. */
-export function getNoteGroups(noteGroups: NoteGroup[], listId: string): NoteGroup[] {
+export function getNoteGroups(noteGroups: NoteGroup[], folderId: string): NoteGroup[] {
   return noteGroups
-    .filter(g => g.listId === listId)
+    .filter(g => g.folderId === folderId)
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 }

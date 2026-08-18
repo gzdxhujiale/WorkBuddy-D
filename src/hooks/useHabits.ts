@@ -5,6 +5,7 @@ import { Habit, HabitData } from "@/types/habit";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
 import { queryKeys } from "@/lib/syncEngine";
 import { useAuth } from "@/lib/auth";
+import { createHabitId } from "@/lib/entityIds";
 
 export function useHabitData() {
   const { userId } = useAuth();
@@ -120,7 +121,7 @@ export function useHabitActions() {
     (payload: Partial<Habit>): Habit => {
       const now = Date.now();
       const newHabit: Habit = {
-        id: crypto.randomUUID(),
+        id: createHabitId(),
         name: payload.name || "未命名习惯",
         frequencyType: payload.frequencyType || "daily",
         goal: payload.goal || "today",

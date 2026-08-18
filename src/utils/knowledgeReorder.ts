@@ -1,5 +1,5 @@
 import { arrayMove } from '@dnd-kit/sortable';
-import { List, Folder, Note } from '@/types/lists';
+import { KnowledgeFolder, KnowledgeBase, Note } from '@/types/knowledge';
 
 // ── Discriminated union: 拖拽计算结果 ──
 
@@ -10,19 +10,19 @@ export type ReorderAction<TGroup = string | null> =
 
 // ── Sidebar 专用：list / folder 树的重排 ──
 
-export interface ComputeListReorderInput {
+export interface ComputeKnowledgeFolderReorderInput {
   activeId: string;
   overId: string;
-  lists: List[];
-  folders: Folder[];
+  lists: KnowledgeFolder[];
+  folders: KnowledgeBase[];
   overType: 'folder' | 'standalone' | 'list' | 'other'; // dnd over.data?.current?.type 或推断
 }
 
 /**
  * 纯函数：根据 sidebar 的拖拽事件，计算出 store 应执行的动作。
- * 调用方只需根据 kind 分发到 store.reorderFolders / reorderLists / moveList。
+ * 调用方只需根据 kind 分发到 store.reorderKnowledgeBases / reorderKnowledgeFolders / moveKnowledgeFolder。
  */
-export function computeListReorder(input: ComputeListReorderInput): ReorderAction<string | null> {
+export function computeKnowledgeFolderReorder(input: ComputeKnowledgeFolderReorderInput): ReorderAction<string | null> {
   const { activeId, overId, lists, folders, overType } = input;
   if (activeId === overId) return { kind: 'none' };
 
@@ -33,7 +33,7 @@ export function computeListReorder(input: ComputeListReorderInput): ReorderActio
     if (overIdx === -1) return { kind: 'none' };
     const oldIdx = folders.findIndex(f => f.id === activeId);
     if (oldIdx === -1) return { kind: 'none' };
-    const newOrder = arrayMove(folders, oldIdx, overIdx).map((f: Folder) => f.id);
+    const newOrder = arrayMove(folders, oldIdx, overIdx).map((f: KnowledgeBase) => f.id);
     return { kind: 'reorder', newOrder };
   }
 
@@ -51,24 +51,24 @@ export function computeListReorder(input: ComputeListReorderInput): ReorderActio
     // 拖到某个 list 上
     const overList = lists.find(l => l.id === overId);
     if (!overList) return { kind: 'none' };
-    targetFolderId = overList.folderId ?? null;
+    targetFolderId = overList.knowledgeBaseId ?? null;
 
     // 同 folder 内部 → arrayMove
-    if (activeList.folderId === targetFolderId) {
+    if (activeList.knowledgeBaseId === targetFolderId) {
       const siblings = lists
-        .filter(l => (l.folderId ?? null) === targetFolderId)
+        .filter(l => (l.knowledgeBaseId ?? null) === targetFolderId)
         .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
       const oldIdx = siblings.findIndex(l => l.id === activeId);
       const newIdx = siblings.findIndex(l => l.id === overId);
       if (oldIdx !== -1 && newIdx !== -1) {
-        return { kind: 'reorder', newOrder: arrayMove(siblings, oldIdx, newIdx).map((l: List) => l.id) };
+        return { kind: 'reorder', newOrder: arrayMove(siblings, oldIdx, newIdx).map((l: KnowledgeFolder) => l.id) };
       }
       return { kind: 'none' };
     }
 
     // 跨 folder
     const siblings = lists
-      .filter(l => (l.folderId ?? null) === targetFolderId)
+      .filter(l => (l.knowledgeBaseId ?? null) === targetFolderId)
       .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
     targetIndex = siblings.findIndex(l => l.id === overId);
     if (targetIndex === -1) targetIndex = undefined;

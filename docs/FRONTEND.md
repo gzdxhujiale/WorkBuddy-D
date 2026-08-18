@@ -62,7 +62,7 @@ Key reusable primitives in `src/components/ui/`:
 
 ### Drag and drop coordination
 
-Drag and drop across the application (including knowledge base sidebar ordering, note sorting/moving across lists and groups in `src/components/lists/ListsPanel.tsx`, and project task boards) is centrally coordinated via `@dnd-kit`. Do not implement custom HTML5 drag listeners or parallel drag libraries.
+Drag and drop across the application (including knowledge-base sidebar ordering, note sorting/moving across knowledge folders and groups in `src/components/knowledge/KnowledgePanel.tsx`, and project task boards) is centrally coordinated via `@dnd-kit`. Do not implement custom HTML5 drag listeners or parallel drag libraries.
 
 ### Tailwind and CSS boundary
 
@@ -86,4 +86,3 @@ The Query client disables automatic retry/reconnect/mount refetching to avoid re
 ## Verification
 
 There is no configured frontend test, lint, or formatter script. Run `pnpm build` for frontend changes and manually exercise the affected authenticated route or secondary window. For Tiptap work use the `tiptap` skill; for substantial React implementation, refactoring, review, or performance work use `vercel-react-best-practices`; for distinctive visual design and aesthetic direction use `frontend-design`.
-

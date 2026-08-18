@@ -34,6 +34,7 @@ import {
   type ProjectTemplateDefinition,
 } from "@/types/projects";
 import { QUADRANT_DB_MAP } from "@/types/timeManagement";
+import { createProjectId, createProjectStageId, createProjectTemplateId } from "@/lib/entityIds";
 
 const priorityClasses: Record<Priority, string> = {
   low: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700",
@@ -45,7 +46,7 @@ const priorityClasses: Record<Priority, string> = {
 function makeProject(values: Partial<Project> & Pick<Project, "name">): Project {
   const now = Date.now();
   return {
-    id: crypto.randomUUID(),
+    id: createProjectId(),
     name: values.name,
     description: values.description,
     status: values.status ?? "not_started",
@@ -285,7 +286,7 @@ function CreateTemplateDialog({
     setError("");
     try {
       await onCreate({
-        id: crypto.randomUUID(),
+        id: createProjectTemplateId(),
         name: name.trim(),
         description: description.trim() || undefined,
         definition,
@@ -668,7 +669,7 @@ export function ProjectsPage() {
               stages={selectedStages}
               tasks={selectedTasks}
               disabled={busy}
-              onCreateStage={(name) => run(() => saveStage({ id: crypto.randomUUID(), projectId: selected.id, name, sortOrder: 0 }))}
+              onCreateStage={(name) => run(() => saveStage({ id: createProjectStageId(), projectId: selected.id, name, sortOrder: 0 }))}
               onSaveStage={(stage) => run(() => saveStage(stage))}
               onDeleteStage={(stage) =>
                 confirm({

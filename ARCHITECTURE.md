@@ -44,7 +44,7 @@ The shipped application surface is organized around these domains:
 | --- | --- |
 | Daily action and tasks | `src/components/today/`, `src/components/time-management/`, `src/services/timeManagementService.ts` |
 | Habits | `src/components/habit/`, `src/services/habitService.ts` |
-| Knowledge bases, folders, groups, notes, templates | `src/components/lists/`, `src/hooks/useListsQuery.ts`, `src/services/listsService.ts` |
+| Knowledge bases, folders, groups, notes, templates | `src/components/knowledge/`, `src/hooks/useKnowledgeQuery.ts`, `src/services/knowledgeService.ts` |
 | Daily review | `src/components/daily-review/`, `src/services/dailyReviewService.ts` |
 | Focus assistant and sessions | `src/components/focus/`, `src/services/focusAssistantService.ts` |
 | Authentication and app shell | `src/App.tsx`, `src/components/LoginPage.tsx`, `src/components/layout/` |
@@ -65,7 +65,7 @@ TanStack Query holds remote state; Zustand holds UI-only state. Feature hooks an
 
 The main window subscribes to the private `user:<id>:sync` channel in `src/lib/realtimeManager.ts`. Database triggers emit a minimal committed-change hint; the client invalidates the narrow matching query key and refetches through RLS.
 
-`src/hooks/useListsQuery.ts` also contains a localized Tauri-event fast path that patches list-note cache state between windows. This differs from the accepted rule in [sync-and-editor consistency](docs/design-docs/sync-and-editor-consistency.md), which says Tauri events should not become row-replication. Treat this as a documented implementation divergence: do not extend it before reconciling the code and design decision.
+`src/hooks/useKnowledgeQuery.ts` also contains a localized Tauri-event fast path that patches knowledge-folder note cache state between windows. This differs from the accepted rule in [sync-and-editor consistency](docs/design-docs/sync-and-editor-consistency.md), which says Tauri events should not become row-replication. Treat this as a documented implementation divergence: do not extend it before reconciling the code and design decision.
 
 ### Database ownership
 
@@ -79,7 +79,7 @@ Migrations define tables, policies, triggers, RPCs, and database-owned facts. Th
 | Query state and UI-only state remain separate. | Prevents local selections from masquerading as server truth. | TanStack Query usage, `src/stores/`. |
 | RLS, `user_id`, and authenticated RPC grants protect user data. | The browser is not an authorization boundary. | Migrations and [Security](docs/SECURITY.md). |
 | Broadcast payloads are invalidation hints, not authoritative row data. | Missed messages and stale local values must not overwrite the source of truth. | `src/lib/realtimeManager.ts`, latest Broadcast migration. |
-| Knowledge content is loaded on demand. | Avoids loading note bodies and list contents outside the active surface. | `src/hooks/useListsQuery.ts`, [Frontend](docs/FRONTEND.md). |
+| Knowledge content is loaded on demand. | Avoids loading note bodies and knowledge-folder contents outside the active surface. | `src/hooks/useKnowledgeQuery.ts`, [Frontend](docs/FRONTEND.md). |
 | Applied database history is append-only. | Migrations are the durable record of deployed behavior. | `supabase/migrations/`. |
 | Native permissions are scoped deliberately. | Tauri capabilities grant desktop APIs to webviews. | `src-tauri/capabilities/`, [Security](docs/SECURITY.md). |
 

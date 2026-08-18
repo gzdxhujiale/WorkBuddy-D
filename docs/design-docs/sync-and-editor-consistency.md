@@ -28,7 +28,7 @@ Broadcast 不保证作为持久化队列：断线、重连或错过消息必须�
 
 ### 当前实现差异：列表 Tauri 事件
 
-`src/hooks/useListsQuery.ts` 当前通过 `lists:note-updated`、`lists:note-deleted` 与 `lists:notes-reordered` Tauri 事件，把部分笔记字段直接补丁到其他窗口的 Query cache。这个快速路径与本决策“不要把 Tauri 窗口事件当作行数据复制协议”的边界不一致。
+`src/hooks/useKnowledgeQuery.ts` 当前通过 `lists:note-updated`、`lists:note-deleted` 与 `lists:notes-reordered` Tauri 事件，把部分笔记字段直接补丁到其他窗口的 Query cache。事件名为兼容旧窗口而保留；这个快速路径与本决策“不要把 Tauri 窗口事件当作行数据复制协议”的边界不一致。
 
 在该差异被解决前：
 

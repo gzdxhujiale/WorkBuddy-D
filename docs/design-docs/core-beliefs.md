@@ -19,7 +19,7 @@ These beliefs constrain architecture and implementation choices across domains. 
 | --- | --- | --- |
 | Schema, RPCs, or triggers | Append-only migration history, RLS, grants, and database-owned facts. | `supabase/migrations/`, [generated snapshot](/generated/db-schema) |
 | Query or mutation code | Query/store split, version replacement, precise invalidation, and explicit errors. | `src/hooks/`, `src/services/`, `src/lib/` |
-| Knowledge UI | Shell-first and note-body-on-demand loading. | `src/hooks/useListsQuery.ts`, `src/services/listsService.ts` |
+| Knowledge UI | Shell-first and note-body-on-demand loading. | `src/hooks/useKnowledgeQuery.ts`, `src/services/knowledgeService.ts` |
 | Realtime or windows | Private user topic and hint/refetch model. | `src/lib/realtimeManager.ts`, [sync decision](sync-and-editor-consistency.md) |
 | Offline behavior | Existing executor registration, per-entity replacement, replay, and conflict retention. | `src/lib/offlineSyncQueue.ts` |
 

@@ -122,9 +122,12 @@ export function DropdownMenuContent({
   useEffect(() => {
     if (!open) return;
 
-    const handlePointerDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (contentRef.current && !contentRef.current.contains(target) &&
+      const handlePointerDown = (e: MouseEvent) => {
+        const target = e.target as Node;
+        if (target instanceof Element && target.closest("[data-dropdown-menu-overlay]")) {
+          return;
+        }
+        if (contentRef.current && !contentRef.current.contains(target) &&
           triggerRef.current && !triggerRef.current.contains(target)) {
         close();
       }

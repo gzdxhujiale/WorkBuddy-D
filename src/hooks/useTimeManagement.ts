@@ -8,6 +8,7 @@ import { throwOnPostgrestError } from "@/lib/sync";
 import { hasVersionConflict } from "@/lib/offlineSyncQueue";
 import { queryKeys } from "@/lib/syncEngine";
 import { useAuth } from "@/lib/auth";
+import { createTaskId } from "@/lib/entityIds";
 
 export function useTimeManagementData() {
   const { userId } = useAuth();
@@ -99,7 +100,7 @@ export function useTaskActions() {
       draft: Partial<Pick<Task, "description" | "scheduleMode" | "scheduledStartAt" | "scheduledEndAt" | "reminder">> = {},
     ): Task => {
       const newTask: Task = {
-        id: crypto.randomUUID(),
+        id: createTaskId(),
         title,
         quadrant,
         completed: false,

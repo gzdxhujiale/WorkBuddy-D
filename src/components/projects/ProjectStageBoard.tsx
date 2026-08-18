@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { DatePicker, DateRangePicker } from "@/components/ui/date-picker";
 import type { ProjectStage, ProjectTask } from "@/types/projects";
 import type { Task } from "@/types/timeManagement";
+import { createTaskId } from "@/lib/entityIds";
 
 interface Props {
   stages: ProjectStage[];
@@ -32,7 +33,7 @@ function StageCard({
   const addTask = async () => {
     if (!draft.trim()) return;
     await onSaveTask({
-      id: crypto.randomUUID(),
+      id: createTaskId(),
       title: draft.trim(),
       quadrant: "Q2",
       completed: false,

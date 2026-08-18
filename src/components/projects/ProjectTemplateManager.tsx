@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useProjectActions, useProjectsData } from "@/hooks/useProjects";
 import { QUADRANT_DB_MAP } from "@/types/timeManagement";
 import type { Priority, ProjectTemplate, ProjectTemplateDefinition } from "@/types/projects";
+import { createProjectTemplateId } from "@/lib/entityIds";
 
 function stageText(template?: ProjectTemplate): string {
   return template?.definition.stages.map((stage) => `${stage.name}:${stage.defaultAssigneeName ?? ""}`).join(",") ?? "需求评审:产品,开发:开发,测试:测试,上线:产品";
@@ -38,7 +39,7 @@ function TemplateEditor({ template, onClose }: { template?: ProjectTemplate; onC
     };
     if (stageItems.some((stage) => !stage.name) || definition.tasks.some((task) => !task.title)) return setError("请检查阶段和任务格式");
     setSaving(true); setError("");
-    try { await saveTemplate({ id: template?.id ?? crypto.randomUUID(), name: name.trim(), description: description.trim() || undefined, definition, updatedAt: template?.updatedAt ?? 0 }); onClose(); } catch (cause) { setError(cause instanceof Error ? cause.message : "保存模板失败"); } finally { setSaving(false); }
+    try { await saveTemplate({ id: template?.id ?? createProjectTemplateId(), name: name.trim(), description: description.trim() || undefined, definition, updatedAt: template?.updatedAt ?? 0 }); onClose(); } catch (cause) { setError(cause instanceof Error ? cause.message : "保存模板失败"); } finally { setSaving(false); }
   };
   return <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}><DialogContent className="max-w-2xl" onClose={onClose}><DialogHeader><DialogTitle>{template ? "编辑项目模板" : "新增项目模板"}</DialogTitle><DialogDescription>阶段格式：阶段:默认负责人；任务格式：阶段 | 标题 | 负责人 | 优先级 | 说明。</DialogDescription></DialogHeader><div className="grid gap-3"><label className="grid gap-1.5 text-sm font-medium">模板名称<input autoFocus value={name} onChange={(event) => setName(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none" /></label><label className="grid gap-1.5 text-sm font-medium">说明<input value={description} onChange={(event) => setDescription(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none" /></label><label className="grid gap-1.5 text-sm font-medium">阶段<input value={stages} onChange={(event) => setStages(event.target.value)} className="h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none" /></label><label className="grid gap-1.5 text-sm font-medium">待生成任务<textarea value={tasks} onChange={(event) => setTasks(event.target.value)} className="min-h-32 rounded-lg border border-border bg-background p-3 font-mono text-xs outline-none" /></label></div>{error && <p role="alert" className="text-sm text-destructive">{error}</p>}<DialogFooter><Button variant="outline" onClick={onClose}>取消</Button><Button disabled={saving} onClick={() => void submit()}>{saving ? "保存中…" : "保存模板"}</Button></DialogFooter></DialogContent></Dialog>;
 }

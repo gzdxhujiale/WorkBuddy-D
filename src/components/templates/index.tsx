@@ -1,7 +1,7 @@
 import React from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { loadTemplates, upsertTemplate, deleteTemplate } from '@/services/listsService';
-import type { Template } from '@/types/lists';
+import { loadTemplates, upsertTemplate, deleteTemplate } from '@/services/knowledgeService';
+import type { KnowledgeTemplate } from '@/types/knowledge';
 import { FileText, Trash2 } from 'lucide-react';
 import { useAuth } from '@/lib/auth';
 import { queryKeys } from '@/lib/syncEngine';
@@ -23,7 +23,7 @@ export function useTemplateActions() {
   const TEMPLATE_QUERY_KEY = queryKeys.templates(userId);
 
   const addTemplate = async (name: string, content: string | Record<string, unknown>) => {
-    const newTpl: Template = {
+    const newTpl: KnowledgeTemplate = {
       id: `tpl-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       name,
       content: typeof content === 'string' ? content : JSON.stringify(content),
@@ -32,8 +32,8 @@ export function useTemplateActions() {
     queryClient.invalidateQueries({ queryKey: TEMPLATE_QUERY_KEY });
   };
 
-  const updateTemplate = async (id: string, updates: Partial<Template>) => {
-    const data = queryClient.getQueryData<Template[]>(TEMPLATE_QUERY_KEY) ?? await loadTemplates();
+  const updateTemplate = async (id: string, updates: Partial<KnowledgeTemplate>) => {
+    const data = queryClient.getQueryData<KnowledgeTemplate[]>(TEMPLATE_QUERY_KEY) ?? await loadTemplates();
     const target = data.find((t) => t.id === id);
     if (target) {
       await upsertTemplate({ ...target, ...updates });

@@ -11,6 +11,7 @@ import {
   Circle,
   Clock,
   Timer,
+  SlidersHorizontal,
 } from "lucide-react";
 import { useTimeManagementData, useTaskActions } from "@/hooks/useTimeManagement";
 import { Task, QuadrantType } from "@/types/timeManagement";
@@ -25,19 +26,23 @@ import { startTaskReminderScheduler } from "@/services/taskReminderScheduler";
 import { getTaskEndAt, taskIntersectsDay, taskIntersectsInterval, taskTimeLabel, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
 import { toggleFocusAssistant } from "@/services/focusAssistantWindow";
 import { getTaskDescriptionText } from "@/lib/taskDescription";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export type ViewType = "quadrant" | "day" | "week" | "month";
 export type StatusFilterType = "uncompleted" | "all" | "completed";
+type ProjectTaskFilter = "non-project" | "all" | "project";
 
 export const TimeManagementPanel: React.FC = () => {
   const [activeView, setActiveView] = useState<ViewType>("quadrant");
   const [currentDate, setCurrentDate] = useState<Date>(() => new Date());
   
-  // Filters matching workbuddy requirements:
-  // statusFilter: Default 'uncompleted' (未完成)
-  // quadrantFilter: 'ALL' | 'Q1' | 'Q2' | 'Q3' | 'Q4' (Priority Q1~Q4, hidden in quadrant view)
   const [statusFilter, setStatusFilter] = useState<StatusFilterType>("uncompleted");
   const [quadrantFilter, setQuadrantFilter] = useState<string>("ALL");
+  const [projectTaskFilter, setProjectTaskFilter] = useState<ProjectTaskFilter>("non-project");
 
   const { data: tmData } = useTimeManagementData();
   const tasks = tmData?.tasks ?? [];
@@ -126,21 +131,21 @@ export const TimeManagementPanel: React.FC = () => {
     setCurrentDate(new Date());
   };
 
-  // Filter tasks based on statusFilter and quadrantFilter
   const filteredTasks = useMemo(() => {
     return tasks.filter((t) => {
-      // 1. Status Filter (Default: 未完成)
+      if (projectTaskFilter === "non-project" && t.projectId) return false;
+      if (projectTaskFilter === "project" && !t.projectId) return false;
+
       if (statusFilter === "uncompleted" && t.completed) return false;
       if (statusFilter === "completed" && !t.completed) return false;
 
-      // 2. Priority Filter (Q1~Q4)
       if (quadrantFilter !== "ALL" && t.quadrant !== quadrantFilter) {
         return false;
       }
 
       return true;
     });
-  }, [tasks, statusFilter, quadrantFilter]);
+  }, [tasks, projectTaskFilter, statusFilter, quadrantFilter]);
 
   const formatDateYMD = (d: Date) => {
     const y = d.getFullYear();
@@ -242,85 +247,106 @@ export const TimeManagementPanel: React.FC = () => {
   return (
     <div className="flex flex-col h-full w-full bg-transparent overflow-hidden select-none">
       {/* Panel Header */}
-      <header className="flex h-12 items-center justify-end px-6 border-b border-border bg-card flex-shrink-0 select-none">
-        {/* Header Right Actions */}
+      <header className="flex h-12 items-center justify-between gap-3 border-b border-border bg-card px-6 shrink-0 select-none">
+        {/* View Switcher Tabs */}
+        <div className="flex items-center bg-muted p-0.5 rounded-lg border border-border">
+          <button
+            onClick={() => setActiveView("quadrant")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+              activeView === "quadrant"
+                ? "bg-card text-foreground shadow-2xs font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <LayoutGrid size={14} />
+            <span>四象限</span>
+          </button>
+          <button
+            onClick={() => setActiveView("day")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+              activeView === "day"
+                ? "bg-card text-foreground shadow-2xs font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Sun size={14} />
+            <span>日视图</span>
+          </button>
+          <button
+            onClick={() => setActiveView("week")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+              activeView === "week"
+                ? "bg-card text-foreground shadow-2xs font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <CalendarRange size={14} />
+            <span>周视图</span>
+          </button>
+          <button
+            onClick={() => setActiveView("month")}
+            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
+              activeView === "month"
+                ? "bg-card text-foreground shadow-2xs font-semibold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <CalendarIcon size={14} />
+            <span>月视图</span>
+          </button>
+        </div>
+
         <div className="flex items-center gap-3">
           <button onClick={() => void toggleFocusAssistant()} className="flex items-center gap-1.5 rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-600 transition-colors hover:bg-rose-100 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-300 cursor-pointer" title="显示或隐藏悬浮专注助手"><Timer size={14} />悬浮专注</button>
-          {/* View Switcher Tabs */}
-          <div className="flex items-center bg-muted p-0.5 rounded-lg border border-border">
-            <button
-              onClick={() => setActiveView("quadrant")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
-                activeView === "quadrant"
-                  ? "bg-card text-foreground shadow-2xs font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+              aria-label="筛选任务"
             >
-              <LayoutGrid size={14} />
-              <span>四象限</span>
-            </button>
-            <button
-              onClick={() => setActiveView("day")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
-                activeView === "day"
-                  ? "bg-card text-foreground shadow-2xs font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Sun size={14} />
-              <span>日视图</span>
-            </button>
-            <button
-              onClick={() => setActiveView("week")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
-                activeView === "week"
-                  ? "bg-card text-foreground shadow-2xs font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <CalendarRange size={14} />
-              <span>周视图</span>
-            </button>
-            <button
-              onClick={() => setActiveView("month")}
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md transition-all cursor-pointer ${
-                activeView === "month"
-                  ? "bg-card text-foreground shadow-2xs font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <CalendarIcon size={14} />
-              <span>月视图</span>
-            </button>
-          </div>
-
-          {/* Status Filter Selector */}
-          <div className="flex items-center text-xs font-medium">
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as StatusFilterType)}
-              className="bg-card text-foreground border border-border rounded-lg px-2.5 py-1 text-xs focus:outline-none cursor-pointer"
-            >
-              <option value="uncompleted">状态: 未完成</option>
-              <option value="all">状态: 全部</option>
-              <option value="completed">状态: 已完成</option>
-            </select>
-          </div>
-
-          {/* Priority Filter Selector */}
-          <div className="flex items-center text-xs font-medium">
-            <select
-              value={quadrantFilter}
-              onChange={(e) => setQuadrantFilter(e.target.value)}
-              className="bg-card text-foreground border border-border rounded-lg px-2.5 py-1 text-xs focus:outline-none cursor-pointer"
-            >
-              <option value="ALL">优先级: 全部</option>
-              <option value="Q1">Q1 (重要且紧急)</option>
-              <option value="Q2">Q2 (重要不紧急)</option>
-              <option value="Q3">Q3 (紧急不重要)</option>
-              <option value="Q4">Q4 (不重要不紧急)</option>
-            </select>
-          </div>
+              <SlidersHorizontal size={14} />
+              筛选
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 gap-3 p-3" aria-label="任务筛选选项">
+              <label className="grid gap-1.5 text-xs font-medium text-foreground">
+                任务范围
+                <select
+                  value={projectTaskFilter}
+                  onChange={(event) => setProjectTaskFilter(event.target.value as ProjectTaskFilter)}
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs font-normal outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="non-project">仅非项目任务</option>
+                  <option value="all">全部任务</option>
+                  <option value="project">仅项目任务</option>
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-xs font-medium text-foreground">
+                状态
+                <select
+                  value={statusFilter}
+                  onChange={(event) => setStatusFilter(event.target.value as StatusFilterType)}
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs font-normal outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="uncompleted">未完成</option>
+                  <option value="all">全部</option>
+                  <option value="completed">已完成</option>
+                </select>
+              </label>
+              <label className="grid gap-1.5 text-xs font-medium text-foreground">
+                优先级
+                <select
+                  value={quadrantFilter}
+                  onChange={(event) => setQuadrantFilter(event.target.value)}
+                  className="h-8 rounded-md border border-border bg-background px-2 text-xs font-normal outline-none focus:ring-1 focus:ring-ring"
+                >
+                  <option value="ALL">全部</option>
+                  <option value="Q1">Q1 · 重要且紧急</option>
+                  <option value="Q2">Q2 · 重要不紧急</option>
+                  <option value="Q3">Q3 · 紧急不重要</option>
+                  <option value="Q4">Q4 · 不重要不紧急</option>
+                </select>
+              </label>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 

@@ -2,7 +2,7 @@
 
 | Area | Shipped behavior |
 | --- | --- |
-| Tasks | Four-quadrant tasks, scheduling, reminders |
+| Tasks | Four-quadrant tasks, scheduling, reminders; the task center defaults to active non-project tasks and offers project scope, status, and priority filters |
 | Habits | Habit definitions and dated check-ins |
 | Knowledge | 知识库、文件夹、分组、笔记、模板与按需加载；见 [知识库](knowledge.md) |
 | Daily review | One review per user/date |
