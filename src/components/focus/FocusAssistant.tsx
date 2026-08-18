@@ -10,12 +10,14 @@ import {
   RotateCcw,
   Sparkles,
   Sun,
-  Moon,
-  Layers,
-  StopCircle,
+  Gamepad2,
   Coffee,
+  Clock,
+  Cat,
+  Dog,
+  Bot,
 } from "lucide-react";
-import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
 import { useFocusTaskOptions } from "@/hooks/useTimeManagement";
 import { useHabitData } from "@/hooks/useHabits";
 import { focusAssistantApi, FocusStats } from "@/services/focusAssistantService";
@@ -24,10 +26,22 @@ import { useAuth } from "@/lib/auth";
 import type { FocusSession, FocusSessionType } from "@/types/focusAssistant";
 import { cn } from "@/lib/utils";
 import { createFocusCycleId } from "@/lib/entityIds";
+import { PixelPet, PetState } from "./pets/PixelPet";
+import { PixelDog } from "./pets/PixelDog";
+import { VectorPet } from "./pets/VectorPet";
+import { SpeechBubble } from "./pets/SpeechBubble";
+import { getPetDialogue, PetEvent, PetDialogueOptions } from "./pets/petDialogues";
 
 type Status = "ready" | "running" | "paused";
 type ActiveModal = "none" | "task-selector" | "time-editor" | "menu" | "style-menu";
-type StyleTheme = "light" | "dark" | "glass" | "minimal";
+export type StyleTheme =
+  | "classic"
+  | "pixel"
+  | "pixel-pure"
+  | "pixel-dog"
+  | "pixel-dog-pure"
+  | "vector"
+  | "vector-pure";
 
 interface SelectedTarget {
   type: "none" | "task" | "habit";
@@ -35,7 +49,6 @@ interface SelectedTarget {
   name: string;
 }
 
-const REST_MINUTES = 5;
 const clamp = (val: number, min = 1, max = 180) => Math.max(min, Math.min(max, Number.isFinite(val) ? Math.floor(val) : min));
 
 async function setWindowGeometry(width: number, height: number) {
@@ -77,7 +90,19 @@ export function FocusAssistant() {
   });
 
   const [theme, setTheme] = useState<StyleTheme>(() => {
-    return (localStorage.getItem("workbuddy.focusAssistant.theme") as StyleTheme) || "light";
+    const saved = localStorage.getItem("workbuddy.focusAssistant.theme") as StyleTheme;
+    if (
+      saved === "pixel" ||
+      saved === "pixel-pure" ||
+      saved === "pixel-dog" ||
+      saved === "pixel-dog-pure" ||
+      saved === "vector" ||
+      saved === "vector-pure" ||
+      saved === "classic"
+    ) {
+      return saved;
+    }
+    return "classic";
   });
 
   const [isPinned, setIsPinned] = useState<boolean>(() => {
@@ -96,6 +121,9 @@ export function FocusAssistant() {
   const [secondsLeft, setSecondsLeft] = useState(focusMinutes * 60);
   const [session, setSession] = useState<FocusSession | null>(null);
   const [stats, setStats] = useState<FocusStats>({ todayMinutes: 0, weekMinutes: 0 });
+  const [bubbleText, setBubbleText] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState<boolean>(false);
+  const [dragDirection, setDragDirection] = useState<"left" | "right">("right");
 
   // Modal Temp States
   const [editFocusInput, setEditFocusInput] = useState<string>(String(focusMinutes));
@@ -108,6 +136,124 @@ export function FocusAssistant() {
   const sessionRef = useRef<FocusSession | null>(null);
   const sessionTypeRef = useRef<FocusSessionType>(sessionType);
   const isCompletingRef = useRef(false);
+  const bubbleTimerRef = useRef<number | null>(null);
+
+  const isPurePet = theme === "pixel-pure" || theme === "pixel-dog-pure" || theme === "vector-pure";
+  const currentSpecies: "cat" | "dog" =
+    theme.includes("dog") || theme.includes("vector") ? "dog" : "cat";
+  const notificationTitle = currentSpecies === "dog" ? "🐶 专注伴侣" : "🐱 专注伴侣";
+
+  const getDialogue = (event: PetEvent, opts?: Partial<PetDialogueOptions>) => {
+    return getPetDialogue(event, {
+      species: currentSpecies,
+      targetName: selectedTarget.name,
+      focusMinutes,
+      restMinutes,
+      ...opts,
+    });
+  };
+
+  const dragSessionRef = useRef<{
+    isDown: boolean;
+    hasMoved: boolean;
+    startScreenX: number;
+    startScreenY: number;
+    startWindowX: number;
+    startWindowY: number;
+    scaleFactor: number;
+    lastScreenX: number;
+  }>({
+    isDown: false,
+    hasMoved: false,
+    startScreenX: 0,
+    startScreenY: 0,
+    startWindowX: 0,
+    startWindowY: 0,
+    scaleFactor: 1,
+    lastScreenX: 0,
+  });
+
+  const handleDragPointerDown = async (e: React.PointerEvent) => {
+    const target = e.target as HTMLElement;
+    if (target.closest("button") || target.closest("input") || target.closest("[role='menu']")) {
+      return;
+    }
+
+    try {
+      const win = getCurrentWindow();
+      const [pos, scale] = await Promise.all([
+        win.outerPosition(),
+        win.scaleFactor().catch(() => 1),
+      ]);
+
+      dragSessionRef.current = {
+        isDown: true,
+        hasMoved: false,
+        startScreenX: e.screenX,
+        startScreenY: e.screenY,
+        startWindowX: pos.x,
+        startWindowY: pos.y,
+        scaleFactor: scale || 1,
+        lastScreenX: e.screenX,
+      };
+
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      // Fallback
+    }
+  };
+
+  const handleDragPointerMove = (e: React.PointerEvent) => {
+    if (!dragSessionRef.current.isDown) return;
+
+    const { startScreenX, startScreenY, startWindowX, startWindowY, scaleFactor, lastScreenX } =
+      dragSessionRef.current;
+
+    const totalDx = e.screenX - startScreenX;
+    const totalDy = e.screenY - startScreenY;
+    const instantaneousDx = e.screenX - lastScreenX;
+
+    if (Math.abs(totalDx) > 3 || Math.abs(totalDy) > 3) {
+      dragSessionRef.current.hasMoved = true;
+      setIsDragging(true);
+
+      if (Math.abs(instantaneousDx) > 0.5) {
+        setDragDirection(instantaneousDx > 0 ? "right" : "left");
+      }
+
+      const newPhysX = Math.round(startWindowX + totalDx * scaleFactor);
+      const newPhysY = Math.round(startWindowY + totalDy * scaleFactor);
+
+      try {
+        void getCurrentWindow().setPosition(new PhysicalPosition(newPhysX, newPhysY));
+      } catch {
+        // Ignore
+      }
+    }
+
+    dragSessionRef.current.lastScreenX = e.screenX;
+  };
+
+  const handleDragPointerUp = (e: React.PointerEvent) => {
+    if (dragSessionRef.current.isDown) {
+      dragSessionRef.current.isDown = false;
+      setIsDragging(false);
+      try {
+        (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+      } catch {
+        // Ignore
+      }
+    }
+  };
+
+  const speak = (text: string, durationMs = 4000) => {
+    if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+    setBubbleText(text);
+    bubbleTimerRef.current = window.setTimeout(() => {
+      setBubbleText(null);
+      bubbleTimerRef.current = null;
+    }, durationMs);
+  };
 
   useEffect(() => {
     remainingRef.current = secondsLeft;
@@ -139,17 +285,19 @@ export function FocusAssistant() {
   // Handle window sizing according to active state/modal
   useEffect(() => {
     if (activeModal === "task-selector") {
-      setWindowGeometry(200, 280);
+      setWindowGeometry(210, 290);
     } else if (activeModal === "time-editor") {
-      setWindowGeometry(200, 180);
+      setWindowGeometry(210, 190);
     } else if (activeModal === "menu" || activeModal === "style-menu") {
-      setWindowGeometry(200, 210);
+      setWindowGeometry(210, 260);
+    } else if (isPurePet) {
+      setWindowGeometry(220, 180);
     } else if (showStats) {
-      setWindowGeometry(200, 140);
+      setWindowGeometry(205, 145);
     } else {
-      setWindowGeometry(200, 75);
+      setWindowGeometry(205, 80);
     }
-  }, [activeModal, showStats]);
+  }, [activeModal, showStats, isPurePet, theme]);
 
   // Setup scale change & pin listener
   useEffect(() => {
@@ -160,15 +308,17 @@ export function FocusAssistant() {
         await win.setAlwaysOnTop(isPinned);
         unlisten = await win.onScaleChanged(async () => {
           if (activeModal === "task-selector") {
-            await win.setSize(new LogicalSize(200, 280)).catch(() => undefined);
+            await win.setSize(new LogicalSize(210, 290)).catch(() => undefined);
           } else if (activeModal === "time-editor") {
-            await win.setSize(new LogicalSize(200, 180)).catch(() => undefined);
+            await win.setSize(new LogicalSize(210, 190)).catch(() => undefined);
           } else if (activeModal === "menu" || activeModal === "style-menu") {
-            await win.setSize(new LogicalSize(200, 210)).catch(() => undefined);
+            await win.setSize(new LogicalSize(210, 260)).catch(() => undefined);
+          } else if (isPurePet) {
+            await win.setSize(new LogicalSize(220, 180)).catch(() => undefined);
           } else if (showStats) {
-            await win.setSize(new LogicalSize(200, 140)).catch(() => undefined);
+            await win.setSize(new LogicalSize(205, 145)).catch(() => undefined);
           } else {
-            await win.setSize(new LogicalSize(200, 75)).catch(() => undefined);
+            await win.setSize(new LogicalSize(205, 80)).catch(() => undefined);
           }
         });
       } catch {
@@ -179,7 +329,22 @@ export function FocusAssistant() {
     return () => {
       if (unlisten) unlisten();
     };
-  }, [isPinned, activeModal, showStats]);
+  }, [isPinned, activeModal, showStats, isPurePet]);
+
+  // Pet state
+  const petState: PetState = useMemo(() => {
+    if (sessionType === "rest") {
+      return status === "running" ? "resting" : "paused";
+    }
+    if (status === "running") return "working";
+    if (status === "paused") return "paused";
+    return "ready";
+  }, [sessionType, status]);
+
+  const handlePokePet = () => {
+    const text = getDialogue("poke");
+    speak(text);
+  };
 
   // Actions
   const startFocus = async () => {
@@ -191,6 +356,10 @@ export function FocusAssistant() {
     remainingRef.current = minutes * 60;
     startedAt.current = Date.now();
     setStatus("running");
+
+    const text = getDialogue("focus_start");
+    speak(text);
+    void sendDesktopNotification(notificationTitle, text);
 
     try {
       const created = await focusAssistantApi.create({
@@ -240,6 +409,10 @@ export function FocusAssistant() {
     const activeSec = Math.max(0, totalPlannedSec - remainingRef.current);
     startedAt.current = null;
     setStatus("paused");
+
+    const text = getDialogue("focus_pause");
+    speak(text);
+
     try {
       await focusAssistantApi.update(session.id, { status: "paused", activeSeconds: activeSec });
       setSession({ ...session, status: "paused", activeSeconds: activeSec });
@@ -252,6 +425,10 @@ export function FocusAssistant() {
     if (!session) return;
     startedAt.current = Date.now();
     setStatus("running");
+
+    const text = getDialogue("focus_resume");
+    speak(text);
+
     try {
       await focusAssistantApi.update(session.id, { status: "running" });
       setSession({ ...session, status: "running" });
@@ -279,10 +456,9 @@ export function FocusAssistant() {
       }
     }
 
-    void sendDesktopNotification(
-      "专注结束",
-      `本次专注已结束，开始 ${restMinutes} 分钟休息时段。`
-    );
+    const text = getDialogue("focus_stop", { restMinutes });
+    speak(text);
+    void sendDesktopNotification(notificationTitle, text);
 
     refreshStats();
     void startRest(cycleId, taskId);
@@ -307,10 +483,9 @@ export function FocusAssistant() {
       }
     }
 
-    void sendDesktopNotification(
-      "专注完成",
-      `🎉 恭喜！已完成「${selectedTarget.name || "专注"}」时段，开始 ${restMinutes} 分钟休息放松一下吧！`
-    );
+    const text = getDialogue("focus_complete", { restMinutes });
+    speak(text);
+    void sendDesktopNotification(notificationTitle, text);
 
     refreshStats();
     void startRest(cycleId, taskId);
@@ -333,10 +508,9 @@ export function FocusAssistant() {
       }
     }
 
-    void sendDesktopNotification(
-      "休息结束",
-      `☕ ${restMinutes} 分钟休息时段已结束，准备好开始新的专注了吗？`
-    );
+    const text = getDialogue("rest_complete");
+    speak(text);
+    void sendDesktopNotification(notificationTitle, text);
 
     setSession(null);
     setSessionType("focus");
@@ -364,10 +538,9 @@ export function FocusAssistant() {
       }
     }
 
-    void sendDesktopNotification(
-      "已跳过休息",
-      "休息时段已跳过，已恢复专注就绪状态。"
-    );
+    const text = getDialogue("rest_skip");
+    speak(text);
+    void sendDesktopNotification(notificationTitle, text);
 
     setSession(null);
     setSessionType("focus");
@@ -416,7 +589,7 @@ export function FocusAssistant() {
     void getCurrentWindow().hide().catch(() => undefined);
   };
 
-  const togglePin = async () => {
+  const handleTogglePin = async () => {
     const next = !isPinned;
     await getCurrentWindow().setAlwaysOnTop(next).catch(() => undefined);
     setIsPinned(next);
@@ -447,7 +620,6 @@ export function FocusAssistant() {
   const progressRatio = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
   const strokeDashoffset = 113.1 * (1 - progressRatio); // 2 * PI * 18 ≈ 113.1
 
-
   // Filtered Task & Habit list
   const filteredTasks = useMemo(() => {
     if (!searchQuery.trim()) return tasks;
@@ -461,23 +633,23 @@ export function FocusAssistant() {
     return habits.filter((h) => h.name.toLowerCase().includes(q));
   }, [habits, searchQuery]);
 
-  // Window Background and Card Themes (No borders or heavy shadows to prevent dark shadow artifacts on transparent windows)
+  // Window Background and Card Themes for Modals / Cards
   const getThemeClasses = () => {
     switch (theme) {
-      case "dark":
-        return "bg-slate-900 text-slate-100 shadow-none";
-      case "glass":
-        return "bg-white/95 dark:bg-slate-900/95 backdrop-blur-md text-slate-800 dark:text-slate-100 shadow-none";
-      case "minimal":
-        return "bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 shadow-none";
-      case "light":
+      case "pixel":
+      case "pixel-pure":
+        return "bg-amber-50 text-amber-950 border-2 border-amber-900 shadow-[2px_2px_0px_rgba(120,53,15,1)]";
+      case "vector":
+      case "vector-pure":
+        return "bg-gradient-to-br from-orange-50/95 via-white/95 to-amber-50/95 text-slate-800 border border-orange-200/80 shadow-none";
+      case "classic":
       default:
         return "bg-white text-slate-800 shadow-none";
     }
   };
 
   // ============================================================================
-  // Modal: Task / Habit Selector (Image 3)
+  // Modal: Task / Habit Selector
   // ============================================================================
   if (activeModal === "task-selector") {
     return (
@@ -679,80 +851,64 @@ export function FocusAssistant() {
     return (
       <div
         className={cn(
-          "w-[200px] h-[180px] p-2.5 flex flex-col justify-between rounded-2xl select-none text-xs border-0 outline-none",
+          "w-[200px] h-[180px] p-2.5 flex flex-col justify-between rounded-2xl select-none overflow-hidden text-xs border-0 outline-none",
           getThemeClasses()
         )}
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) void getCurrentWindow().startDragging();
-        }}
       >
-        <div>
-          <div className="flex items-center justify-between pb-1 text-slate-700 dark:text-slate-300 font-semibold border-b border-slate-100 dark:border-slate-800">
-            <span>时间设置</span>
-            <button
-              onClick={() => setActiveModal("none")}
-              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5 rounded"
-            >
-              <X size={13} />
-            </button>
+        <div className="flex items-center justify-between pb-1 border-b border-slate-200/80 dark:border-slate-700/80">
+          <div className="flex items-center gap-1 font-semibold text-slate-800 dark:text-slate-100">
+            <Clock size={13} className="text-orange-500" />
+            <span>调整专注时长</span>
+          </div>
+          <button
+            onClick={() => setActiveModal("none")}
+            className="size-5 rounded-full hover:bg-slate-200/60 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 cursor-pointer"
+          >
+            <X size={12} />
+          </button>
+        </div>
+
+        <div className="space-y-2 py-1">
+          {/* Focus minutes */}
+          <div className="flex items-center justify-between">
+            <label className="text-slate-600 dark:text-slate-300 text-xs">专注时长 (分)</label>
+            <input
+              type="number"
+              min={1}
+              max={180}
+              value={editFocusInput}
+              onChange={(e) => setEditFocusInput(e.target.value)}
+              className="w-14 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-center font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500"
+            />
           </div>
 
-          <div className="space-y-2 py-2">
-            {/* Focus time row */}
-            <div className="flex items-center justify-between px-0.5">
-              <span className="text-slate-600 dark:text-slate-300 font-medium">专注时间</span>
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  min={1}
-                  max={180}
-                  autoFocus
-                  value={editFocusInput}
-                  onChange={(e) => setEditFocusInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSaveTime();
-                    if (e.key === "Escape") setActiveModal("none");
-                  }}
-                  className="w-13 px-1.5 py-0.5 border border-blue-500 rounded-md text-xs font-bold text-center text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 outline-none"
-                />
-                <span className="text-slate-500 dark:text-slate-400 text-[11px]">分钟</span>
-              </div>
-            </div>
-
-            {/* Rest time row */}
-            <div className="flex items-center justify-between px-0.5">
-              <span className="text-slate-600 dark:text-slate-300 font-medium">休息时间</span>
-              <div className="flex items-center gap-1">
-                <input
-                  type="number"
-                  min={1}
-                  max={60}
-                  value={editRestInput}
-                  onChange={(e) => setEditRestInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleSaveTime();
-                    if (e.key === "Escape") setActiveModal("none");
-                  }}
-                  className="w-13 px-1.5 py-0.5 border border-emerald-500 rounded-md text-xs font-bold text-center text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 outline-none"
-                />
-                <span className="text-slate-500 dark:text-slate-400 text-[11px]">分钟</span>
-              </div>
-            </div>
+          {/* Rest minutes */}
+          <div className="flex items-center justify-between">
+            <label className="text-slate-600 dark:text-slate-300 text-xs">休息时长 (分)</label>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              value={editRestInput}
+              onChange={(e) => setEditRestInput(e.target.value)}
+              className="w-14 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-center font-bold text-slate-800 dark:text-slate-100 outline-none focus:border-blue-500"
+            />
           </div>
         </div>
 
-        <div className="flex items-center gap-2 pt-1">
-          <button
-            onClick={handleSaveTime}
-            className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white rounded-lg text-xs font-semibold shadow-xs transition-colors cursor-pointer"
-          >
-            确定
-          </button>
+        {/* Action Buttons */}
+        <div className="flex items-center gap-1.5 pt-1 border-t border-slate-200/80 dark:border-slate-700/80">
           <button
             onClick={() => setActiveModal("none")}
-            className="flex-1 py-1.5 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+            className="flex-1 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-xs font-medium cursor-pointer"
           >
             取消
+          </button>
+          <button
+            onClick={handleSaveTime}
+            className="flex-1 py-1 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold cursor-pointer shadow-xs"
+          >
+            保存并重置
           </button>
         </div>
       </div>
@@ -760,98 +916,89 @@ export function FocusAssistant() {
   }
 
   // ============================================================================
-  // Modal: More Menu / Style Menu
+  // Modal: Right-Click / More Menu & Style Menu
   // ============================================================================
   if (activeModal === "menu" || activeModal === "style-menu") {
     return (
       <div
         className={cn(
-          "w-[200px] h-[210px] p-2.5 flex flex-col justify-between rounded-2xl select-none text-xs border-0 outline-none",
+          "w-[200px] h-[250px] p-2.5 flex flex-col justify-between rounded-2xl select-none overflow-hidden text-xs border-0 outline-none",
           getThemeClasses()
         )}
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) void getCurrentWindow().startDragging();
-        }}
       >
-        <div className="flex items-center justify-between pb-1.5 border-b border-slate-100 dark:border-slate-800">
-          <span className="font-semibold text-slate-700 dark:text-slate-300">
-            {activeModal === "style-menu" ? "选择样式主题" : "选项设置"}
+        <div className="flex items-center justify-between pb-1 border-b border-slate-200/80 dark:border-slate-700/80">
+          <span className="font-semibold text-slate-800 dark:text-slate-100">
+            {activeModal === "style-menu" ? "选择主题风格" : "专注助手选项"}
           </span>
           <button
             onClick={() => setActiveModal("none")}
-            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5 rounded"
+            className="size-5 rounded-full hover:bg-slate-200/60 dark:hover:bg-slate-700 flex items-center justify-center text-slate-500 cursor-pointer"
           >
-            <X size={13} />
+            <X size={12} />
           </button>
         </div>
 
         {activeModal === "menu" ? (
-          <div className="flex-1 py-1 space-y-1 overflow-y-auto no-scrollbar">
-            {/* Toggle Pin */}
+          <div className="flex-1 py-1 space-y-1 overflow-y-auto no-scrollbar text-xs">
+            {/* Modify Time Settings */}
             <button
               onClick={() => {
-                void togglePin();
-                setActiveModal("none");
+                setEditFocusInput(String(focusMinutes));
+                setEditRestInput(String(restMinutes));
+                setActiveModal("time-editor");
               }}
               className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left"
             >
-              <span>{isPinned ? "取消置顶" : "窗口置顶"}</span>
-              {isPinned && <Check size={13} className="text-blue-500" />}
+              <div className="flex items-center gap-2">
+                <Clock size={13} className="text-orange-500" />
+                <span>修改时间设置 ({focusMinutes}分/{restMinutes}分)</span>
+              </div>
+              <ChevronRight size={12} className="text-slate-400" />
             </button>
 
-            {/* Change Style */}
+            {/* Switch Style */}
             <button
               onClick={() => setActiveModal("style-menu")}
               className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left"
             >
-              <span>修改样式</span>
-              <ChevronRight size={13} className="text-slate-400" />
+              <div className="flex items-center gap-2">
+                <Sparkles size={13} className="text-blue-500" />
+                <span>切换主题风格</span>
+              </div>
+              <ChevronRight size={12} className="text-slate-400" />
             </button>
 
-            {/* Toggle Stats */}
+            {/* Toggle Always on Top */}
             <button
-              onClick={() => {
-                handleToggleStats();
-                setActiveModal("none");
-              }}
+              onClick={handleTogglePin}
               className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left"
             >
-              <span>{showStats ? "收起统计" : "展开统计"}</span>
-              {showStats && <Check size={13} className="text-blue-500" />}
+              <span>窗口置顶</span>
+              <span className="text-[11px] text-slate-400 font-medium">
+                {isPinned ? "已开启" : "已关闭"}
+              </span>
             </button>
 
-            {/* Stop current focus if running/paused (Focus mode) */}
-            {sessionType === "focus" && status !== "ready" && (
+            {/* Toggle Stats expansion (in card modes) */}
+            {!isPurePet && (
               <button
                 onClick={() => {
-                  void stopFocusAndStartRest();
+                  setShowStats(!showStats);
                   setActiveModal("none");
                 }}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition-colors cursor-pointer text-left font-medium"
+                className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left"
               >
-                <span>结束专注并休息</span>
-                <StopCircle size={13} />
-              </button>
-            )}
-
-            {/* Skip rest if in rest mode */}
-            {sessionType === "rest" && (
-              <button
-                onClick={() => {
-                  void skipRest();
-                  setActiveModal("none");
-                }}
-                className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-amber-600 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/40 transition-colors cursor-pointer text-left font-medium"
-              >
-                <span>跳过休息 / 重新专注</span>
-                <StopCircle size={13} />
+                <span>统计详情面板</span>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  {showStats ? "折叠" : "展开"}
+                </span>
               </button>
             )}
 
             {/* Reset Timer */}
             <button
               onClick={() => {
-                const resetSec = (sessionType === "rest" ? REST_MINUTES : focusMinutes) * 60;
+                const resetSec = (sessionType === "rest" ? restMinutes : focusMinutes) * 60;
                 setSecondsLeft(resetSec);
                 remainingRef.current = resetSec;
                 setActiveModal("none");
@@ -863,66 +1010,115 @@ export function FocusAssistant() {
             </button>
           </div>
         ) : (
-          <div className="flex-1 py-1 space-y-1 overflow-y-auto no-scrollbar">
+          <div className="flex-1 py-1 space-y-1 overflow-y-auto no-scrollbar text-xs">
+            {/* 1. Classic Light */}
             <button
-              onClick={() => handleSetTheme("light")}
+              onClick={() => handleSetTheme("classic")}
               className={cn(
                 "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left",
-                theme === "light" && "bg-blue-50/80 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 font-medium"
+                theme === "classic" && "bg-blue-50/80 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 font-medium"
               )}
             >
               <div className="flex items-center gap-2">
                 <Sun size={13} className="text-amber-500" />
-                <span>经典浅色</span>
+                <span>经典浅色卡片</span>
               </div>
-              {theme === "light" && <Check size={13} className="text-blue-500" />}
+              {theme === "classic" && <Check size={13} className="text-blue-500" />}
             </button>
 
+            {/* 2. Retro Pixel Cat Card */}
             <button
-              onClick={() => handleSetTheme("dark")}
+              onClick={() => handleSetTheme("pixel")}
               className={cn(
                 "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left",
-                theme === "dark" && "bg-blue-50/80 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 font-medium"
+                theme === "pixel" && "bg-amber-100/80 text-amber-900 font-medium"
               )}
             >
               <div className="flex items-center gap-2">
-                <Moon size={13} className="text-indigo-400" />
-                <span>暗黑夜色</span>
+                <Gamepad2 size={13} className="text-orange-600" />
+                <span>复古像素猫 (卡片)</span>
               </div>
-              {theme === "dark" && <Check size={13} className="text-blue-500" />}
+              {theme === "pixel" && <Check size={13} className="text-amber-700" />}
             </button>
 
+            {/* 3. Retro Pixel Cat Pure Pet */}
             <button
-              onClick={() => handleSetTheme("glass")}
+              onClick={() => handleSetTheme("pixel-pure")}
               className={cn(
                 "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left",
-                theme === "glass" && "bg-blue-50/80 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 font-medium"
+                theme === "pixel-pure" && "bg-amber-200/80 text-amber-950 font-bold"
               )}
             >
               <div className="flex items-center gap-2">
-                <Sparkles size={13} className="text-cyan-500" />
-                <span>毛玻璃透明</span>
+                <Cat size={13} className="text-orange-600" />
+                <span>复古像素猫 (纯宠物)</span>
               </div>
-              {theme === "glass" && <Check size={13} className="text-blue-500" />}
+              {theme === "pixel-pure" && <Check size={13} className="text-amber-900" />}
             </button>
 
+            {/* 4. Retro Pixel Dog Card */}
             <button
-              onClick={() => handleSetTheme("minimal")}
+              onClick={() => handleSetTheme("pixel-dog")}
               className={cn(
                 "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left",
-                theme === "minimal" && "bg-blue-50/80 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400 font-medium"
+                theme === "pixel-dog" && "bg-amber-100/80 text-amber-900 font-medium"
               )}
             >
               <div className="flex items-center gap-2">
-                <Layers size={13} className="text-emerald-500" />
-                <span>极简纯色</span>
+                <Gamepad2 size={13} className="text-amber-700" />
+                <span>复古像素狗 (卡片)</span>
               </div>
-              {theme === "minimal" && <Check size={13} className="text-blue-500" />}
+              {theme === "pixel-dog" && <Check size={13} className="text-amber-700" />}
+            </button>
+
+            {/* 5. Retro Pixel Dog Pure Pet */}
+            <button
+              onClick={() => handleSetTheme("pixel-dog-pure")}
+              className={cn(
+                "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left",
+                theme === "pixel-dog-pure" && "bg-amber-200/80 text-amber-950 font-bold"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Dog size={13} className="text-amber-700" />
+                <span>复古像素狗 (纯宠物)</span>
+              </div>
+              {theme === "pixel-dog-pure" && <Check size={13} className="text-amber-900" />}
+            </button>
+
+            {/* 6. Modern Vector Dog Card */}
+            <button
+              onClick={() => handleSetTheme("vector")}
+              className={cn(
+                "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left",
+                theme === "vector" && "bg-orange-100/80 text-orange-900 font-medium"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Sparkles size={13} className="text-orange-500" />
+                <span>现代矢量柴犬 (卡片)</span>
+              </div>
+              {theme === "vector" && <Check size={13} className="text-orange-600" />}
+            </button>
+
+            {/* 7. Modern Vector Dog Pure Pet */}
+            <button
+              onClick={() => handleSetTheme("vector-pure")}
+              className={cn(
+                "w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-left",
+                theme === "vector-pure" && "bg-orange-200/80 text-orange-950 font-bold"
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Bot size={13} className="text-orange-600" />
+                <span>现代矢量柴犬 (纯宠物)</span>
+              </div>
+              {theme === "vector-pure" && <Check size={13} className="text-orange-700" />}
             </button>
           </div>
         )}
 
-        <div className="pt-1 text-center">
+        <div className="pt-1 border-t border-slate-200/80 dark:border-slate-700/80">
           <button
             onClick={() => setActiveModal("none")}
             className="w-full py-1 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 text-xs font-medium cursor-pointer"
@@ -935,150 +1131,363 @@ export function FocusAssistant() {
   }
 
   // ============================================================================
-  // Main Floating Card View (200 x 75px, or 200 x 140px when stats open)
+  // Pure Pet View
+  // ============================================================================
+  if (isPurePet) {
+    return (
+      <div
+        className="relative w-[220px] h-[180px] select-none flex flex-col items-center justify-center overflow-visible outline-none group mx-auto cursor-grab active:cursor-grabbing"
+        onContextMenu={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          setActiveModal("menu");
+        }}
+        onPointerDown={handleDragPointerDown}
+        onPointerMove={handleDragPointerMove}
+        onPointerUp={handleDragPointerUp}
+        onPointerCancel={handleDragPointerUp}
+      >
+        {/* Header: Speech Bubble / Timer */}
+        <div className="w-full flex items-center justify-center relative z-30 shrink-0 mb-0.5 pointer-events-auto">
+          {bubbleText ? (
+            <SpeechBubble
+              text={bubbleText}
+              theme={theme}
+              onDismiss={() => setBubbleText(null)}
+            />
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditFocusInput(String(focusMinutes));
+                setEditRestInput(String(restMinutes));
+                setActiveModal("time-editor");
+              }}
+              className={cn(
+                "px-2.5 py-0.5 rounded-full text-xs font-bold transition-transform cursor-pointer hover:scale-105 active:scale-95 shadow-xs",
+                theme.startsWith("pixel")
+                  ? "bg-amber-50 text-amber-950 border border-amber-900 font-mono text-[11px]"
+                  : sessionType === "rest"
+                  ? "bg-emerald-500/90 text-white backdrop-blur-xs text-[11px]"
+                  : "bg-orange-500/90 text-white backdrop-blur-xs text-[11px]"
+              )}
+              title="点击修改专注/休息时间（右键宠物呼出菜单）"
+            >
+              {sessionType === "rest" && "☕ "}
+              {formatTime(secondsLeft)}
+            </button>
+          )}
+        </div>
+
+        {/* Pet Display */}
+        <div
+          className="relative flex items-center justify-center pointer-events-auto"
+          onContextMenu={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setActiveModal("menu");
+          }}
+        >
+          {theme === "pixel-pure" ? (
+            <PixelPet
+              state={petState}
+              size="lg"
+              isWalking={isDragging}
+              direction={dragDirection}
+              onPoke={handlePokePet}
+            />
+          ) : theme === "pixel-dog-pure" ? (
+            <PixelDog
+              state={petState}
+              size="lg"
+              isWalking={isDragging}
+              direction={dragDirection}
+              onPoke={handlePokePet}
+            />
+          ) : (
+            <VectorPet
+              state={petState}
+              size="lg"
+              isWalking={isDragging}
+              direction={dragDirection}
+              onPoke={handlePokePet}
+            />
+          )}
+        </div>
+
+        {/* Footer Actions */}
+        <div className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none group-hover:pointer-events-auto z-20 shrink-0 mt-0.5">
+          {status === "paused" ? (
+            <div className="flex items-center gap-1 bg-white/95 dark:bg-slate-800/95 p-1 rounded-full shadow-md border border-slate-200/80 dark:border-slate-700">
+              <button
+                onClick={(e) => { e.stopPropagation(); void resume(); }}
+                className="size-5 rounded-full bg-blue-500 text-white flex items-center justify-center cursor-pointer hover:scale-110"
+              >
+                <Play size={9} className="fill-current ml-0.5" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); sessionType === "rest" ? void skipRest() : void stopFocusAndStartRest(); }}
+                className="size-5 rounded-full bg-slate-500 text-white flex items-center justify-center cursor-pointer hover:scale-110"
+              >
+                <div className="size-1.5 bg-white rounded-[0.5px]" />
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setActiveModal("menu"); }}
+                className="size-5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 flex items-center justify-center cursor-pointer"
+              >
+                <MoreHorizontal size={11} />
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1 bg-white/95 dark:bg-slate-800/95 px-1.5 py-0.5 rounded-full shadow-md border border-slate-200/80 dark:border-slate-700">
+              <button
+                onClick={(e) => { e.stopPropagation(); status === "ready" ? void startFocus() : void pause(); }}
+                className={cn("size-5 rounded-full text-white flex items-center justify-center cursor-pointer hover:scale-110", sessionType === "rest" ? "bg-emerald-500" : "bg-orange-500")}
+              >
+                {status === "running" ? <Pause size={10} className="fill-current" /> : <Play size={10} className="fill-current ml-0.5" />}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setSearchQuery(""); setActiveModal("task-selector"); }}
+                className="px-1.5 py-0.5 text-[10px] text-slate-600 dark:text-slate-300 hover:text-blue-500 max-w-[65px] truncate cursor-pointer font-medium"
+              >
+                {selectedTarget.name || "专注"}
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); setActiveModal("menu"); }}
+                className="size-5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-500 flex items-center justify-center cursor-pointer"
+              >
+                <MoreHorizontal size={11} />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ============================================================================
+  // Main Floating Card View
   // ============================================================================
   return (
     <div
       className={cn(
-        "w-[200px] rounded-2xl select-none transition-all flex flex-col justify-between overflow-hidden border-0 outline-none",
+        "relative w-[200px] rounded-2xl select-none transition-all flex flex-col justify-between overflow-visible outline-none mx-auto cursor-grab active:cursor-grabbing",
         showStats ? "h-[140px] p-2.5" : "h-[75px] px-3 py-2",
         getThemeClasses()
       )}
-      onMouseDown={(e) => {
-        // Drag window on non-interactive click
-        if (
-          e.target === e.currentTarget ||
-          (e.target as HTMLElement).getAttribute("data-drag") === "true"
-        ) {
-          void getCurrentWindow().startDragging();
-        }
+      onContextMenu={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setActiveModal("menu");
       }}
-      data-drag="true"
+      onPointerDown={handleDragPointerDown}
+      onPointerMove={handleDragPointerMove}
+      onPointerUp={handleDragPointerUp}
+      onPointerCancel={handleDragPointerUp}
     >
-      {/* Top 75px Main Floating Area */}
-      <div className="flex items-center justify-between w-full h-[58px]" data-drag="true">
-        {/* Left Circular Play/Pause button with circular progress */}
-        <div className="relative size-11 flex items-center justify-center shrink-0">
-          <svg className="size-11 -rotate-90" viewBox="0 0 44 44">
-            {/* Background ring */}
-            <circle
-              cx="22"
-              cy="22"
-              r="18"
-              fill="none"
-              className="stroke-slate-200/90 dark:stroke-slate-700/80"
-              strokeWidth="3"
-            />
-            {/* Active progress ring */}
-            {status !== "ready" && (
+      {/* Speech Bubble floating on top inside card */}
+      {bubbleText && (
+        <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-50 w-auto max-w-[185px]">
+          <SpeechBubble text={bubbleText} theme={theme} onDismiss={() => setBubbleText(null)} />
+        </div>
+      )}
+
+      {/* Top Right: Window Actions (Stats, Menu, Close) */}
+      <div className="absolute top-1.5 right-2 flex items-center gap-0.5 text-slate-400 dark:text-slate-500 z-20">
+        {/* Toggle Stats */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToggleStats();
+          }}
+          className={cn(
+            "p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded",
+            showStats && "text-blue-500 dark:text-blue-400"
+          )}
+          title={showStats ? "收起统计" : "展开今日/本周统计"}
+        >
+          <RotateCcw size={12} className={cn("transition-transform", showStats && "rotate-180")} />
+        </button>
+
+        {/* More Menu */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setActiveModal("menu");
+          }}
+          className="p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded"
+          title="更多选项"
+        >
+          <MoreHorizontal size={13} />
+        </button>
+
+        {/* Close / Hide Window */}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            hideWindow();
+          }}
+          className="p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded"
+          title="关闭悬浮助手"
+        >
+          <X size={13} />
+        </button>
+      </div>
+
+      {/* Main Row: Pet Avatar + Middle Info + Right Control Button */}
+      <div className="flex items-center w-full h-[58px] mt-0.5" data-drag="true">
+        {/* Left Side: Avatar / Pet / Circular Ring according to Theme */}
+        {theme === "pixel" ? (
+          <PixelPet
+            state={petState}
+            size="md"
+            isWalking={isDragging}
+            direction={dragDirection}
+            onPoke={handlePokePet}
+            className="shrink-0 mr-1.5"
+          />
+        ) : theme === "pixel-dog" ? (
+          <PixelDog
+            state={petState}
+            size="md"
+            isWalking={isDragging}
+            direction={dragDirection}
+            onPoke={handlePokePet}
+            className="shrink-0 mr-1.5"
+          />
+        ) : theme === "vector" ? (
+          <VectorPet
+            state={petState}
+            size="md"
+            isWalking={isDragging}
+            direction={dragDirection}
+            onPoke={handlePokePet}
+            className="shrink-0 mr-1.5"
+          />
+        ) : (
+          /* Classic Light Circular Ring */
+          <div className="relative size-11 flex items-center justify-center shrink-0 mr-1.5">
+            <svg className="size-11 -rotate-90" viewBox="0 0 44 44">
+              {/* Background ring */}
               <circle
                 cx="22"
                 cy="22"
                 r="18"
                 fill="none"
-                className={cn(
-                  "transition-all duration-300",
-                  sessionType === "rest" ? "stroke-emerald-500" : "stroke-blue-500"
-                )}
+                className="stroke-slate-200/90 dark:stroke-slate-700/80"
                 strokeWidth="3"
-                strokeLinecap="round"
-                strokeDasharray="113.1"
-                strokeDashoffset={strokeDashoffset}
               />
-            )}
-          </svg>
-
-          {/* Center Action Button */}
-          {status === "paused" ? (
-            <div className="absolute inset-0 m-auto w-[33px] h-[26px] rounded-full bg-slate-50 dark:bg-slate-800/95 flex items-center justify-center">
-              {/* Resume Button */}
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void resume();
-                }}
-                className={cn(
-                  "flex-1 h-full flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-transform",
-                  sessionType === "rest"
-                    ? "text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
-                    : "text-blue-600 hover:text-blue-700 dark:text-blue-400"
-                )}
-                title={sessionType === "rest" ? "继续休息" : "继续专注"}
-              >
-                <Play
-                  size={10}
+              {/* Active progress ring */}
+              {status !== "ready" && (
+                <circle
+                  cx="22"
+                  cy="22"
+                  r="18"
+                  fill="none"
                   className={cn(
-                    "ml-0.5",
-                    sessionType === "rest"
-                      ? "fill-emerald-600 dark:fill-emerald-400"
-                      : "fill-blue-600 dark:fill-blue-400"
+                    "transition-all duration-300",
+                    sessionType === "rest" ? "stroke-emerald-500" : "stroke-blue-500"
                   )}
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeDasharray="113.1"
+                  strokeDashoffset={strokeDashoffset}
                 />
-              </button>
+              )}
+            </svg>
 
-              {/* Vertical Divider */}
-              <div className="w-[1px] h-3 bg-slate-200/90 dark:bg-slate-700 shrink-0" />
-
-              {/* Stop / Finish Button */}
+            {/* Center Action Button (Classic) */}
+            {status === "paused" ? (
+              <div className="absolute inset-0 m-auto w-[33px] h-[26px] rounded-full bg-slate-50 dark:bg-slate-800/95 flex items-center justify-center">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void resume();
+                  }}
+                  className={cn(
+                    "flex-1 h-full flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95 transition-transform",
+                    sessionType === "rest"
+                      ? "text-emerald-600 hover:text-emerald-700 dark:text-emerald-400"
+                      : "text-blue-600 hover:text-blue-700 dark:text-blue-400"
+                  )}
+                  title={sessionType === "rest" ? "继续休息" : "继续专注"}
+                >
+                  <Play
+                    size={10}
+                    className={cn(
+                      "ml-0.5",
+                      sessionType === "rest"
+                        ? "fill-emerald-600 dark:fill-emerald-400"
+                        : "fill-blue-600 dark:fill-blue-400"
+                    )}
+                  />
+                </button>
+                <div className="w-[1px] h-3 bg-slate-200/90 dark:bg-slate-700 shrink-0" />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (sessionType === "rest") {
+                      void skipRest();
+                    } else {
+                      void stopFocusAndStartRest();
+                    }
+                  }}
+                  className="flex-1 h-full flex items-center justify-center text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer hover:scale-110 active:scale-95 transition-transform"
+                  title={sessionType === "rest" ? "跳过休息" : "结束专注并开始休息"}
+                >
+                  <div className="size-2.5 rounded-[1.5px] bg-slate-600 dark:bg-slate-300 hover:bg-slate-800 dark:hover:bg-slate-100" />
+                </button>
+              </div>
+            ) : (
               <button
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (sessionType === "rest") {
-                    void skipRest();
-                  } else {
-                    void stopFocusAndStartRest();
+                  if (status === "ready") {
+                    void startFocus();
+                  } else if (status === "running") {
+                    void pause();
                   }
                 }}
-                className="flex-1 h-full flex items-center justify-center text-slate-600 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 cursor-pointer hover:scale-110 active:scale-95 transition-transform"
-                title={sessionType === "rest" ? "跳过休息" : "结束专注并开始休息"}
-              >
-                <div className="size-2.5 rounded-[1.5px] bg-slate-600 dark:bg-slate-300 hover:bg-slate-800 dark:hover:bg-slate-100" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (status === "ready") {
-                  void startFocus();
-                } else if (status === "running") {
-                  void pause();
+                className="absolute inset-0 m-auto size-8 rounded-full bg-slate-50 dark:bg-slate-800/90 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform cursor-pointer"
+                title={
+                  status === "running"
+                    ? sessionType === "rest"
+                      ? "暂停休息"
+                      : "暂停专注"
+                    : "开始专注"
                 }
-              }}
-              className="absolute inset-0 m-auto size-8 rounded-full bg-slate-50 dark:bg-slate-800/90 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform cursor-pointer"
-              title={
-                status === "running"
-                  ? sessionType === "rest"
-                    ? "暂停休息"
-                    : "暂停专注"
-                  : "开始专注"
-              }
-            >
-              {status === "running" ? (
-                <Pause
-                  size={14}
-                  className={cn(
-                    sessionType === "rest"
-                      ? "text-emerald-600 dark:text-emerald-400 fill-emerald-600 dark:fill-emerald-400"
-                      : "text-blue-600 dark:text-blue-400 fill-blue-600 dark:fill-blue-400"
-                  )}
-                />
-              ) : (
-                <Play size={14} className="text-blue-600 dark:text-blue-400 fill-blue-600 dark:fill-blue-400 ml-0.5" />
-              )}
-            </button>
-          )}
-        </div>
+              >
+                {status === "running" ? (
+                  <Pause
+                    size={14}
+                    className={cn(
+                      sessionType === "rest"
+                        ? "text-emerald-600 dark:text-emerald-400 fill-emerald-600 dark:fill-emerald-400"
+                        : "text-blue-600 dark:text-blue-400 fill-blue-600 dark:fill-blue-400"
+                    )}
+                  />
+                ) : (
+                  <Play size={14} className="text-blue-600 dark:text-blue-400 fill-blue-600 dark:fill-blue-400 ml-0.5" />
+                )}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Center: Title & Timer */}
-        <div className="flex flex-col justify-center ml-2.5 flex-1 min-w-0" data-drag="true">
+        <div className="flex flex-col justify-center flex-1 min-w-0 pr-1" data-drag="true">
           {/* Target Title (Clickable in focus mode, status indicator in rest mode) */}
           {sessionType === "rest" ? (
             <div
-              className="flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400 font-semibold select-none max-w-[85px] truncate"
+              className={cn(
+                "flex items-center gap-1 text-xs font-semibold select-none max-w-[85px] truncate",
+                theme.startsWith("pixel")
+                  ? "text-emerald-800 font-mono text-[11px]"
+                  : "text-emerald-600 dark:text-emerald-400"
+              )}
               title="休息时段"
             >
-              <Coffee size={12} className="shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <Coffee size={12} className="shrink-0" />
               <span className="truncate">休息时段</span>
             </div>
           ) : (
@@ -1088,11 +1497,16 @@ export function FocusAssistant() {
                 setSearchQuery("");
                 setActiveModal("task-selector");
               }}
-              className="flex items-center gap-0.5 text-xs text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 font-medium cursor-pointer select-none max-w-[85px] truncate text-left"
+              className={cn(
+                "flex items-center gap-0.5 text-xs font-medium cursor-pointer select-none max-w-[85px] truncate text-left",
+                theme.startsWith("pixel")
+                  ? "text-amber-800 hover:text-amber-950 font-mono text-[11px]"
+                  : "text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400"
+              )}
               title="点击选择关联任务/习惯"
             >
               <span className="truncate">{selectedTarget.name || "专注"}</span>
-              <ChevronRight size={11} className="shrink-0 text-slate-400" />
+              <ChevronRight size={11} className="shrink-0 opacity-70" />
             </button>
           )}
 
@@ -1106,9 +1520,9 @@ export function FocusAssistant() {
             }}
             className={cn(
               "text-[22px] font-bold tracking-tight leading-none cursor-pointer select-none text-left mt-0.5",
-              sessionType === "rest"
-                ? "text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 dark:hover:text-emerald-300"
-                : "text-slate-900 dark:text-slate-100 hover:text-blue-600 dark:hover:text-blue-400"
+              theme.startsWith("pixel") && "font-mono tracking-tighter text-amber-950",
+              !theme.startsWith("pixel") && sessionType === "rest" && "text-emerald-600 dark:text-emerald-400 hover:text-emerald-700",
+              !theme.startsWith("pixel") && sessionType !== "rest" && "text-slate-900 dark:text-slate-100 hover:text-blue-600"
             )}
             title="点击修改时间设置"
           >
@@ -1116,69 +1530,110 @@ export function FocusAssistant() {
           </button>
         </div>
 
-        {/* Right: Actions (Toggle Stats, Menu, Close) */}
-        <div className="flex items-center gap-0.5 self-start -mt-0.5 -mr-1 text-slate-400 dark:text-slate-500">
-          {/* Toggle Stats */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              handleToggleStats();
-            }}
-            className={cn(
-              "p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded",
-              showStats && "text-blue-500 dark:text-blue-400"
+        {/* Right: Action / Play-Pause for Pet Themes (Pixel & Vector Card mode) */}
+        {theme !== "classic" && (
+          <div className="flex items-center justify-center shrink-0 mt-3 mr-0.5">
+            {status === "paused" ? (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void resume();
+                  }}
+                  className={cn(
+                    "size-6 rounded-md flex items-center justify-center cursor-pointer transition-transform hover:scale-110",
+                    theme.startsWith("pixel")
+                      ? "bg-amber-200 border border-amber-900 text-amber-900"
+                      : "bg-orange-100 text-orange-600"
+                  )}
+                  title={sessionType === "rest" ? "继续休息" : "继续专注"}
+                >
+                  <Play size={11} className="fill-current ml-0.5" />
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (sessionType === "rest") {
+                      void skipRest();
+                    } else {
+                      void stopFocusAndStartRest();
+                    }
+                  }}
+                  className={cn(
+                    "size-6 rounded-md flex items-center justify-center cursor-pointer transition-transform hover:scale-110",
+                    theme.startsWith("pixel")
+                      ? "bg-amber-200 border border-amber-900 text-amber-900"
+                      : "bg-slate-100 text-slate-600"
+                  )}
+                  title={sessionType === "rest" ? "跳过休息" : "结束专注并开始休息"}
+                >
+                  <div className="size-2 rounded-[1px] bg-current" />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (status === "ready") {
+                    void startFocus();
+                  } else if (status === "running") {
+                    void pause();
+                  }
+                }}
+                className={cn(
+                  "size-7 rounded-full flex items-center justify-center cursor-pointer transition-transform hover:scale-105 active:scale-95 shadow-xs",
+                  theme.startsWith("pixel")
+                    ? "bg-amber-300 border-2 border-amber-900 text-amber-950"
+                    : sessionType === "rest"
+                    ? "bg-emerald-500 text-white"
+                    : "bg-orange-500 text-white"
+                )}
+                title={
+                  status === "running"
+                    ? sessionType === "rest"
+                      ? "暂停休息"
+                      : "暂停专注"
+                    : "开始专注"
+                }
+              >
+                {status === "running" ? (
+                  <Pause size={12} className="fill-current" />
+                ) : (
+                  <Play size={12} className="fill-current ml-0.5" />
+                )}
+              </button>
             )}
-            title={showStats ? "收起统计" : "展开今日/本周统计"}
-          >
-            <RotateCcw size={12} className={cn("transition-transform", showStats && "rotate-180")} />
-          </button>
-
-          {/* More Menu */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setActiveModal("menu");
-            }}
-            className="p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded"
-            title="更多选项"
-          >
-            <MoreHorizontal size={13} />
-          </button>
-
-          {/* Close / Hide Window */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              hideWindow();
-            }}
-            className="p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded"
-            title="关闭悬浮助手"
-          >
-            <X size={13} />
-          </button>
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Bottom Expanded Stats Section (Image 2) */}
+      {/* Bottom Expanded Stats Section */}
       {showStats && (
-        <div className="pt-2 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-around text-center shrink-0">
+        <div
+          className={cn(
+            "pt-2 flex items-center justify-around text-center shrink-0 border-t",
+            theme === "pixel"
+              ? "border-amber-900/30 text-amber-950 font-mono"
+              : "border-slate-200/60 dark:border-slate-800/80"
+          )}
+        >
           {/* Column 1: Today Focus */}
           <div className="flex-1 flex flex-col items-center">
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">今日专注</span>
-            <span className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight">
+            <span className="text-[10px] opacity-70 font-normal">今日专注</span>
+            <span className="text-sm font-bold leading-tight">
               {stats.todayMinutes}
-              <span className="text-[11px] font-normal text-slate-500 ml-0.5">m</span>
+              <span className="text-[11px] font-normal opacity-80 ml-0.5">m</span>
             </span>
           </div>
 
-          <div className="h-6 w-px bg-slate-200/60 dark:bg-slate-800/80" />
+          <div className={cn("h-6 w-px", theme === "pixel" ? "bg-amber-900/30" : "bg-slate-200/60 dark:bg-slate-800/80")} />
 
           {/* Column 2: This Week Focus */}
           <div className="flex-1 flex flex-col items-center">
-            <span className="text-[10px] text-slate-400 dark:text-slate-500 font-normal">本周专注</span>
-            <span className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight">
+            <span className="text-[10px] opacity-70 font-normal">本周专注</span>
+            <span className="text-sm font-bold leading-tight">
               {stats.weekMinutes}
-              <span className="text-[11px] font-normal text-slate-500 ml-0.5">m</span>
+              <span className="text-[11px] font-normal opacity-80 ml-0.5">m</span>
             </span>
           </div>
         </div>
@@ -1186,4 +1641,3 @@ export function FocusAssistant() {
     </div>
   );
 }
-
