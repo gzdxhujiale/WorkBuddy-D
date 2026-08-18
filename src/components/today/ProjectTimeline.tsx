@@ -607,9 +607,17 @@ export const ProjectTimeline: React.FC = () => {
 
       {/* Timeline Gantt Body */}
       {timelineStages.length === 0 ? (
-        <div className="py-10 text-center text-xs text-muted-foreground">
-          <FolderKanban className="mx-auto mb-2 size-7 opacity-40 text-muted-foreground" />
-          当前时间视图（{VIEW_MODE_LABELS[viewMode]}）内暂无排期阶段。可在「项目中心」为阶段配置时间周期。
+        <div className={cn("py-10 text-center text-xs text-muted-foreground", isPixelTheme && "font-mono")}>
+          {isPixelTheme ? (
+            <PixelScroll className="mx-auto mb-2 text-amber-600 dark:text-amber-400 opacity-70" size={28} />
+          ) : (
+            <FolderKanban className="mx-auto mb-2 size-7 opacity-40 text-muted-foreground" />
+          )}
+          <span>
+            {isPixelTheme
+              ? `当前时间视图（${VIEW_MODE_LABELS[viewMode]}）暂无公会战役排期，可在「项目中心」配置`
+              : `当前时间视图（${VIEW_MODE_LABELS[viewMode]}）内暂无排期阶段。可在「项目中心」为阶段配置时间周期。`}
+          </span>
         </div>
       ) : (
         <div className="mt-4 overflow-x-auto min-w-0">
@@ -707,20 +715,28 @@ export const ProjectTimeline: React.FC = () => {
                   todayDate.getTime() >= sTime && todayDate.getTime() <= eTime + dayMs;
 
                 // Style variant
-                let barClass =
-                  "border border-emerald-500/50 bg-emerald-950/40 text-emerald-300 dark:bg-emerald-950/50 shadow-xs";
+                let barClass = isPixelTheme
+                  ? "border-2 border-emerald-800/60 bg-emerald-950/40 text-emerald-300 font-mono shadow-[2px_2px_0px_rgba(0,0,0,0.15)]"
+                  : "border border-emerald-500/50 bg-emerald-950/40 text-emerald-300 dark:bg-emerald-950/50 shadow-xs";
+
                 if (isTodayActive) {
-                  barClass =
-                    "bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-semibold shadow-[0_0_15px_rgba(16,185,129,0.45)] border border-emerald-300/40";
+                  barClass = isPixelTheme
+                    ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold border-2 border-emerald-800 shadow-[2px_2px_0px_#064e3b]"
+                    : "bg-gradient-to-r from-emerald-500 to-teal-400 text-white font-semibold shadow-[0_0_15px_rgba(16,185,129,0.45)] border border-emerald-300/40";
                 } else if (eTime < todayDate.getTime()) {
-                  barClass = "bg-muted/70 text-muted-foreground border border-border/80";
+                  barClass = isPixelTheme
+                    ? "bg-muted/70 text-muted-foreground border-2 border-border/80 font-mono"
+                    : "bg-muted/70 text-muted-foreground border border-border/80";
                 }
 
                 if (isHoveredAura) {
-                  barClass =
-                    "bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold ring-2 ring-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.95)] z-30 scale-[1.02] animate-pulse";
+                  barClass = isPixelTheme
+                    ? "bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold border-2 border-amber-800 ring-2 ring-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.95)] z-30 scale-[1.02] animate-pulse"
+                    : "bg-gradient-to-r from-amber-500 to-amber-600 text-white font-bold ring-2 ring-amber-400 shadow-[0_0_24px_rgba(245,158,11,0.95)] z-30 scale-[1.02] animate-pulse";
                 } else if (isPopoverOpen) {
-                  barClass += " ring-2 ring-sky-400 shadow-md z-30";
+                  barClass += isPixelTheme
+                    ? " ring-2 ring-sky-400 border-2 border-sky-600 shadow-[2px_2px_0px_#0284c7] z-30"
+                    : " ring-2 ring-sky-400 shadow-md z-30";
                 }
 
                 const displayName =

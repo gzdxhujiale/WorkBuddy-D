@@ -377,7 +377,11 @@ export const TodayPanel: React.FC = () => {
               className={cn(
                 "text-xs tabular-nums",
                 isPixelTheme && "font-mono",
-                due.overdue ? "text-red-500 font-semibold" : "text-muted-foreground"
+                due.overdue
+                  ? isPixelTheme
+                    ? "text-red-700 dark:text-red-300 font-bold bg-red-100 dark:bg-red-950/80 px-1.5 py-0.5 rounded-xs border border-red-800/40 shadow-[1px_1px_0px_#7f1d1d]"
+                    : "text-red-500 font-semibold"
+                  : "text-muted-foreground"
               )}
             >
               {due.text}
@@ -610,7 +614,9 @@ export const TodayPanel: React.FC = () => {
               </div>
 
               {todayHabits.length === 0 ? (
-                <div className="py-3 text-xs text-muted-foreground">今天没有需要打卡的习惯</div>
+                <div className="py-3 text-xs text-muted-foreground">
+                  {isPixelTheme ? "今日暂无修行目标，前往「日常习惯」添加" : "今天没有需要打卡的习惯"}
+                </div>
               ) : (
                 <div className="flex flex-col">
                   {uncheckedHabits.map((habit) => (
@@ -624,7 +630,9 @@ export const TodayPanel: React.FC = () => {
                         onClick={() => toggleCheckIn(habit.id, today, true)}
                         className={cn(
                           "px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950/60 border border-emerald-600/40 hover:bg-emerald-200 transition-colors cursor-pointer shrink-0",
-                          isPixelTheme ? "rounded-xs border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b]" : "rounded-full"
+                          isPixelTheme
+                            ? "rounded-xs border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b] active:translate-x-[1px] active:translate-y-[1px]"
+                            : "rounded-full"
                         )}
                       >
                         打卡
@@ -641,7 +649,7 @@ export const TodayPanel: React.FC = () => {
                       <span
                         className={cn(
                           "size-5 bg-emerald-500 text-white flex items-center justify-center text-xs font-bold shrink-0",
-                          isPixelTheme ? "rounded-xs border border-emerald-700" : "rounded-full"
+                          isPixelTheme ? "rounded-xs border border-emerald-700 shadow-[1px_1px_0px_#064e3b]" : "rounded-full"
                         )}
                       >
                         ✓
@@ -682,10 +690,10 @@ export const TodayPanel: React.FC = () => {
               <div className="text-xs text-muted-foreground">
                 {reviewWritten ? (
                   <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-                    <span>✨ 今日已完成复盘，复利积累中</span>
+                    <span>{isPixelTheme ? "✨ 今日冒险日志已刻印完成，EXP 结算中" : "✨ 今日已完成复盘，复利积累中"}</span>
                   </div>
                 ) : (
-                  <span>今日尚未记录复盘心得，总结今日让成长加速</span>
+                  <span>{isPixelTheme ? "今日尚未刻印冒险日志，总结今日让成长加速" : "今日尚未记录复盘心得，总结今日让成长加速"}</span>
                 )}
               </div>
             </div>

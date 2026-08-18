@@ -27,7 +27,7 @@ The root app resolves the Supabase session before rendering an authenticated rou
 | State kind | Owner | Use it for |
 | --- | --- | --- |
 | Server/cache state | TanStack Query | User-scoped records, refetching, invalidation, and optimistic cache updates. |
-| UI-only shared state | Zustand in `src/stores/` | Selection, drawer/modal state, and per-user UI preferences. |
+| UI-only shared state | Zustand in `src/stores/` (`useUiStore.ts`) | Selection, drawer/modal state, per-user UI preferences, transient timeline hover linkage (`hoveredStageId`), and cross-route active project selection (`activeProjectId`). |
 | Local component state | React hooks | Drafts, transient interaction state, and surface-local feedback. |
 | Database access | `src/services/` and feature hooks | Mapping Supabase rows, RPC calls, reads, and domain mutations. |
 
