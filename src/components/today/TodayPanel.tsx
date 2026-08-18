@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Check,
   Calendar,
+  AlignLeft,
 } from "lucide-react";
 import { useTimeManagementData, useTaskActions } from "@/hooks/useTimeManagement";
 import { Task, QuadrantType } from "@/types/timeManagement";
@@ -15,6 +16,7 @@ import { DailyReviewItem } from "@/types/dailyReview";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { openQuickEditWindow, prewarmQuickEditWindow } from "@/services/quickEditWindow";
 import { taskIntersectsDay, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
+import { hasTaskDescription } from "@/lib/taskDescription";
 import { ProjectTimeline } from "./ProjectTimeline";
 import { cn } from "@/lib/utils";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
@@ -332,6 +334,11 @@ export const TodayPanel: React.FC = () => {
               )}
             >
               {due.text}
+            </span>
+          )}
+          {hasTaskDescription(task.description) && (
+            <span title="包含任务详情" className="text-muted-foreground/70 flex items-center">
+              <AlignLeft size={13} />
             </span>
           )}
           <Calendar

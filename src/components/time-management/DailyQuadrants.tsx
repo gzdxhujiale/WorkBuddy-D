@@ -432,10 +432,13 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
               )}
             </div>
 
-            <div className="flex items-center gap-1.5 flex-shrink-0 ml-2 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="flex items-center justify-end flex-shrink-0 ml-2 min-w-[24px]">
               {hasContent && (
-                <span title="包含任务详情">
-                  <AlignLeft size={13} className="text-muted-foreground" />
+                <span
+                  title="包含任务详情"
+                  className="flex items-center justify-center size-6 text-muted-foreground group-hover:hidden transition-all"
+                >
+                  <AlignLeft size={13} />
                 </span>
               )}
               <Button
@@ -445,11 +448,11 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
                   e.stopPropagation();
                   onDeleteTask(task.id);
                 }}
-                className={
+                className={`hidden group-hover:flex h-6 w-6 cursor-pointer ${
                   isPixelTheme
-                    ? "h-6 w-6 rounded-xs border border-border/80 bg-muted hover:bg-red-600 hover:text-white text-muted-foreground shadow-[1px_1px_0px_#000] cursor-pointer"
-                    : "h-6 w-6 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
-                }
+                    ? "rounded-xs border border-border/80 bg-muted hover:bg-red-600 hover:text-white text-muted-foreground shadow-[1px_1px_0px_#000]"
+                    : "text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40"
+                }`}
                 title="删除任务"
               >
                 <X size={14} />
@@ -536,49 +539,64 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
             </Button>
           </div>
 
-          {/* Task List by Group */}
+          {/* Task List by Group or Empty State */}
           <div className="flex-1 overflow-y-auto px-4 py-2 flex flex-col gap-1" onDragOver={handleDragOver}>
-            {expired.length > 0 && (
-              <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "已过期")}>
-                <CollapsibleGroup title="已过期" count={expired.length} isExpired>
-                  {renderTasks(expired, config.iconTextClass)}
-                </CollapsibleGroup>
+            {sortedTasks.length === 0 ? (
+              <div
+                onClick={(e) => onCreateTask(type, e.currentTarget)}
+                className="flex-1 flex flex-col items-center justify-center text-muted-foreground/50 hover:text-muted-foreground text-xs gap-1.5 cursor-pointer select-none transition-colors min-h-[100px]"
+                title="点击新建任务"
+              >
+                <span className="text-base">{isPixelTheme ? "📜" : "✨"}</span>
+                <span className={isPixelTheme ? "font-mono" : ""}>
+                  {isPixelTheme ? "暂无委托 · 点击添加" : "暂无任务 · 点击添加"}
+                </span>
               </div>
-            )}
-            {within1Day.length > 0 && (
-              <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "一天内")}>
-                <CollapsibleGroup title="一天内" count={within1Day.length}>
-                  {renderTasks(within1Day, config.iconTextClass)}
-                </CollapsibleGroup>
-              </div>
-            )}
-            {within3Days.length > 0 && (
-              <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "三天内")}>
-                <CollapsibleGroup title="三天内" count={within3Days.length}>
-                  {renderTasks(within3Days, config.iconTextClass)}
-                </CollapsibleGroup>
-              </div>
-            )}
-            {within1Week.length > 0 && (
-              <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "一周内")}>
-                <CollapsibleGroup title="一周内" count={within1Week.length}>
-                  {renderTasks(within1Week, config.iconTextClass)}
-                </CollapsibleGroup>
-              </div>
-            )}
-            {beyond1Week.length > 0 && (
-              <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "一周外")}>
-                <CollapsibleGroup title="一周外" count={beyond1Week.length}>
-                  {renderTasks(beyond1Week, config.iconTextClass)}
-                </CollapsibleGroup>
-              </div>
-            )}
-            {noDate.length > 0 && (
-              <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "无日期")}>
-                <CollapsibleGroup title="无日期" count={noDate.length}>
-                  {renderTasks(noDate, config.iconTextClass)}
-                </CollapsibleGroup>
-              </div>
+            ) : (
+              <>
+                {expired.length > 0 && (
+                  <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "已过期")}>
+                    <CollapsibleGroup title="已过期" count={expired.length} isExpired>
+                      {renderTasks(expired, config.iconTextClass)}
+                    </CollapsibleGroup>
+                  </div>
+                )}
+                {within1Day.length > 0 && (
+                  <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "一天内")}>
+                    <CollapsibleGroup title="一天内" count={within1Day.length}>
+                      {renderTasks(within1Day, config.iconTextClass)}
+                    </CollapsibleGroup>
+                  </div>
+                )}
+                {within3Days.length > 0 && (
+                  <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "三天内")}>
+                    <CollapsibleGroup title="三天内" count={within3Days.length}>
+                      {renderTasks(within3Days, config.iconTextClass)}
+                    </CollapsibleGroup>
+                  </div>
+                )}
+                {within1Week.length > 0 && (
+                  <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "一周内")}>
+                    <CollapsibleGroup title="一周内" count={within1Week.length}>
+                      {renderTasks(within1Week, config.iconTextClass)}
+                    </CollapsibleGroup>
+                  </div>
+                )}
+                {beyond1Week.length > 0 && (
+                  <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "一周外")}>
+                    <CollapsibleGroup title="一周外" count={beyond1Week.length}>
+                      {renderTasks(beyond1Week, config.iconTextClass)}
+                    </CollapsibleGroup>
+                  </div>
+                )}
+                {noDate.length > 0 && (
+                  <div onDragOver={handleDragOver} onDrop={(e) => handleDropOnGroup(e, type, "无日期")}>
+                    <CollapsibleGroup title="无日期" count={noDate.length}>
+                      {renderTasks(noDate, config.iconTextClass)}
+                    </CollapsibleGroup>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

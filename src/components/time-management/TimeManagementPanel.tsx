@@ -12,6 +12,7 @@ import {
   Clock,
   Timer,
   SlidersHorizontal,
+  Check,
 } from "lucide-react";
 import { useTimeManagementData, useTaskActions } from "@/hooks/useTimeManagement";
 import { Task, QuadrantType } from "@/types/timeManagement";
@@ -288,19 +289,35 @@ export const TimeManagementPanel: React.FC = () => {
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger
-              className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
+              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-foreground transition-colors cursor-pointer ${
+                isPixelTheme
+                  ? "rounded-xs border border-border bg-card shadow-[1px_1px_0px_#000] hover:bg-muted font-mono"
+                  : "rounded-lg border border-border bg-card hover:bg-accent"
+              }`}
               aria-label="筛选任务"
             >
               <SlidersHorizontal size={14} />
               筛选
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 gap-3 p-3" aria-label="任务筛选选项">
+            <DropdownMenuContent
+              align="end"
+              className={`w-56 gap-3 p-3 ${
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border bg-popover font-mono shadow-[3px_3px_0px_#000]"
+                  : "rounded-xl border border-border bg-popover"
+              }`}
+              aria-label="任务筛选选项"
+            >
               <label className="grid gap-1.5 text-xs font-medium text-foreground">
                 任务范围
                 <select
                   value={projectTaskFilter}
                   onChange={(event) => setProjectTaskFilter(event.target.value as ProjectTaskFilter)}
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs font-normal outline-none focus:ring-1 focus:ring-ring"
+                  className={`h-8 px-2 text-xs font-normal outline-none bg-background text-foreground ${
+                    isPixelTheme
+                      ? "rounded-xs border border-border font-mono"
+                      : "rounded-md border border-border focus:ring-1 focus:ring-ring"
+                  }`}
                 >
                   <option value="non-project">仅非项目任务</option>
                   <option value="all">全部任务</option>
@@ -312,7 +329,11 @@ export const TimeManagementPanel: React.FC = () => {
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as StatusFilterType)}
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs font-normal outline-none focus:ring-1 focus:ring-ring"
+                  className={`h-8 px-2 text-xs font-normal outline-none bg-background text-foreground ${
+                    isPixelTheme
+                      ? "rounded-xs border border-border font-mono"
+                      : "rounded-md border border-border focus:ring-1 focus:ring-ring"
+                  }`}
                 >
                   <option value="uncompleted">未完成</option>
                   <option value="all">全部</option>
@@ -324,7 +345,11 @@ export const TimeManagementPanel: React.FC = () => {
                 <select
                   value={quadrantFilter}
                   onChange={(event) => setQuadrantFilter(event.target.value)}
-                  className="h-8 rounded-md border border-border bg-background px-2 text-xs font-normal outline-none focus:ring-1 focus:ring-ring"
+                  className={`h-8 px-2 text-xs font-normal outline-none bg-background text-foreground ${
+                    isPixelTheme
+                      ? "rounded-xs border border-border font-mono"
+                      : "rounded-md border border-border focus:ring-1 focus:ring-ring"
+                  }`}
                 >
                   <option value="ALL">全部</option>
                   <option value="Q1">Q1 · 重要且紧急</option>
@@ -357,7 +382,13 @@ export const TimeManagementPanel: React.FC = () => {
         ) : (
           <div className="flex-1 min-h-0 flex gap-3.5 items-stretch">
             {/* Left Panel: Card containing Date Navigation Header & Main View */}
-            <div className="min-w-0 flex-1 bg-card rounded-2xl p-4 border border-border shadow-xs flex flex-col min-h-0 h-full overflow-hidden">
+            <div
+              className={`min-w-0 flex-1 p-4 flex flex-col min-h-0 h-full overflow-hidden ${
+                isPixelTheme
+                  ? "bg-card rounded-xl border-2 border-border shadow-[3px_3px_0px_rgba(0,0,0,0.1)] font-mono"
+                  : "bg-card rounded-2xl border border-border shadow-xs"
+              }`}
+            >
               {/* Date Navigation Header inside Left Panel */}
               <div className="flex items-center justify-between pb-3 border-b border-border shrink-0 gap-2">
                 <div className="text-sm font-bold text-foreground whitespace-nowrap">
@@ -366,20 +397,32 @@ export const TimeManagementPanel: React.FC = () => {
                 <div className="flex items-center gap-1 text-muted-foreground shrink-0">
                   <button
                     onClick={handlePrevDate}
-                    className="p-1.5 rounded-lg hover:bg-accent text-foreground transition-colors cursor-pointer"
+                    className={`p-1.5 transition-colors cursor-pointer ${
+                      isPixelTheme
+                        ? "rounded-xs border border-border hover:bg-muted text-foreground"
+                        : "rounded-lg hover:bg-accent text-foreground"
+                    }`}
                     title="上一阶段"
                   >
                     <ChevronLeft size={16} />
                   </button>
                   <button
                     onClick={handleGoToday}
-                    className="px-2.5 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold border border-primary/20 hover:bg-primary/20 transition-colors cursor-pointer"
+                    className={`px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                      isPixelTheme
+                        ? "rounded-xs border border-primary/30 bg-primary/10 text-primary shadow-[1px_1px_0px_#000]"
+                        : "rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20"
+                    }`}
                   >
                     今天
                   </button>
                   <button
                     onClick={handleNextDate}
-                    className="p-1.5 rounded-lg hover:bg-accent text-foreground transition-colors cursor-pointer"
+                    className={`p-1.5 transition-colors cursor-pointer ${
+                      isPixelTheme
+                        ? "rounded-xs border border-border hover:bg-muted text-foreground"
+                        : "rounded-lg hover:bg-accent text-foreground"
+                    }`}
                     title="下一阶段"
                   >
                     <ChevronRight size={16} />
@@ -435,12 +478,24 @@ export const TimeManagementPanel: React.FC = () => {
             </div>
 
             {/* Right Panel: Period Task Overview Sidebar (Reference: workbuddy) */}
-            <aside className="w-80 shrink-0 bg-card rounded-2xl p-4 border border-border shadow-xs flex flex-col min-h-0 h-full overflow-hidden">
+            <aside
+              className={`w-80 shrink-0 p-4 flex flex-col min-h-0 h-full overflow-hidden ${
+                isPixelTheme
+                  ? "bg-card rounded-xl border-2 border-border shadow-[3px_3px_0px_rgba(0,0,0,0.1)] font-mono"
+                  : "bg-card rounded-2xl border border-border shadow-xs"
+              }`}
+            >
               <div className="flex items-center justify-between pb-3 border-b border-border shrink-0">
                 <h3 className="text-xs font-bold text-foreground">
                   {getSidebarTitle()}
                 </h3>
-                <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-primary/10 text-primary font-semibold">
+                <span
+                  className={`text-[11px] font-mono px-2 py-0.5 font-semibold ${
+                    isPixelTheme
+                      ? "rounded-xs border border-primary/30 bg-primary/10 text-primary shadow-[1px_1px_0px_#000]"
+                      : "rounded-full bg-primary/10 text-primary"
+                  }`}
+                >
                   {periodTasks.length} 项
                 </span>
               </div>
@@ -459,7 +514,11 @@ export const TimeManagementPanel: React.FC = () => {
                       onClick={() =>
                         handleOpenTaskEditor(undefined, "Q2", undefined, currentDateStr)
                       }
-                      className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium border border-primary/20 hover:bg-primary/20 transition-colors cursor-pointer flex items-center gap-1"
+                      className={`px-3 py-1 text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${
+                        isPixelTheme
+                          ? "rounded-xs border border-primary/30 bg-primary/10 text-primary shadow-[1px_1px_0px_#000] hover:bg-primary/20"
+                          : "rounded-full bg-primary/10 text-primary border border-primary/20 hover:bg-primary/20"
+                      }`}
                     >
                       <Plus size={13} />
                       <span>添加任务</span>
@@ -471,10 +530,16 @@ export const TimeManagementPanel: React.FC = () => {
                       <div
                         key={t.id}
                         onClick={(e) => handleOpenTaskEditor(t, t.quadrant, e.currentTarget)}
-                        className={`p-2.5 rounded-xl border transition-all space-y-1.5 relative cursor-pointer ${
+                        className={`p-2.5 transition-all space-y-1.5 relative cursor-pointer ${
+                          isPixelTheme
+                            ? "rounded-xs border border-border bg-card shadow-[1px_1px_0px_rgba(0,0,0,0.06)]"
+                            : "rounded-xl border border-border shadow-2xs"
+                        } ${
                           t.completed
-                            ? "bg-muted/40 border-border opacity-60"
-                            : "bg-card border-border hover:border-primary/60 shadow-2xs"
+                            ? "bg-muted/40 opacity-60"
+                            : isPixelTheme
+                            ? "hover:bg-amber-100/50 dark:hover:bg-amber-950/40"
+                            : "hover:border-primary/60"
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -485,9 +550,19 @@ export const TimeManagementPanel: React.FC = () => {
                                 e.stopPropagation();
                                 handleToggleComplete(t.id);
                               }}
-                              className="mt-0.5 text-muted-foreground hover:text-primary transition-colors shrink-0 cursor-pointer"
+                              className={`mt-0.5 transition-colors shrink-0 cursor-pointer ${
+                                isPixelTheme
+                                  ? `size-4 rounded-xs flex items-center justify-center ${
+                                      t.completed
+                                        ? "bg-emerald-600 text-white border border-emerald-800 shadow-[1px_1px_0px_#064e3b]"
+                                        : "border-2 border-amber-900/60 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/60 hover:border-emerald-500 shadow-[1px_1px_0px_#000]"
+                                    }`
+                                  : "text-muted-foreground hover:text-primary"
+                              }`}
                             >
-                              {t.completed ? (
+                              {isPixelTheme ? (
+                                t.completed && <Check size={11} className="stroke-[3]" />
+                              ) : t.completed ? (
                                 <CheckCircle2 size={16} className="text-emerald-500" />
                               ) : (
                                 <Circle size={16} />
@@ -499,7 +574,7 @@ export const TimeManagementPanel: React.FC = () => {
                                   t.completed
                                     ? "line-through text-muted-foreground"
                                     : "text-foreground"
-                                }`}
+                                } ${isPixelTheme ? "font-mono" : ""}`}
                               >
                                 {t.title}
                               </div>
@@ -507,7 +582,9 @@ export const TimeManagementPanel: React.FC = () => {
                           </div>
 
                           <span
-                            className={`px-1.5 py-0.5 rounded text-[10px] font-medium shrink-0 border ${
+                            className={`px-1.5 py-0.5 text-[10px] font-medium shrink-0 border ${
+                              isPixelTheme ? "rounded-xs font-mono shadow-[1px_1px_0px_#000]" : "rounded"
+                            } ${
                               t.quadrant === "Q1"
                                 ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20"
                                 : t.quadrant === "Q2"

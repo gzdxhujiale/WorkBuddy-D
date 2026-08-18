@@ -38,6 +38,7 @@ import { hasTaskDescription } from "@/lib/taskDescription";
 import { ReactjsTiptapEditor } from "@/components/ui/reactjs-tiptap-editor";
 import { DateRangePicker } from "@/components/ui/date-picker";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { applyAppThemeStyle } from "@/lib/preferences";
 import { PixelScroll } from "@/components/pixel/PixelIcons";
 
 // ==========================================
@@ -1152,8 +1153,12 @@ export function TaskQuickEditWindow() {
 
   useEffect(() => {
     document.documentElement.classList.add("tqe-window");
+    applyAppThemeStyle();
     const pending: Promise<UnlistenFn>[] = [
-      listen<TqeInitPayload>("tqe:init", (e) => setInit(e.payload)),
+      listen<TqeInitPayload>("tqe:init", (e) => {
+        applyAppThemeStyle();
+        setInit(e.payload);
+      }),
       listen<{ session: string }>("tqe:discard", (e) => {
         setInit((active) => {
           if (e.payload?.session !== active?.session) return active;
