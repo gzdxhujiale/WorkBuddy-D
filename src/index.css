@@ -407,5 +407,22 @@ html.tqe-window body > div:has(> [class*="richtext-max-h-"]) {
   color: #ffffff !important;
 }
 
+.theme-retro-pixel .arco-input-tag {
+  border-radius: 2px !important;
+  border: 1.5px solid #8c6239 !important;
+  background-color: var(--color-background) !important;
+  color: var(--color-foreground) !important;
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+}
+
+.theme-retro-pixel .arco-input-tag .arco-input-tag-tag {
+  border-radius: 2px !important;
+  background-color: #fde68a !important;
+  color: #451a03 !important;
+  border: 1px solid #78350f !important;
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+  font-weight: 700 !important;
+}
+
 
 

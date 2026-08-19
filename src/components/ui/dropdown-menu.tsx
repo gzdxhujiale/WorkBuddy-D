@@ -199,7 +199,7 @@ export function DropdownMenuItem({
       type="button"
       disabled={disabled}
       className={cn(
-        "w-full text-left px-3 py-2 text-sm rounded-sm transition-colors cursor-pointer flex items-center justify-between gap-2 select-none",
+        "w-full text-left px-2.5 py-1.5 text-xs rounded-sm transition-colors cursor-pointer flex items-center justify-start gap-2 select-none",
         destructive
           ? "text-destructive hover:bg-destructive/10"
           : "text-foreground hover:bg-muted",

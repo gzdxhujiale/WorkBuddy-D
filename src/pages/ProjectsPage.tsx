@@ -1,8 +1,6 @@
 import { useMemo, useState, useEffect } from "react";
 import {
   Calendar,
-  Check,
-  CheckCircle2,
   ChevronRight,
   Flag,
   FolderKanban,
@@ -10,13 +8,30 @@ import {
   Tag,
   Trash2,
   Users,
+  Search,
+  Kanban,
+  Table as TableIcon,
+  Activity,
+  Archive,
+  ArchiveRestore,
+  MoreHorizontal,
 } from "lucide-react";
 import { ProjectStageBoard } from "@/components/projects/ProjectStageBoard";
+import { ProjectGanttView } from "@/components/projects/ProjectGanttView";
+import { ProjectTableView } from "@/components/projects/ProjectTableView";
 import { TemplateEditorModal } from "@/components/projects/TemplateEditorModal";
 import { useConfirmDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { useProjectActions, useProjectsData } from "@/hooks/useProjects";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/ui/date-picker";
+import { InputTag } from "@/components/ui/input-tag";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -27,7 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   PRIORITY_LABELS,
-  PROJECT_STATUS_LABELS,
+  getProjectComputedStatus,
   type Priority,
   type Project,
   type ProjectStatus,
@@ -35,8 +50,10 @@ import {
 } from "@/types/projects";
 import { createProjectId, createProjectStageId } from "@/lib/entityIds";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
-import { PixelShield } from "@/components/pixel/PixelIcons";
+import { PixelShield, PixelScroll } from "@/components/pixel/PixelIcons";
 import { useUiStore } from "@/stores/uiStore";
+import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
+import { cn } from "@/lib/utils";
 
 const priorityClasses: Record<Priority, string> = {
   low: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700",
@@ -254,12 +271,13 @@ function CreateProjectDialog({
   );
 }
 
-
+export type ProjectViewMode = "kanban" | "gantt" | "table";
+export type SidebarStatusFilter = "all" | "in_progress" | "completed" | "archived";
 
 export function ProjectsPage() {
   const { isPixelTheme } = useAppThemeStyle();
   const { data, isPending, error } = useProjectsData();
-  const { saveProject, saveStage, saveTask, saveTemplate, createFromTemplate, deleteProject, deleteStage, deleteTask } = useProjectActions();
+  const { saveProject, saveStage, reorderStages, saveTask, saveTemplate, createFromTemplate, deleteProject, deleteStage, deleteTask } = useProjectActions();
   const { confirm, dialogElement } = useConfirmDialog();
   const activeProjectId = useUiStore((s) => s.activeProjectId);
   const setActiveProjectId = useUiStore((s) => s.setActiveProjectId);
@@ -269,101 +287,320 @@ export function ProjectsPage() {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
 
+  // New View Mode State
+  const [viewMode, setViewMode] = useState<ProjectViewMode>("kanban");
+
+  // New Sidebar Status Filter & Search State
+  const [statusFilter, setStatusFilter] = useState<SidebarStatusFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const todayStr = useMemo(() => todayYMD(), []);
+
+  const projects = data?.projects ?? [];
+  const allStages = data?.stages ?? [];
+  const allTasks = data?.tasks ?? [];
+
+  // Dynamically compute project status map based on task completion and archival state
+  const statusMap = useMemo(() => {
+    const map = new Map<string, ProjectStatus>();
+    for (const p of projects) {
+      const pTasks = allTasks.filter((t) => t.projectId === p.id);
+      map.set(p.id, getProjectComputedStatus(p, pTasks));
+    }
+    return map;
+  }, [projects, allTasks]);
+
+  // Smart dynamic status derivation with risk awareness (Option A)
+  const getProjectSmartStatus = (proj: Project) => {
+    const computedStatus = statusMap.get(proj.id) || "in_progress";
+    if (computedStatus === "archived") {
+      return {
+        key: "archived" as const,
+        label: "已归档",
+        sidebarLabel: "已归档",
+        badgeClasses: isPixelTheme
+          ? "rounded-xs bg-muted text-muted-foreground border border-border shadow-[1px_1px_0px_#000] font-mono"
+          : "rounded-lg bg-muted/70 text-muted-foreground border border-border/70",
+      };
+    }
+
+    if (computedStatus === "completed") {
+      return {
+        key: "completed" as const,
+        label: "已完成",
+        sidebarLabel: "已完成",
+        badgeClasses: isPixelTheme
+          ? "rounded-xs bg-emerald-500 text-emerald-950 border border-emerald-800 shadow-[1px_1px_0px_#064e3b] font-mono"
+          : "rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/70",
+      };
+    }
+
+    // For in_progress project, check risk & deadlines
+    const projTasks = allTasks.filter((t) => t.projectId === proj.id);
+    const overdueTasks = projTasks.filter((t) => {
+      if (t.completed) return false;
+      const tTime = t.scheduledEndAt || t.scheduledStartAt;
+      return Boolean(tTime && formatDateYMD(new Date(tTime)) < todayStr);
+    });
+
+    const isProjectOverdue = Boolean(
+      proj.endDate &&
+      proj.endDate < todayStr
+    );
+
+    const approachingTasks = projTasks.filter((t) => {
+      if (t.completed) return false;
+      const tTime = t.scheduledEndAt || t.scheduledStartAt;
+      if (!tTime) return false;
+      const dStr = formatDateYMD(new Date(tTime));
+      return dStr >= todayStr && (new Date(dStr).getTime() - new Date(todayStr).getTime()) / (24 * 3600 * 1000) <= 3;
+    });
+
+    const isProjectApproaching = Boolean(
+      !isProjectOverdue &&
+      proj.endDate &&
+      (new Date(proj.endDate).getTime() - new Date(todayStr).getTime()) / (24 * 3600 * 1000) <= 3
+    );
+
+    if (overdueTasks.length > 0 || isProjectOverdue) {
+      const count = overdueTasks.length > 0 ? overdueTasks.length : 1;
+      return {
+        key: "overdue" as const,
+        label: `进行中 · 逾期（${count}）`,
+        sidebarLabel: `逾期（${count}）`,
+        badgeClasses: isPixelTheme
+          ? "rounded-xs bg-red-200 text-red-950 border border-red-800 shadow-[1px_1px_0px_#7f1d1d] font-mono"
+          : "rounded-lg bg-red-100 dark:bg-red-950/80 text-red-800 dark:text-red-300 border border-red-300/70",
+      };
+    }
+
+    if (approachingTasks.length > 0 || isProjectApproaching) {
+      const count = approachingTasks.length > 0 ? approachingTasks.length : 1;
+      return {
+        key: "approaching" as const,
+        label: `进行中 · 临近预期（${count}）`,
+        sidebarLabel: `临近预期（${count}）`,
+        badgeClasses: isPixelTheme
+          ? "rounded-xs bg-amber-200 text-amber-950 border border-amber-800 shadow-[1px_1px_0px_#000] font-mono"
+          : "rounded-lg bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300/70",
+      };
+    }
+
+    return {
+      key: "healthy" as const,
+      label: "进行中 · 正常推进",
+      sidebarLabel: "进行中",
+      badgeClasses: isPixelTheme
+        ? "rounded-xs bg-amber-400 text-amber-950 border border-amber-800 shadow-[1px_1px_0px_#000] font-mono"
+        : "rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 border border-amber-200/90 dark:border-amber-800/70",
+    };
+  };
+
+  // Status Filter counts (dynamically computed from each project's tasks)
+  const inProgressCount = useMemo(
+    () =>
+      projects.filter((p) => {
+        const st = statusMap.get(p.id);
+        return st === "in_progress" || !st;
+      }).length,
+    [projects, statusMap]
+  );
+  const completedProjectsCount = useMemo(
+    () => projects.filter((p) => statusMap.get(p.id) === "completed").length,
+    [projects, statusMap]
+  );
+  const archivedCount = useMemo(
+    () => projects.filter((p) => statusMap.get(p.id) === "archived").length,
+    [projects, statusMap]
+  );
+
+  // Filtered projects based on computed status and search
+  const filteredProjects = useMemo(() => {
+    return projects
+      .filter((project) => {
+        const st = statusMap.get(project.id) || "in_progress";
+        if (statusFilter === "in_progress") return st === "in_progress";
+        if (statusFilter === "completed") return st === "completed";
+        if (statusFilter === "archived") return st === "archived";
+        return true;
+      })
+      .filter((project) => {
+        if (!searchQuery.trim()) return true;
+        const q = searchQuery.toLowerCase();
+        return (
+          project.name.toLowerCase().includes(q) ||
+          (project.description?.toLowerCase().includes(q) ?? false) ||
+          project.tags.some((tag) => tag.toLowerCase().includes(q))
+        );
+      });
+  }, [projects, statusFilter, searchQuery, statusMap]);
+
   useEffect(() => {
     if (activeProjectId && activeProjectId !== selectedId) {
       setSelectedId(activeProjectId);
     }
-  }, [activeProjectId]);
+  }, [activeProjectId, selectedId]);
 
-  const rawProjects = data?.projects ?? [];
-  const allTasks = data?.tasks ?? [];
+  useEffect(() => {
+    if (!selectedId && filteredProjects.length > 0) {
+      setSelectedId(filteredProjects[0].id);
+    }
+  }, [filteredProjects, selectedId]);
 
-  const projects = useMemo(() => {
-    const PRIORITY_WEIGHT: Record<Priority, number> = {
-      urgent: 4,
-      high: 3,
-      medium: 2,
-      low: 1,
-    };
+  const selected = useMemo(() => projects.find((item) => item.id === selectedId), [projects, selectedId]);
+  const selectedStages = useMemo(() => allStages.filter((stage) => stage.projectId === selected?.id), [allStages, selected?.id]);
+  const selectedTasks = useMemo(() => allTasks.filter((task) => task.projectId === selected?.id), [allTasks, selected?.id]);
 
-    return [...rawProjects].sort((a, b) => {
-      // 1. 先按项目优先级排序（紧急 > 高 > 中 > 低）
-      const pDiff = (PRIORITY_WEIGHT[b.priority] ?? 0) - (PRIORITY_WEIGHT[a.priority] ?? 0);
-      if (pDiff !== 0) return pDiff;
-
-      // 2. 再按项目完成进度排序（完成度高 -> 完成度低）
-      const tasksA = allTasks.filter((t) => t.projectId === a.id);
-      const doneA = tasksA.filter((t) => t.completed).length;
-      const progressA = tasksA.length > 0 ? doneA / tasksA.length : 0;
-
-      const tasksB = allTasks.filter((t) => t.projectId === b.id);
-      const doneB = tasksB.filter((t) => t.completed).length;
-      const progressB = tasksB.length > 0 ? doneB / tasksB.length : 0;
-
-      if (progressB !== progressA) return progressB - progressA;
-
-      // 3. 兜底按更新时间降序
-      return (b.updatedAt ?? 0) - (a.updatedAt ?? 0);
-    });
-  }, [rawProjects, allTasks]);
-
-  const selected = projects.find((project) => project.id === selectedId) ?? projects[0];
-  const selectedStages = useMemo(
-    () => (data?.stages ?? []).filter((stage) => stage.projectId === selected?.id).sort((a, b) => a.sortOrder - b.sortOrder),
-    [data?.stages, selected?.id]
-  );
-  const selectedTasks = useMemo(
-    () => (data?.tasks ?? []).filter((task) => task.projectId === selected?.id),
-    [data?.tasks, selected?.id]
-  );
-  const completedCount = selectedTasks.filter((task) => task.completed).length;
-
-  const createProject = async (project: Project, templateId?: string) => {
-    if (templateId) await createFromTemplate(project, templateId);
-    else await saveProject(project);
-    setSelectedId(project.id);
-  };
-
-  const run = async (work: () => Promise<void>) => {
+  const run = async <T,>(action: () => Promise<T>): Promise<T | undefined> => {
     setBusy(true);
     setActionError("");
     try {
-      await work();
+      return await action();
     } catch (cause) {
       setActionError(cause instanceof Error ? cause.message : "操作失败");
+      return undefined;
     } finally {
       setBusy(false);
     }
   };
 
-  if (isPending) return <div className="grid h-full place-items-center text-sm text-muted-foreground">加载项目中心…</div>;
-  if (error) return <div className="p-8 text-sm text-destructive">加载项目中心失败：{error.message}</div>;
+  const createProject = async (project: Project, templateId?: string) => {
+    if (templateId) {
+      await run(() => createFromTemplate(project, templateId));
+    } else {
+      await run(() => saveProject(project));
+    }
+    setSelectedId(project.id);
+    setActiveProjectId(project.id);
+  };
+
+  if (isPending) return <div className="p-8 text-sm text-muted-foreground font-mono">加载项目中心…</div>;
+  if (error) return <div className="p-8 text-sm text-destructive font-mono">加载项目中心失败：{error.message}</div>;
 
   return (
     <div className="flex flex-row h-full w-full min-h-0 overflow-hidden bg-background text-foreground">
       {/* Sidebar */}
-      <aside className={`flex flex-col h-full w-[300px] shrink-0 border-r ${isPixelTheme ? "border-r-2 border-border/90 bg-muted/40 font-mono" : "border-border bg-muted/20"} overflow-hidden`}>
-        <div className={`flex h-12 shrink-0 items-center justify-between border-b px-4 select-none ${isPixelTheme ? "border-b-2 border-border/90" : "border-border"}`}>
+      <aside
+        className={cn(
+          "flex flex-col h-full w-[310px] shrink-0 border-r overflow-hidden",
+          isPixelTheme ? "border-r-2 border-border/90 bg-muted/40 font-mono" : "border-border bg-muted/20"
+        )}
+      >
+        {/* Sidebar Header */}
+        <div
+          className={cn(
+            "flex h-12 shrink-0 items-center justify-between border-b px-3.5 select-none",
+            isPixelTheme ? "border-b-2 border-border/90" : "border-border"
+          )}
+        >
           <div className="flex items-center gap-2">
             {isPixelTheme && <PixelShield size={18} className="shrink-0" />}
-            <h3 className="text-base font-bold text-foreground">{isPixelTheme ? "⚔️ 冒险项目公会" : "项目中心"}</h3>
+            <h3 className="text-sm font-bold text-foreground">{isPixelTheme ? "⚔️ 冒险项目公会" : "项目中心"}</h3>
           </div>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={isPixelTheme ? "size-8 rounded-xs border-2 border-border bg-muted hover:bg-card text-foreground shadow-[1px_1px_0px_#000] cursor-pointer" : "size-8 rounded-md text-muted-foreground hover:text-foreground cursor-pointer"}
-            onClick={() => setCreating(true)}
-            aria-label="新建项目"
-            title="新建项目"
-          >
-            <Plus className="size-4" />
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "size-7.5 cursor-pointer",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border bg-muted hover:bg-card text-foreground shadow-[1px_1px_0px_#000]"
+                  : "rounded-md text-muted-foreground hover:text-foreground"
+              )}
+              onClick={() => setCreatingTemplate(true)}
+              aria-label="管理模板"
+              title="配置项目模板"
+            >
+              <PixelScroll size={14} className="opacity-80" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn(
+                "size-7.5 cursor-pointer",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-amber-900 bg-amber-500 hover:bg-amber-600 text-amber-950 shadow-[1px_1px_0px_#000]"
+                  : "rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+              )}
+              onClick={() => setCreating(true)}
+              aria-label="新建项目"
+              title="新建项目"
+            >
+              <Plus className="size-4" />
+            </Button>
+          </div>
         </div>
-        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
-          {projects.map((project) => {
+
+        {/* Status Filter Pills */}
+        <div
+          className={cn(
+            "p-2.5 border-b flex flex-col gap-2 shrink-0 select-none",
+            isPixelTheme ? "border-b-2 border-border/80 bg-amber-50/20 dark:bg-amber-950/20" : "border-border/60"
+          )}
+        >
+          {/* Filter Pills Grid */}
+          <div className="grid grid-cols-4 gap-1">
+            {[
+              { key: "all", label: "全部", count: projects.length },
+              { key: "in_progress", label: "进行中", count: inProgressCount },
+              { key: "completed", label: "已完成", count: completedProjectsCount },
+              { key: "archived", label: "已归档", count: archivedCount },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setStatusFilter(tab.key as SidebarStatusFilter)}
+                className={cn(
+                  "py-1 px-1.5 text-[11px] font-bold text-center transition-all cursor-pointer truncate",
+                  statusFilter === tab.key
+                    ? isPixelTheme
+                      ? "rounded-xs bg-amber-500 text-amber-950 border border-amber-900 shadow-[1px_1px_0px_#000]"
+                      : "rounded-md bg-primary text-primary-foreground shadow-2xs font-semibold"
+                    : isPixelTheme
+                    ? "rounded-xs bg-card/60 hover:bg-card text-muted-foreground border border-border/60"
+                    : "rounded-md text-muted-foreground hover:bg-muted"
+                )}
+                title={`${tab.label} (${tab.count})`}
+              >
+                {tab.label} ({tab.count})
+              </button>
+            ))}
+          </div>
+
+          {/* Search Input */}
+          <div
+            className={cn(
+              "flex items-center gap-1.5 h-7.5 px-2 bg-background border",
+              isPixelTheme ? "rounded-xs border-2 border-border/80 shadow-[1px_1px_0px_#000]" : "rounded-lg border-border/80"
+            )}
+          >
+            <Search size={13} className="text-muted-foreground shrink-0" />
+            <input
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="搜索项目名称、标签..."
+              className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="text-xs text-muted-foreground hover:text-foreground"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Project List */}
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
+          {filteredProjects.map((project) => {
             const taskSet = allTasks.filter((task) => task.projectId === project.id);
             const done = taskSet.filter((task) => task.completed).length;
             const isCurrent = selected?.id === project.id;
+            const smart = getProjectSmartStatus(project);
+
             return (
               <button
                 key={project.id}
@@ -372,48 +609,71 @@ export function ProjectsPage() {
                   setSelectedId(project.id);
                   setActiveProjectId(project.id);
                 }}
-                className={`w-full ${isPixelTheme ? "rounded-xs font-mono" : "rounded-xl"} border p-3 text-left transition-all cursor-pointer select-none ${isCurrent
+                className={cn(
+                  "w-full border p-2.5 text-left transition-all cursor-pointer select-none relative",
+                  isPixelTheme ? "rounded-xs font-mono" : "rounded-xl",
+                  isCurrent
                     ? isPixelTheme
                       ? "border-2 border-amber-800 dark:border-amber-500 bg-amber-200/90 dark:bg-amber-950 shadow-[3px_3px_0px_rgba(0,0,0,0.18)]"
                       : "border-sky-300 bg-sky-50/80 shadow-sm dark:border-sky-800 dark:bg-sky-950/40"
                     : isPixelTheme
-                      ? "border-2 border-border/80 bg-card hover:bg-amber-100/60 dark:hover:bg-amber-950/40 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] hover:-translate-x-0.5 hover:-translate-y-0.5"
-                      : "border-transparent hover:bg-accent/60"
-                  }`}
+                    ? "border-2 border-border/80 bg-card hover:bg-amber-100/60 dark:hover:bg-amber-950/40 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] hover:-translate-x-0.5 hover:-translate-y-0.5"
+                    : "border-border/60 hover:bg-accent/60"
+                )}
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-2.5">
                   <ProgressRing completed={done} total={taskSet.length} isPixelTheme={isPixelTheme} />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className={`truncate text-sm font-semibold ${isPixelTheme ? "text-foreground font-bold" : "text-foreground"}`}>{project.name}</span>
-                      <ChevronRight className="size-4 text-muted-foreground shrink-0" />
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span className={cn("truncate text-xs font-bold text-foreground", isPixelTheme && "font-mono")}>
+                        {project.name}
+                      </span>
+                      <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
                     </div>
-                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+
+                    <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
                       <span
-                        className={`inline-flex items-center px-1.5 py-0.5 text-[10px] font-semibold border ${
-                          isPixelTheme
-                            ? "rounded-xs font-mono border-black/40 shadow-[1px_1px_0px_#000]"
-                            : "rounded"
-                        } ${priorityClasses[project.priority]}`}
+                        className={cn(
+                          "inline-flex items-center px-1 py-0.2 text-[9px] font-bold border",
+                          isPixelTheme ? "rounded-xs font-mono border-black/40 shadow-[1px_1px_0px_#000]" : "rounded",
+                          priorityClasses[project.priority]
+                        )}
                       >
                         {PRIORITY_LABELS[project.priority]}
                       </span>
-                      <span className="shrink-0">{PROJECT_STATUS_LABELS[project.status]}</span>
-                      {(project.startDate || project.endDate) && (
-                        <span className="truncate">
-                          · {project.startDate ?? "未设"} 至 {project.endDate ?? "未设"}
-                        </span>
-                      )}
+
+                      {/* Smart Status in sidebar */}
+                      <span
+                        className={cn(
+                          "inline-flex items-center px-1 py-0.2 text-[9px] font-bold shrink-0",
+                          smart.key === "overdue"
+                            ? isPixelTheme
+                              ? "rounded-xs bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-800 shadow-[1px_1px_0px_#7f1d1d] animate-pulse"
+                              : "rounded bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
+                            : smart.key === "approaching"
+                            ? isPixelTheme
+                              ? "rounded-xs bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-800 shadow-[1px_1px_0px_#000]"
+                              : "rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                            : smart.key === "completed"
+                            ? isPixelTheme
+                              ? "rounded-xs bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-800"
+                              : "rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
+                            : "text-muted-foreground"
+                        )}
+                      >
+                        <span>{smart.sidebarLabel}</span>
+                      </span>
                     </div>
                   </div>
                 </div>
               </button>
             );
           })}
-          {projects.length === 0 && (
-            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
-              <FolderKanban className="mx-auto mb-3 size-8 opacity-45" />
-              还没有项目。创建一个项目，或从模板开始。
+
+          {filteredProjects.length === 0 && (
+            <div className="px-3 py-12 text-center text-xs text-muted-foreground space-y-1">
+              <FolderKanban className="mx-auto mb-2 size-7 opacity-40" />
+              <p>{searchQuery || statusFilter !== "all" ? "未找到符合条件的项目" : "还没有项目"}</p>
             </div>
           )}
         </div>
@@ -422,9 +682,14 @@ export function ProjectsPage() {
       {/* Main Details Panel */}
       {selected ? (
         <section className="flex-1 h-full min-w-0 overflow-y-auto">
-          <div className="mx-auto max-w-5xl p-6 lg:p-8">
-            {/* Header: Title & Actions */}
-            <div className={`flex flex-wrap items-center justify-between gap-4 border-b pb-4 ${isPixelTheme ? "border-b-2 border-border/80 font-mono" : "border-border"}`}>
+          <div className="mx-auto max-w-5xl p-4 lg:p-5 space-y-3">
+            {/* Header: Title & Status & Actions */}
+            <div
+              className={cn(
+                "flex items-center justify-between gap-3 border-b pb-2.5",
+                isPixelTheme ? "border-b-2 border-border/80 font-mono" : "border-border"
+              )}
+            >
               <div className="min-w-0 flex-1">
                 <input
                   key={`name-${selected.id}`}
@@ -435,78 +700,103 @@ export function ProjectsPage() {
                       void run(() => saveProject({ ...selected, name: val }));
                     }
                   }}
-                  className={`w-full bg-transparent px-2 py-1 text-lg font-bold text-foreground outline-none transition-colors ${
+                  className={cn(
+                    "w-full bg-transparent px-1.5 py-0.5 text-base sm:text-lg font-bold text-foreground outline-none transition-colors",
                     isPixelTheme
                       ? "rounded-xs border-2 border-transparent hover:border-border/60 focus:border-amber-600 focus:bg-background font-mono"
                       : "rounded-lg hover:bg-muted/40 focus:bg-background focus:ring-2 focus:ring-ring"
-                  }`}
+                  )}
                   aria-label="项目名称"
                   placeholder="项目名称"
                 />
               </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={selected.status}
-                  disabled={busy}
-                  onChange={(event) => void run(() => saveProject({ ...selected, status: event.target.value as ProjectStatus }))}
-                  className={`h-9 border border-border bg-background px-3 text-sm font-medium outline-none ${
-                    isPixelTheme
-                      ? "rounded-xs border-2 shadow-[2px_2px_0px_#000] font-mono"
-                      : "rounded-lg shadow-sm"
-                  }`}
-                >
-                  {Object.entries(PROJECT_STATUS_LABELS).map(([value, label]) => (
-                    <option key={value} value={value} disabled={value === "completed" && completedCount !== selectedTasks.length}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-                <Button
-                  variant={selected.status === "completed" ? "secondary" : "default"}
-                  size="sm"
-                  disabled={busy || selected.status === "completed" || (selectedTasks.length > 0 && completedCount !== selectedTasks.length)}
-                  onClick={() => void run(() => saveProject({ ...selected, status: "completed" }))}
-                  className={`h-9 gap-1.5 ${
-                    isPixelTheme
-                      ? "rounded-xs border-2 border-border shadow-[2px_2px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] font-mono"
-                      : ""
-                  }`}
-                >
-                  <Check className="size-4" />
-                  {selected.status === "completed" ? "已完成" : "完成项目"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  disabled={busy}
-                  aria-label={`删除项目 ${selected.name}`}
-                  title="删除项目"
-                  onClick={() =>
-                    void confirm({
-                      title: "删除项目？",
-                      description: "项目、所有阶段及其任务都会移入已删除状态。",
-                      confirmText: "删除项目",
-                    }).then((confirmed) => {
-                      if (!confirmed) return;
-                      void run(async () => {
-                        await deleteProject(selected.id);
-                        setSelectedId(undefined);
-                      });
-                    })
-                  }
-                  className={`size-9 text-muted-foreground hover:bg-destructive/10 hover:text-destructive ${
-                    isPixelTheme
-                      ? "rounded-xs border-2 border-border bg-muted shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
-                      : ""
-                  }`}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
+
+              {/* Status Badge & 3-Dots Dropdown Menu */}
+              <div className="flex items-center gap-2 shrink-0">
+                {/* Dynamic Smart Computed Status Badge */}
+                {(() => {
+                  const smart = getProjectSmartStatus(selected);
+                  return (
+                    <div
+                      className={cn(
+                        "inline-flex h-8 items-center justify-center px-3 text-xs font-semibold select-none shadow-2xs",
+                        smart.badgeClasses
+                      )}
+                      title={`项目状态：${smart.label}`}
+                    >
+                      <span>{smart.label}</span>
+                    </div>
+                  );
+                })()}
+
+                {/* 3-dots Dropdown Menu (Archive & Delete) */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={busy}
+                      className={cn(
+                        "size-8 text-muted-foreground hover:text-foreground cursor-pointer shrink-0",
+                        isPixelTheme && "rounded-xs border border-border bg-muted shadow-[1px_1px_0px_#000]"
+                      )}
+                      title="更多项目操作"
+                    >
+                      <MoreHorizontal className="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className={cn("min-w-28", isPixelTheme && "font-mono border-2")}>
+                    <DropdownMenuItem
+                      onClick={() =>
+                        void run(() =>
+                          saveProject({
+                            ...selected,
+                            status: selected.status === "archived" ? "not_started" : "archived",
+                          })
+                        )
+                      }
+                      className="gap-1.5 cursor-pointer"
+                    >
+                      {selected.status === "archived" ? (
+                        <>
+                          <ArchiveRestore className="size-3.5 text-amber-600 shrink-0" />
+                          <span>移出归档</span>
+                        </>
+                      ) : (
+                        <>
+                          <Archive className="size-3.5 shrink-0" />
+                          <span>归档项目</span>
+                        </>
+                      )}
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      destructive
+                      onClick={() =>
+                        void confirm({
+                          title: "删除项目？",
+                          description: "项目、所有阶段及其任务都会移入已删除状态。",
+                          confirmText: "删除项目",
+                        }).then((confirmed) => {
+                          if (!confirmed) return;
+                          void run(async () => {
+                            await deleteProject(selected.id);
+                            setSelectedId(undefined);
+                          });
+                        })
+                      }
+                      className="gap-1.5 cursor-pointer"
+                    >
+                      <Trash2 className="size-3.5 shrink-0" />
+                      <span>删除项目</span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
             </div>
 
             {/* Description */}
-            <div className="mt-3">
+            <div>
               <textarea
                 key={`desc-${selected.id}`}
                 defaultValue={selected.description}
@@ -518,33 +808,37 @@ export function ProjectsPage() {
                 }}
                 placeholder="添加项目说明或目标描述…"
                 rows={2}
-                className={`w-full resize-y bg-transparent p-2.5 text-sm leading-relaxed text-muted-foreground outline-none transition-colors ${
+                className={cn(
+                  "w-full resize-y bg-transparent p-2 text-xs leading-relaxed text-muted-foreground outline-none transition-colors",
                   isPixelTheme
                     ? "rounded-xs border-2 border-transparent hover:border-border/60 focus:border-amber-600 focus:bg-background focus:text-foreground font-mono"
-                    : "rounded-lg border border-transparent hover:border-border/60 focus:border-border focus:bg-background focus:text-foreground focus:ring-1 focus:ring-ring"
-                }`}
+                    : "rounded-lg border border-transparent hover:border-border/60 focus:border-border focus:bg-background focus:text-foreground"
+                )}
               />
             </div>
 
-            {/* Properties Bar */}
-            <div className={`mt-4 grid grid-cols-1 gap-3 p-4 sm:grid-cols-2 lg:grid-cols-3 ${
-              isPixelTheme
-                ? "rounded-xs border-2 border-border/90 bg-amber-50/40 dark:bg-amber-950/20 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] font-mono"
-                : "rounded-xl border border-border/80 bg-muted/20"
-            }`}>
+            {/* Properties Bar: 2-Column Grid (Row 1: Priority & Owner; Row 2: Timeline & Tags) */}
+            <div
+              className={cn(
+                "grid grid-cols-1 gap-2.5 p-3 sm:grid-cols-2",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border/90 bg-amber-50/40 dark:bg-amber-950/20 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] font-mono"
+                  : "rounded-xl border border-border/80 bg-muted/20"
+              )}
+            >
               {/* Priority */}
-              <div className="flex items-center gap-2.5">
-                <Flag className="size-4 text-muted-foreground shrink-0" />
+              <div className="flex items-center gap-2">
+                <Flag className="size-3.5 text-muted-foreground shrink-0" />
                 <span className="text-xs text-muted-foreground shrink-0">优先级</span>
                 <select
                   value={selected.priority}
                   disabled={busy}
                   onChange={(e) => void run(() => saveProject({ ...selected, priority: e.target.value as Priority }))}
-                  className={`h-7 px-2 text-xs font-medium outline-none bg-background border ${
-                    isPixelTheme
-                      ? "rounded-xs border-2 border-border font-mono shadow-[1px_1px_0px_#000]"
-                      : "rounded-md"
-                  } ${priorityClasses[selected.priority]}`}
+                  className={cn(
+                    "h-6.5 px-2 text-xs font-medium outline-none bg-background border",
+                    isPixelTheme ? "rounded-xs border-2 border-border font-mono shadow-[1px_1px_0px_#000]" : "rounded-md",
+                    priorityClasses[selected.priority]
+                  )}
                 >
                   {Object.entries(PRIORITY_LABELS).map(([val, label]) => (
                     <option key={val} value={val}>
@@ -555,8 +849,8 @@ export function ProjectsPage() {
               </div>
 
               {/* Owner */}
-              <div className="flex items-center gap-2.5">
-                <Users className="size-4 text-muted-foreground shrink-0" />
+              <div className="flex items-center gap-2">
+                <Users className="size-3.5 text-muted-foreground shrink-0" />
                 <span className="text-xs text-muted-foreground shrink-0">负责人</span>
                 <input
                   key={`owner-${selected.id}`}
@@ -569,20 +863,21 @@ export function ProjectsPage() {
                       void run(() => saveProject({ ...selected, ownerName: val || undefined }));
                     }
                   }}
-                  className={`h-7 min-w-0 flex-1 bg-transparent px-1.5 text-xs text-foreground outline-none ${
+                  className={cn(
+                    "h-6.5 min-w-0 flex-1 bg-transparent px-1.5 text-xs text-foreground outline-none",
                     isPixelTheme
-                      ? "rounded-xs border-2 border-transparent hover:border-border focus:border-amber-600 focus:bg-background font-mono"
+                      ? "rounded-xs border border-transparent hover:border-border focus:border-amber-600 focus:bg-background font-mono"
                       : "rounded-md border border-transparent hover:border-border focus:border-border focus:bg-background"
-                  }`}
+                  )}
                 />
               </div>
 
-              {/* Timeline */}
-              <div className="flex items-center gap-2.5">
-                <Calendar className="size-4 text-muted-foreground shrink-0" />
+              {/* Timeline (Row 2 Col 1) */}
+              <div className="flex items-center gap-2">
+                <Calendar className="size-3.5 text-muted-foreground shrink-0" />
                 <span className="text-xs text-muted-foreground shrink-0">周期</span>
                 <DateRangePicker
-                  size="small"
+                  size="mini"
                   disabled={busy}
                   value={
                     selected.startDate || selected.endDate
@@ -600,93 +895,164 @@ export function ProjectsPage() {
                       })
                     );
                   }}
-                  className="h-7 text-xs flex-1 max-w-[240px]"
+                  className="h-6.5 text-xs flex-1 max-w-[220px]"
                 />
               </div>
 
-              {/* Tags */}
-              <div className="flex items-center gap-2.5 sm:col-span-2">
-                <Tag className="size-4 text-muted-foreground shrink-0" />
+              {/* Tags (Row 2 Col 2 - Arco InputTag on same horizontal row) */}
+              <div className="flex items-center gap-2 min-w-0">
+                <Tag className="size-3.5 text-muted-foreground shrink-0" />
                 <span className="text-xs text-muted-foreground shrink-0">标签</span>
-                <div className="flex flex-1 flex-wrap items-center gap-1.5">
-                  {selected.tags.map((tag, idx) => (
-                    <span
-                      key={`${tag}-${idx}`}
-                      className={`px-2 py-0.5 text-xs ${
-                        isPixelTheme
-                          ? "rounded-xs bg-amber-200/80 text-amber-950 dark:bg-amber-900/60 dark:text-amber-100 border border-amber-900/40 shadow-[1px_1px_0px_rgba(0,0,0,0.1)] font-mono font-semibold"
-                          : "rounded-md bg-secondary text-secondary-foreground"
-                      }`}
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                  <input
-                    key={`tags-${selected.id}`}
-                    defaultValue={selected.tags.join(", ")}
-                    placeholder={selected.tags.length === 0 ? "添加标签 (逗号分隔)" : "编辑..."}
+                <div className="flex-1 min-w-0">
+                  <InputTag
+                    size="mini"
+                    allowClear
+                    saveOnBlur
                     disabled={busy}
-                    onBlur={(event) => {
-                      const nextTags = event.target.value.split(",").map((t) => t.trim()).filter(Boolean);
-                      if (nextTags.join(",") !== selected.tags.join(",")) {
-                        void run(() => saveProject({ ...selected, tags: nextTags }));
-                      }
+                    value={selected.tags}
+                    placeholder={selected.tags.length === 0 ? "输入标签后按回车..." : ""}
+                    onChange={(nextTags) => {
+                      void run(() => saveProject({ ...selected, tags: nextTags }));
                     }}
-                    className={`h-6 min-w-[80px] flex-1 bg-transparent px-1.5 text-xs text-muted-foreground outline-none ${
-                      isPixelTheme
-                        ? "rounded-xs border border-transparent hover:border-border/60 focus:border-amber-600 focus:bg-background focus:text-foreground font-mono"
-                        : "rounded hover:bg-background/80 focus:bg-background focus:ring-1 focus:ring-ring"
-                    }`}
+                    className={cn(
+                      "w-full text-xs min-h-[26px]",
+                      isPixelTheme && "font-mono rounded-xs border-2 border-border"
+                    )}
                   />
-                </div>
-              </div>
-
-              {/* Progress */}
-              <div className="flex items-center gap-2.5">
-                <CheckCircle2 className="size-4 text-muted-foreground shrink-0" />
-                <span className="text-xs text-muted-foreground shrink-0">进度</span>
-                <div className="flex flex-1 items-center gap-2">
-                  <div className={`flex-1 overflow-hidden ${
-                    isPixelTheme
-                      ? "h-3 rounded-xs border-2 border-amber-900/50 bg-amber-950/20 p-[1px]"
-                      : "h-2 rounded-full bg-muted"
-                  }`}>
-                    <div
-                      className={`h-full bg-emerald-500 transition-all duration-300 ${
-                        isPixelTheme ? "rounded-xs border-r border-emerald-700" : "rounded-full"
-                      }`}
-                      style={{ width: `${selectedTasks.length ? Math.round((completedCount / selectedTasks.length) * 100) : 0}%` }}
-                    />
-                  </div>
-                  <span className={`text-xs text-muted-foreground font-medium shrink-0 ${isPixelTheme ? "font-mono font-bold" : ""}`}>
-                    {completedCount}/{selectedTasks.length} ({selectedTasks.length ? Math.round((completedCount / selectedTasks.length) * 100) : 0}%)
-                  </span>
                 </div>
               </div>
             </div>
 
-            {/* Stages & Tasks */}
-            <ProjectStageBoard
-              stages={selectedStages}
-              tasks={selectedTasks}
-              disabled={busy}
-              onCreateStage={(name) => run(() => saveStage({ id: createProjectStageId(), projectId: selected.id, name, sortOrder: 0 }))}
-              onSaveStage={(stage) => run(() => saveStage(stage))}
-              onDeleteStage={(stage) =>
-                confirm({
-                  title: `删除阶段“${stage.name}”？`,
-                  description: "该阶段中的任务也会移入已删除状态。",
-                  confirmText: "删除阶段",
-                }).then((confirmed) => {
-                  if (confirmed) void run(() => deleteStage(stage.id));
-                })
-              }
-              onSaveTask={(task) => run(() => saveTask(task))}
-              onDeleteTask={(taskId) => run(() => deleteTask(taskId))}
-            />
+            {/* Unified View Control Bar (Option 1) */}
+            <div
+              className={cn(
+                "flex items-center justify-between gap-3 border-b pb-2 pt-1 select-none",
+                isPixelTheme ? "border-b-2 border-border/80 font-mono" : "border-border/70"
+              )}
+            >
+              {/* Left: View Tabs */}
+              <div
+                className={cn(
+                  "inline-flex items-center gap-1 p-0.5 rounded-lg border",
+                  isPixelTheme
+                    ? "rounded-xs border border-border bg-muted/60 font-mono shadow-[1px_1px_0px_#000]"
+                    : "border-border/60 bg-muted/40"
+                )}
+              >
+                {[
+                  { mode: "kanban" as ProjectViewMode, label: "阶段看板", icon: Kanban },
+                  { mode: "gantt" as ProjectViewMode, label: "单体甘特", icon: Activity },
+                  { mode: "table" as ProjectViewMode, label: "紧凑表格", icon: TableIcon },
+                ].map((v) => {
+                  const Icon = v.icon;
+                  const isActive = viewMode === v.mode;
+                  return (
+                    <button
+                      key={v.mode}
+                      type="button"
+                      onClick={() => setViewMode(v.mode)}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold transition-all cursor-pointer",
+                        isActive
+                          ? isPixelTheme
+                            ? "rounded-xs bg-amber-500 text-amber-950 font-bold border border-amber-900 shadow-[1px_1px_0px_#000]"
+                            : "rounded-md bg-background text-foreground shadow-2xs font-bold"
+                          : "text-muted-foreground hover:text-foreground hover:bg-background/50"
+                      )}
+                    >
+                      <Icon size={13} />
+                      <span>{v.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Right: Summary + View Context Action (Add Stage) */}
+              <div className="flex items-center gap-3">
+                <div className="text-xs text-muted-foreground font-medium hidden sm:flex items-center gap-1.5 select-none">
+                  <span>{selectedStages.length} 个阶段</span>
+                  <span>•</span>
+                  <span>{selectedTasks.length} 项任务</span>
+                </div>
+
+                {viewMode === "kanban" && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(() =>
+                        saveStage({
+                          id: createProjectStageId(),
+                          projectId: selected.id,
+                          name: `阶段 ${selectedStages.length + 1}`,
+                          sortOrder: 0,
+                        })
+                      )
+                    }
+                    className={cn(
+                      "h-7 px-2.5 text-xs gap-1 cursor-pointer shrink-0",
+                      isPixelTheme
+                        ? "rounded-xs border border-border bg-amber-400 text-amber-950 shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] font-mono font-bold"
+                        : "rounded-lg hover:bg-accent border border-border/80"
+                    )}
+                    variant="outline"
+                  >
+                    <Plus className="size-3.5" />
+                    <span>添加阶段</span>
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Views Distribution */}
+            {viewMode === "kanban" && (
+              <ProjectStageBoard
+                stages={selectedStages}
+                tasks={selectedTasks}
+                disabled={busy}
+                onCreateStage={(name) => run(() => saveStage({ id: createProjectStageId(), projectId: selected.id, name, sortOrder: 0 }))}
+                onSaveStage={(stage) => run(() => saveStage(stage))}
+                onReorderStages={(stageIds) => reorderStages(selected.id, stageIds)}
+                onDeleteStage={(stage) =>
+                  confirm({
+                    title: `删除阶段“${stage.name}”？`,
+                    description: "该阶段中的任务也会移入已删除状态。",
+                    confirmText: "删除阶段",
+                  }).then((confirmed) => {
+                    if (confirmed) void run(() => deleteStage(stage.id));
+                  })
+                }
+                onSaveTask={(task) => saveTask(task)}
+                onDeleteTask={(taskId) => deleteTask(taskId)}
+              />
+            )}
+
+            {viewMode === "gantt" && (
+              <ProjectGanttView
+                project={selected}
+                stages={selectedStages}
+                tasks={selectedTasks}
+                disabled={busy}
+                onSaveStage={(stage) => run(() => saveStage(stage))}
+                onSaveTask={(task) => saveTask(task)}
+                onDeleteTask={(taskId) => deleteTask(taskId)}
+              />
+            )}
+
+            {viewMode === "table" && (
+              <ProjectTableView
+                project={selected}
+                stages={selectedStages}
+                tasks={selectedTasks}
+                disabled={busy}
+                onSaveTask={(task) => saveTask(task)}
+                onDeleteTask={(taskId) => deleteTask(taskId)}
+              />
+            )}
 
             {actionError && (
-              <p className="mt-4 text-sm text-destructive" role="alert">
+              <p className="mt-4 text-sm text-destructive font-mono" role="alert">
                 {actionError}
               </p>
             )}

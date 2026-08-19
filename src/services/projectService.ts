@@ -113,6 +113,46 @@ export const projectApi = {
     throwOnPostgrestError(error, "保存项目阶段");
   },
 
+  async reorderStages(projectId: string, stageIds: string[]): Promise<void> {
+    // 1. Try RPC first (if migration is deployed on remote DB)
+    const rpcResult = await supabase.rpc("reorder_project_stages", {
+      p_project_id: projectId,
+      p_stage_ids: stageIds,
+    });
+
+    if (!rpcResult.error) {
+      return;
+    }
+
+    // 2. Resilient fallback: direct 2-phase update on project_stages table
+    // Phase 1: Assign high positive sort_orders (>= 100000) to clear 0..9999 slots
+    // (Note: project_stages table has check (sort_order >= 0), so offsets must be positive)
+    for (let i = 0; i < stageIds.length; i++) {
+      const stageId = stageIds[i];
+      const { error } = await supabase
+        .from("project_stages")
+        .update({ sort_order: 100000 + i })
+        .eq("id", stageId)
+        .eq("project_id", projectId);
+      if (error) {
+        throwOnPostgrestError(error, "调整项目阶段顺序");
+      }
+    }
+
+    // Phase 2: Assign final 0-indexed sort_orders
+    for (let i = 0; i < stageIds.length; i++) {
+      const stageId = stageIds[i];
+      const { error } = await supabase
+        .from("project_stages")
+        .update({ sort_order: i })
+        .eq("id", stageId)
+        .eq("project_id", projectId);
+      if (error) {
+        throwOnPostgrestError(error, "调整项目阶段顺序");
+      }
+    }
+  },
+
   async saveTemplate(template: ProjectTemplate): Promise<void> {
     const { error } = await supabase.rpc("save_project_template", {
       p_id: template.id,

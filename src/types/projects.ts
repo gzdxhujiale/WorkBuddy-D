@@ -84,3 +84,23 @@ export const PRIORITY_LABELS: Record<Priority, string> = {
   high: "高",
   urgent: "紧急",
 };
+
+/**
+ * Dynamically derives high-level project status from task completions and archival state.
+ * 3-State Lifecycle:
+ * - 'archived': Explicitly archived by user.
+ * - 'completed': Has tasks and all tasks are completed (100%).
+ * - 'in_progress': Active project (either has pending tasks or active work stream).
+ */
+export function getProjectComputedStatus(
+  project: Pick<Project, "status">,
+  projectTasks: Array<Pick<ProjectTask, "completed">>
+): ProjectStatus {
+  if (project.status === "archived") {
+    return "archived";
+  }
+  if (projectTasks && projectTasks.length > 0 && projectTasks.every((t) => t.completed)) {
+    return "completed";
+  }
+  return "in_progress";
+}

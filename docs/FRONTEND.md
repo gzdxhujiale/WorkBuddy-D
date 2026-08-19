@@ -56,6 +56,7 @@ Tailwind 4 is configured through `src/index.css`; it is the application's Tailwi
 Key reusable primitives in `src/components/ui/`:
 - `modal.tsx` — bridges the official `@arco-design/web-react` Modal component and official Arco styling for desktop dialogs.
 - `select.tsx` — bridges the official `@arco-design/web-react` Select dropdown component with search and grouping support.
+- `input-tag.tsx` — bridges the official `@arco-design/web-react` InputTag component for responsive tag management with enter/blur creation, deletion, and theme synchronization.
 - `dropdown-menu.tsx` — accessible floating dropdown menu replacing ad-hoc `useClickOutside` layers.
 - `toast.tsx` — application-wide toast notification system mounted globally in `AppLayout.tsx`.
 - `popconfirm.tsx` — inline confirmation popovers for destructive and critical actions.

@@ -30,38 +30,62 @@ export function useProjectActions() {
     await projectApi.saveProject(project);
     await refresh();
   }, [refresh]);
+
   const saveStage = useCallback(async (stage: ProjectStage) => {
     await projectApi.saveStage(stage);
     await refresh();
   }, [refresh]);
+
+  const reorderStages = useCallback(async (projectId: string, stageIds: string[]) => {
+    await projectApi.reorderStages(projectId, stageIds);
+    await refresh();
+  }, [refresh]);
+
   const saveTemplate = useCallback(async (template: ProjectTemplate) => {
     await projectApi.saveTemplate(template);
     await refresh();
   }, [refresh]);
+
   const createFromTemplate = useCallback(async (project: Project, templateId: string) => {
     await projectApi.createFromTemplate(project, templateId);
     await refresh();
   }, [refresh]);
+
   const deleteTemplate = useCallback(async (templateId: string) => {
     await projectApi.deleteTemplate(templateId);
     await refresh();
   }, [refresh]);
+
   const deleteProject = useCallback(async (projectId: string) => {
     await projectApi.deleteProject(projectId);
     await refresh();
   }, [refresh]);
+
   const deleteStage = useCallback(async (stageId: string) => {
     await projectApi.deleteStage(stageId);
     await refresh();
   }, [refresh]);
+
   const saveTask = useCallback(async (task: Task) => {
     await projectApi.saveTask(task);
     await refresh();
   }, [refresh]);
+
   const deleteTask = useCallback(async (taskId: string) => {
     await projectApi.deleteTask(taskId);
     await refresh();
   }, [refresh]);
 
-  return { saveProject, saveStage, saveTemplate, createFromTemplate, deleteTemplate, deleteProject, deleteStage, saveTask, deleteTask };
+  return {
+    saveProject,
+    saveStage,
+    reorderStages,
+    saveTemplate,
+    createFromTemplate,
+    deleteTemplate,
+    deleteProject,
+    deleteStage,
+    saveTask,
+    deleteTask,
+  };
 }
