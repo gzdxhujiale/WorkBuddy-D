@@ -366,7 +366,10 @@ export const TodayPanel: React.FC = () => {
     return (
       <div
         key={task.id}
-        onClick={(e) => openTaskQuickEdit(task, e.currentTarget)}
+        onClick={(e) => {
+          e.stopPropagation();
+          openTaskQuickEdit(task, e.currentTarget);
+        }}
         onMouseEnter={() => {
           if (task.projectStageId) setHoveredStageId(task.projectStageId);
           setHoveredTaskId(task.id);

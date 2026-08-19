@@ -34,8 +34,9 @@ let readyResolve: (() => void) | null = null;
 let readyReject: ((e: unknown) => void) | null = null;
 let unlistenPoolFocus: UnlistenFn | null = null;
 let listenersInstalled = false;
-let listenerCleanups: UnlistenFn[] = [];
-let current: { session: string; opts: QuickEditWindowOptions } | null = null;
+const listenerCleanups: UnlistenFn[] = [];
+const activeSessions = new Map<string, QuickEditWindowOptions>();
+let currentSessionId: string | null = null;
 let latestRequestedSession: string | null = null;
 let lastPos: { x: number; y: number } | null = null;
 
@@ -48,16 +49,20 @@ function scheduleFocusCheck(): void {
   if (focusTimer !== null) window.clearTimeout(focusTimer);
   focusTimer = window.setTimeout(() => {
     focusTimer = null;
-    if (!current || !popupEverFocused) return;
+    if (!currentSessionId || !popupEverFocused) return;
     if (!mainFocused && !popupFocused) void emitTo(POOL_LABEL, 'tqe:close-all');
-  }, 120);
+  }, 150);
 }
 
 function endSession(session: string): void {
-  if (current?.session !== session) return;
-  const cur = current;
-  current = null;
-  cur.opts.onClosed();
+  const sessionOpts = activeSessions.get(session);
+  if (sessionOpts) {
+    activeSessions.delete(session);
+    sessionOpts.onClosed();
+  }
+  if (currentSessionId === session) {
+    currentSessionId = null;
+  }
 }
 
 async function installListeners(): Promise<void> {
@@ -71,19 +76,25 @@ async function installListeners(): Promise<void> {
       readyReject = null;
     }),
     listen<{ session: string; taskId: string; updates: Record<string, unknown> }>('tqe:commit', (e) => {
-      if (e.payload?.session !== current?.session) return;
-      current?.opts.onCommit?.(e.payload.taskId, fromWire(e.payload.updates));
+      const s = e.payload?.session;
+      const sessionOpts = activeSessions.get(s);
+      if (sessionOpts) {
+        sessionOpts.onCommit?.(e.payload.taskId, fromWire(e.payload.updates));
+      }
     }),
     listen<{ session: string; draft: TaskDraft }>('tqe:create', (e) => {
-      if (e.payload?.session !== current?.session) return;
-      const q = e.payload.draft.quadrant || current?.opts.quadrant || 'Q2';
-      current?.opts.onCreate?.(q, e.payload.draft);
+      const s = e.payload?.session;
+      const sessionOpts = activeSessions.get(s);
+      if (sessionOpts) {
+        const q = e.payload.draft.quadrant || sessionOpts.quadrant || 'Q2';
+        sessionOpts.onCreate?.(q, e.payload.draft);
+      }
     }),
     listen<{ session: string }>('tqe:closed', (e) => {
       endSession(e.payload?.session ?? '');
     }),
     listen<{ session: string }>('tqe:shown', (e) => {
-      if (e.payload?.session !== current?.session || !pool || !lastPos) return;
+      if (e.payload?.session !== currentSessionId || !pool || !lastPos) return;
       void pool.setPosition(new PhysicalPosition(lastPos.x, lastPos.y)).catch(() => {});
     }),
     getCurrentWindow().onFocusChanged(({ payload }) => {
@@ -178,7 +189,11 @@ function discardPool(): void {
   poolReady = null;
   unlistenPoolFocus?.();
   unlistenPoolFocus = null;
-  if (current) endSession(current.session);
+  for (const [_, sessionOpts] of activeSessions) {
+    sessionOpts.onClosed();
+  }
+  activeSessions.clear();
+  currentSessionId = null;
 }
 
 export function prewarmQuickEditWindow(): void {
@@ -186,21 +201,43 @@ export function prewarmQuickEditWindow(): void {
 }
 
 export function requestQuickEditCloseLayer(): void {
-  if (current) {
+  if (currentSessionId) {
     void emitTo(POOL_LABEL, 'tqe:close-layer');
   }
 }
 
 export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise<void> {
-  if (current) current = null;
+  const prevSessionId = currentSessionId;
+  if (prevSessionId) {
+    // Flush any pending uncommitted draft of the previous session before starting new one
+    void emitTo(POOL_LABEL, 'tqe:flush', { session: prevSessionId });
+  }
+
   // A UUID keeps events from an old Vite-HMR module instance from matching a
   // new editing session after its module counter has been reset.
   const session = crypto.randomUUID();
+  currentSessionId = session;
   latestRequestedSession = session;
+  activeSessions.set(session, opts);
 
   const readyP = ensurePool();
   const main = getCurrentWindow();
-  const r = opts.anchorEl.getBoundingClientRect();
+
+  let r: DOMRect;
+  if (
+    opts.anchorEl &&
+    typeof opts.anchorEl.getBoundingClientRect === 'function' &&
+    document.body.contains(opts.anchorEl) &&
+    opts.anchorEl !== document.body
+  ) {
+    r = opts.anchorEl.getBoundingClientRect();
+  } else {
+    // Safe viewport center fallback
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
+    const vh = typeof window !== 'undefined' ? window.innerHeight : 600;
+    r = new DOMRect(vw / 2 - 120, vh / 2 - 80, 240, 48);
+  }
+
   const [factor, inner, mon] = await Promise.all([
     main.scaleFactor(),
     main.innerPosition(),
@@ -235,11 +272,10 @@ export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise
 
   await readyP;
   if (latestRequestedSession !== session || !pool) {
-    if (!pool) opts.onClosed();
+    if (!pool) endSession(session);
     return;
   }
 
-  current = { session, opts };
   popupEverFocused = false;
   lastPos = { x: Math.round(winX * factor), y: Math.round(winY * factor) };
   await pool.setPosition(new PhysicalPosition(lastPos.x, lastPos.y)).catch(() => {});
@@ -253,9 +289,12 @@ export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise
 
 /** Discard the active draft, e.g. during logout or a parent-window teardown. */
 export function discardQuickEditDraft(): void {
-  const session = current?.session;
-  current = null;
-  if (session) void emitTo(POOL_LABEL, 'tqe:discard', { session });
+  const session = currentSessionId;
+  currentSessionId = null;
+  if (session) {
+    activeSessions.delete(session);
+    void emitTo(POOL_LABEL, 'tqe:discard', { session });
+  }
 }
 
 // Tauri listeners live outside React. Explicitly remove them when Vite swaps

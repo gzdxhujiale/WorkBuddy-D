@@ -985,6 +985,7 @@ export const ProjectTimeline: React.FC = () => {
                                           onMouseEnter={() => setHoveredTaskId(task.id)}
                                           onMouseLeave={() => setHoveredTaskId(null)}
                                           onClick={(e) => {
+                                            e.stopPropagation();
                                             void openQuickEditWindow({
                                               task,
                                               anchorEl: e.currentTarget,
@@ -1303,6 +1304,7 @@ export const ProjectTimeline: React.FC = () => {
                                             onMouseEnter={() => setHoveredTaskId(task.id)}
                                             onMouseLeave={() => setHoveredTaskId(null)}
                                             onClick={(e) => {
+                                              e.stopPropagation();
                                               void openQuickEditWindow({
                                                 task,
                                                 anchorEl: e.currentTarget,

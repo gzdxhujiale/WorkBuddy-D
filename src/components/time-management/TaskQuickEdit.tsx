@@ -24,6 +24,7 @@ import {
   Circle,
   CalendarDays,
   Check,
+  X,
 } from "lucide-react";
 import dayjs from "dayjs";
 import {
@@ -355,6 +356,11 @@ export const TaskQuickEditPopover = memo(
         onClose();
       };
 
+      const handleCancel = () => {
+        // Discard unsaved changes and close without committing
+        onClose();
+      };
+
       // ---------- 定位计算 ----------
       const popRef = useRef<HTMLDivElement>(null);
       const datePopRef = useRef<HTMLDivElement>(null);
@@ -425,7 +431,7 @@ export const TaskQuickEditPopover = memo(
       }, [third, customMode]);
 
       // ---------- 分层关闭 ----------
-      const closeOneLayer = () => {
+      const closeOneLayer = (isEscape = false) => {
         if (flagMenuOpen) {
           setFlagMenuOpen(false);
           return;
@@ -438,11 +444,16 @@ export const TaskQuickEditPopover = memo(
           setDateOpen(false);
           return;
         }
-        handleClose();
+        if (isEscape) {
+          // ESC on top layer: discard unsaved edits / cancel create
+          handleCancel();
+        } else {
+          handleClose();
+        }
       };
 
       useImperativeHandle(handleRef, () => ({
-        closeTopLayer: closeOneLayer,
+        closeTopLayer: () => closeOneLayer(true),
         closeAll: handleClose,
       }));
 
@@ -477,8 +488,19 @@ export const TaskQuickEditPopover = memo(
           handleClose();
         };
         const onKeyDown = (e: KeyboardEvent) => {
-          if (e.key !== "Escape") return;
-          closeOneLayer();
+          if (e.isComposing || e.keyCode === 229) return;
+          if (e.key === "Escape") {
+            e.preventDefault();
+            e.stopPropagation();
+            closeOneLayer(true);
+            return;
+          }
+          if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            handleClose();
+            return;
+          }
         };
         window.addEventListener("mousedown", onMouseDown, true);
         window.addEventListener("keydown", onKeyDown);
@@ -676,6 +698,21 @@ export const TaskQuickEditPopover = memo(
                   </div>
                 )}
               </div>
+
+              {/* 显式关闭/完成按钮 */}
+              <button
+                type="button"
+                onClick={handleClose}
+                className={`p-1 flex-shrink-0 grid place-items-center cursor-pointer transition-colors ${
+                  isPixelTheme
+                    ? "rounded-xs border border-border/60 bg-muted/40 hover:bg-muted text-muted-foreground hover:text-foreground shadow-[1px_1px_0px_#000]"
+                    : "rounded-lg text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                }`}
+                title="完成并关闭 (点击外部自动保存)"
+                aria-label="完成并关闭"
+              >
+                <X size={17} />
+              </button>
             </div>
 
             {/* 编辑主体：标题 + 描述 */}
@@ -696,9 +733,11 @@ export const TaskQuickEditPopover = memo(
                     setTitle(e.target.value);
                   }}
                   onKeyDown={(e) => {
-                    if (e.key !== "Enter") return;
-                    if (isCreate) handleClose();
-                    else (e.currentTarget as HTMLInputElement).blur();
+                    if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleClose();
+                    }
                   }}
                   onBlur={() => {
                     if (!title.trim() && task) setTitle(task.title);
@@ -1255,6 +1294,7 @@ export function TaskQuickEditWindow() {
           return null;
         });
       }),
+      listen<{ session: string }>("tqe:flush", () => popRef.current?.closeAll()),
       listen("tqe:close-layer", () => popRef.current?.closeTopLayer()),
       listen("tqe:close-all", () => popRef.current?.closeAll()),
       listen("tqe:ping", () => void emit("tqe:ready")),
