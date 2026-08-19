@@ -64,6 +64,13 @@ const priorityClasses: Record<Priority, string> = {
   urgent: "bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200 dark:border-rose-800",
 };
 
+const PRIORITY_ORDER: Record<Priority, number> = {
+  urgent: 4,
+  high: 3,
+  medium: 2,
+  low: 1,
+};
+
 function makeProject(values: Partial<Project> & Pick<Project, "name">): Project {
   const now = Date.now();
   return {
@@ -322,8 +329,8 @@ export function ProjectsPage() {
   // New View Mode State
   const [viewMode, setViewMode] = useState<ProjectViewMode>("kanban");
 
-  // New Sidebar Status Filter & Search State
-  const [statusFilter, setStatusFilter] = useState<SidebarStatusFilter>("all");
+  // New Sidebar Status Filter & Search State (default to "in_progress")
+  const [statusFilter, setStatusFilter] = useState<SidebarStatusFilter>("in_progress");
   const [searchQuery, setSearchQuery] = useState("");
 
   const todayStr = useMemo(() => todayYMD(), []);
@@ -342,7 +349,7 @@ export function ProjectsPage() {
     return map;
   }, [projects, allTasks]);
 
-  // Smart dynamic status derivation with risk awareness (Option A)
+  // Smart dynamic status derivation with risk awareness and clear contrast badges
   const getProjectSmartStatus = (proj: Project) => {
     const computedStatus = statusMap.get(proj.id) || "in_progress";
     if (computedStatus === "archived") {
@@ -353,6 +360,9 @@ export function ProjectsPage() {
         badgeClasses: isPixelTheme
           ? "rounded-xs bg-muted text-muted-foreground border border-border shadow-[1px_1px_0px_#000] font-mono"
           : "rounded-lg bg-muted/70 text-muted-foreground border border-border/70",
+        sidebarBadgeClasses: isPixelTheme
+          ? "rounded-xs bg-muted text-muted-foreground border border-border/80 font-mono"
+          : "rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700",
       };
     }
 
@@ -364,6 +374,9 @@ export function ProjectsPage() {
         badgeClasses: isPixelTheme
           ? "rounded-xs bg-emerald-500 text-emerald-950 border border-emerald-800 shadow-[1px_1px_0px_#064e3b] font-mono"
           : "rounded-lg bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border border-emerald-300/70",
+        sidebarBadgeClasses: isPixelTheme
+          ? "rounded-xs bg-emerald-200 text-emerald-950 border border-emerald-800 shadow-[1px_1px_0px_#064e3b] font-mono"
+          : "rounded bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/60",
       };
     }
 
@@ -399,10 +412,13 @@ export function ProjectsPage() {
       return {
         key: "overdue" as const,
         label: `进行中 · 逾期（${count}）`,
-        sidebarLabel: `逾期（${count}）`,
+        sidebarLabel: `逾期 ${count}`,
         badgeClasses: isPixelTheme
           ? "rounded-xs bg-red-200 text-red-950 border border-red-800 shadow-[1px_1px_0px_#7f1d1d] font-mono"
           : "rounded-lg bg-red-100 dark:bg-red-950/80 text-red-800 dark:text-red-300 border border-red-300/70",
+        sidebarBadgeClasses: isPixelTheme
+          ? "rounded-xs bg-red-200 text-red-950 border border-red-800 shadow-[1px_1px_0px_#7f1d1d] font-mono animate-pulse"
+          : "rounded bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800/60",
       };
     }
 
@@ -411,10 +427,13 @@ export function ProjectsPage() {
       return {
         key: "approaching" as const,
         label: `进行中 · 临近预期（${count}）`,
-        sidebarLabel: `临近预期（${count}）`,
+        sidebarLabel: `临近 ${count}`,
         badgeClasses: isPixelTheme
           ? "rounded-xs bg-amber-200 text-amber-950 border border-amber-800 shadow-[1px_1px_0px_#000] font-mono"
           : "rounded-lg bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border border-amber-300/70",
+        sidebarBadgeClasses: isPixelTheme
+          ? "rounded-xs bg-amber-200 text-amber-950 border border-amber-800 shadow-[1px_1px_0px_#000] font-mono"
+          : "rounded bg-amber-50 text-amber-700 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60",
       };
     }
 
@@ -425,6 +444,9 @@ export function ProjectsPage() {
       badgeClasses: isPixelTheme
         ? "rounded-xs bg-amber-400 text-amber-950 border border-amber-800 shadow-[1px_1px_0px_#000] font-mono"
         : "rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 border border-amber-200/90 dark:border-amber-800/70",
+      sidebarBadgeClasses: isPixelTheme
+        ? "rounded-xs bg-sky-200 text-sky-950 border border-sky-800 shadow-[1px_1px_0px_#000] font-mono"
+        : "rounded bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800/60",
     };
   };
 
@@ -446,7 +468,7 @@ export function ProjectsPage() {
     [projects, statusMap]
   );
 
-  // Filtered projects based on computed status and search
+  // Filtered projects sorted by priority first, then by time (deadlines/creation)
   const filteredProjects = useMemo(() => {
     return projects
       .filter((project) => {
@@ -464,6 +486,25 @@ export function ProjectsPage() {
           (project.description?.toLowerCase().includes(q) ?? false) ||
           project.tags.some((tag) => tag.toLowerCase().includes(q))
         );
+      })
+      .sort((a, b) => {
+        // 1. First priority: urgent > high > medium > low
+        const pDiff = (PRIORITY_ORDER[b.priority] ?? 0) - (PRIORITY_ORDER[a.priority] ?? 0);
+        if (pDiff !== 0) return pDiff;
+
+        // 2. Secondary: Time sorting (closer deadline first; if no deadline, newer created first)
+        if (a.endDate && b.endDate) {
+          const dateDiff = a.endDate.localeCompare(b.endDate);
+          if (dateDiff !== 0) return dateDiff;
+        } else if (a.endDate && !b.endDate) {
+          return -1;
+        } else if (!a.endDate && b.endDate) {
+          return 1;
+        }
+
+        const timeA = a.createdAt || a.updatedAt || 0;
+        const timeB = b.createdAt || b.updatedAt || 0;
+        return timeB - timeA;
       });
   }, [projects, statusFilter, searchQuery, statusMap]);
 
@@ -571,32 +612,47 @@ export function ProjectsPage() {
           )}
         >
           {/* Filter Pills Grid */}
-          <div className="grid grid-cols-4 gap-1">
+          <div className="grid grid-cols-4 gap-1 p-0.5 rounded-lg bg-muted/40 border border-border/50">
             {[
-              { key: "all", label: "全部", count: projects.length },
               { key: "in_progress", label: "进行中", count: inProgressCount },
+              { key: "all", label: "全部", count: projects.length },
               { key: "completed", label: "已完成", count: completedProjectsCount },
               { key: "archived", label: "已归档", count: archivedCount },
-            ].map((tab) => (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => setStatusFilter(tab.key as SidebarStatusFilter)}
-                className={cn(
-                  "py-1 px-1.5 text-[11px] font-bold text-center transition-all cursor-pointer truncate",
-                  statusFilter === tab.key
-                    ? isPixelTheme
-                      ? "rounded-xs bg-amber-500 text-amber-950 border border-amber-900 shadow-[1px_1px_0px_#000]"
-                      : "rounded-md bg-primary text-primary-foreground shadow-2xs font-semibold"
-                    : isPixelTheme
-                    ? "rounded-xs bg-card/60 hover:bg-card text-muted-foreground border border-border/60"
-                    : "rounded-md text-muted-foreground hover:bg-muted"
-                )}
-                title={`${tab.label} (${tab.count})`}
-              >
-                {tab.label} ({tab.count})
-              </button>
-            ))}
+            ].map((tab) => {
+              const isActive = statusFilter === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.key as SidebarStatusFilter)}
+                  className={cn(
+                    "py-1 px-1 text-[11px] font-medium text-center transition-all cursor-pointer flex items-center justify-center gap-1 min-w-0 select-none",
+                    isActive
+                      ? isPixelTheme
+                        ? "rounded-xs bg-amber-500 text-amber-950 border border-amber-900 shadow-[1px_1px_0px_#000] font-black"
+                        : "rounded-md bg-card text-foreground shadow-2xs font-bold border border-border/80"
+                      : isPixelTheme
+                      ? "rounded-xs text-muted-foreground hover:text-foreground hover:bg-amber-100/30"
+                      : "rounded-md text-muted-foreground hover:text-foreground hover:bg-card/40"
+                  )}
+                  title={`${tab.label} (${tab.count})`}
+                >
+                  <span className="truncate">{tab.label}</span>
+                  <span
+                    className={cn(
+                      "text-[9px] px-1 py-0.2 rounded-full tabular-nums shrink-0 leading-none",
+                      isActive
+                        ? isPixelTheme
+                          ? "bg-amber-950 text-amber-200 font-bold"
+                          : "bg-primary/10 text-primary font-bold"
+                        : "bg-muted/80 text-muted-foreground"
+                    )}
+                  >
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
           {/* Search Input */}
@@ -663,11 +719,11 @@ export function ProjectsPage() {
                       <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
                     </div>
 
-                    <div className="mt-1 flex flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
                       <span
                         className={cn(
-                          "inline-flex items-center px-1 py-0.2 text-[9px] font-bold border",
-                          isPixelTheme ? "rounded-xs font-mono border-black/40 shadow-[1px_1px_0px_#000]" : "rounded",
+                          "inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold border",
+                          isPixelTheme ? "rounded-xs font-mono border-black/40 shadow-[1px_1px_0px_#000]" : "rounded-md",
                           priorityClasses[project.priority]
                         )}
                       >
@@ -677,24 +733,18 @@ export function ProjectsPage() {
                       {/* Smart Status in sidebar */}
                       <span
                         className={cn(
-                          "inline-flex items-center px-1 py-0.2 text-[9px] font-bold shrink-0",
-                          smart.key === "overdue"
-                            ? isPixelTheme
-                              ? "rounded-xs bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300 border border-red-800 shadow-[1px_1px_0px_#7f1d1d] animate-pulse"
-                              : "rounded bg-red-100 text-red-700 dark:bg-red-950 dark:text-red-300"
-                            : smart.key === "approaching"
-                            ? isPixelTheme
-                              ? "rounded-xs bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300 border border-amber-800 shadow-[1px_1px_0px_#000]"
-                              : "rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
-                            : smart.key === "completed"
-                            ? isPixelTheme
-                              ? "rounded-xs bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-800"
-                              : "rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"
-                            : "text-muted-foreground"
+                          "inline-flex items-center px-1.5 py-0.5 text-[10px] font-bold shrink-0 border",
+                          smart.sidebarBadgeClasses
                         )}
                       >
                         <span>{smart.sidebarLabel}</span>
                       </span>
+
+                      {project.endDate && (
+                        <span className="text-[10px] text-muted-foreground ml-auto tabular-nums">
+                          {project.endDate.slice(5)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

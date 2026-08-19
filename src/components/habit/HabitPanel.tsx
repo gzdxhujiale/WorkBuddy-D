@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Modal } from "@/components/ui/modal";
 import { Select } from "@/components/ui/select";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
-import { Drawer, DrawerHeader, DrawerTitle, DrawerContent } from "@/components/ui/drawer";
 import { Item, ItemAvatar, ItemContent, ItemTitle, ItemDescription, ItemActions } from "@/components/ui/item";
 import { DatePicker } from "@/components/ui/date-picker";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
@@ -309,69 +308,61 @@ const DateSwitcher: React.FC<DateSwitcherProps> = memo(({ currentDate, onChange 
   const days = useMemo(() => getDaysAround(), []);
 
   return (
-    <div
+    <header
       className={cn(
-        "flex items-center justify-between px-4 py-3 bg-card border-b select-none",
+        "flex h-14 items-center justify-between px-3 md:px-4 bg-card border-b select-none shrink-0",
         isPixelTheme
           ? "border-b-2 border-border/90 font-mono shadow-[0_2px_0px_rgba(0,0,0,0.04)]"
           : "border-border"
       )}
     >
-      <div className="flex gap-3 md:gap-5 overflow-x-auto w-full hide-scrollbar pb-1 justify-between px-2">
+      <div className="flex items-center gap-1.5 sm:gap-2 w-full justify-between overflow-x-auto hide-scrollbar">
         {days.map((d) => {
           const isSelected = d.dateStr === currentDate;
 
           return (
-            <div
+            <button
               key={d.dateStr}
+              type="button"
               onClick={() => onChange(d.dateStr)}
               className={cn(
-                "flex flex-col items-center justify-center w-12 cursor-pointer transition-all duration-200 shrink-0 gap-1 group py-1",
-                isPixelTheme && isSelected && "bg-amber-100/80 dark:bg-amber-950/60 border-2 border-amber-900/60 dark:border-amber-700/60 rounded-xs shadow-[2px_2px_0px_#000]"
+                "flex-1 flex flex-col items-center justify-center py-1 px-1 rounded-lg cursor-pointer transition-all duration-150 outline-none select-none min-w-[36px]",
+                isPixelTheme
+                  ? isSelected
+                    ? "rounded-xs bg-amber-200 dark:bg-amber-900/80 text-amber-950 dark:text-amber-100 border border-amber-900/70 dark:border-amber-600 shadow-[1px_1px_0px_#000] font-bold"
+                    : "rounded-xs hover:bg-amber-100/50 dark:hover:bg-amber-950/40 text-muted-foreground hover:text-foreground"
+                  : isSelected
+                  ? "bg-blue-500/10 text-blue-600 dark:text-blue-400 font-semibold shadow-2xs border border-blue-500/20"
+                  : "hover:bg-accent/60 text-muted-foreground hover:text-foreground border border-transparent"
               )}
             >
               <span
                 className={cn(
-                  "text-xs font-medium transition-colors",
-                  isPixelTheme ? "font-mono font-bold text-[11px]" : "",
+                  "text-[11px] leading-tight transition-colors",
+                  isPixelTheme ? "font-mono font-bold text-[10px]" : "font-medium",
                   isSelected
                     ? isPixelTheme
-                      ? "text-amber-950 dark:text-amber-200 font-bold"
+                      ? "text-amber-950 dark:text-amber-100 font-black"
                       : "text-blue-600 dark:text-blue-400 font-semibold"
-                    : "text-muted-foreground group-hover:text-foreground"
+                    : ""
                 )}
               >
                 {WEEK_DAYS[d.dayOfWeek]}
               </span>
               <span
                 className={cn(
-                  "text-lg font-bold transition-transform group-hover:scale-110 duration-200",
-                  isPixelTheme ? "font-mono font-black" : "",
-                  isSelected
-                    ? isPixelTheme
-                      ? "text-amber-950 dark:text-amber-200 scale-105"
-                      : "text-blue-600 dark:text-blue-400 scale-110"
-                    : "text-foreground"
+                  "text-sm font-bold leading-tight mt-0.5",
+                  isPixelTheme && "font-mono font-black text-xs",
+                  isSelected && !isPixelTheme && "text-blue-600 dark:text-blue-400"
                 )}
               >
                 {d.dayNum}
               </span>
-              <div
-                className={cn(
-                  "w-4 h-4 border-2 mt-0.5 transition-all duration-200 flex items-center justify-center",
-                  isPixelTheme ? "rounded-xs" : "rounded-full",
-                  isSelected
-                    ? isPixelTheme
-                      ? "border-amber-700 bg-amber-500 shadow-[1px_1px_0px_#78350f]"
-                      : "border-blue-500 bg-blue-500/20"
-                    : "border-border group-hover:border-muted-foreground"
-                )}
-              />
-            </div>
+            </button>
           );
         })}
       </div>
-    </div>
+    </header>
   );
 });
 DateSwitcher.displayName = "DateSwitcher";
@@ -885,153 +876,176 @@ const CreateEditModal: React.FC<CreateEditModalProps> = memo(({
 CreateEditModal.displayName = "CreateEditModal";
 
 // ============================================================
-// Sub-component: HabitSidebar (Using shadcn Drawer & ConfirmDialog)
+// Sub-component: HabitDetailSidebar (Permanent aside sidebar)
 // ============================================================
-interface HabitSidebarProps {
-  habit: Habit;
+interface HabitDetailSidebarProps {
+  habit: Habit | null;
   currentDate: string;
-  onClose: () => void;
+  onEditHabit: (habit: Habit) => void;
+  onDeleteHabit: (habitId: string, habitName: string) => void;
 }
 
-const HabitSidebar: React.FC<HabitSidebarProps> = memo(({ habit, currentDate, onClose }) => {
+const HabitDetailSidebar: React.FC<HabitDetailSidebarProps> = memo(({
+  habit,
+  currentDate,
+  onEditHabit,
+  onDeleteHabit,
+}) => {
   const { isPixelTheme } = useAppThemeStyle();
   const { data } = useHabitData();
   const checkIns = data?.checkIns ?? EMPTY_CHECKINS;
-  const { deleteHabit, updateHabit } = useHabitActions();
-  const stats = useMemo(() => getStats(checkIns, habit.id, currentDate), [checkIns, habit.id, currentDate]);
-
-  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isConfirmDeleteOpen, setIsConfirmDeleteOpen] = useState(false);
 
-  const confirmDelete = useCallback(() => {
-    deleteHabit(habit.id);
-    setIsConfirmDeleteOpen(false);
-    onClose();
-  }, [deleteHabit, habit.id, onClose]);
+  const stats = useMemo(() => {
+    if (!habit) return null;
+    return getStats(checkIns, habit.id, currentDate);
+  }, [checkIns, habit, currentDate]);
+
+  if (!habit || !stats) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-muted-foreground select-none">
+        {isPixelTheme ? (
+          <div className="w-12 h-12 rounded-xs bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-900/60 flex items-center justify-center text-muted-foreground mb-3 shadow-[2px_2px_0px_#000]">
+            <PixelSparkle size={24} />
+          </div>
+        ) : (
+          <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
+            <Calendar size={24} />
+          </div>
+        )}
+        <h4 className="text-sm font-semibold text-foreground mb-1">
+          {isPixelTheme ? "未选定修行契约" : "暂未选中习惯"}
+        </h4>
+        <p className="text-xs text-muted-foreground max-w-[200px]">
+          {isPixelTheme ? "点击左侧修行契约，查阅修炼档案与历程" : "请在左侧选择习惯查看详细打卡统计与月历"}
+        </p>
+      </div>
+    );
+  }
 
   return (
-    <>
-      <Drawer open={true} onOpenChange={(open) => !open && onClose()} side="right">
-        <DrawerHeader onClose={onClose}>
-          <div className="flex items-center justify-between w-full pr-6">
-            <div className="flex items-center gap-3 min-w-0">
-              <HabitAvatar category={habit.category} size="sm" />
-              <DrawerTitle>{habit.name}</DrawerTitle>
+    <div className="flex-1 flex flex-col min-h-0 overflow-hidden select-none">
+      {/* Sidebar Header */}
+      <header
+        className={cn(
+          "flex h-14 items-center justify-between px-4 md:px-5 shrink-0 border-b",
+          isPixelTheme
+            ? "border-b-2 border-border/90 bg-amber-50/60 dark:bg-amber-950/40 font-mono"
+            : "border-border bg-card/60"
+        )}
+      >
+        <div className="flex items-center gap-3 min-w-0 flex-1 mr-2">
+          <HabitAvatar category={habit.category} size="sm" />
+          <div className="min-w-0 flex-1">
+            <h2 className={cn("text-sm font-bold text-foreground truncate", isPixelTheme && "font-mono")}>
+              {habit.name}
+            </h2>
+            <div className="flex items-center gap-2 mt-0.5">
+              <span className="text-[11px] text-muted-foreground">
+                {habit.frequencyType === "daily" ? "每天" : "每周"}
+              </span>
+              <span className="text-[11px] text-muted-foreground">•</span>
+              <span className="text-[11px] text-muted-foreground">
+                {habit.duration === "forever"
+                  ? "永远"
+                  : habit.duration?.startsWith("custom:")
+                  ? `${habit.duration.replace("custom:", "")}天`
+                  : habit.duration?.replace("days", "天") || "30天"}
+              </span>
             </div>
-            <div className="flex items-center gap-2 relative">
+          </div>
+        </div>
+
+        {/* Actions Menu */}
+        <div className="flex items-center gap-1 shrink-0 relative">
+          <button
+            type="button"
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+            className={cn(
+              "p-1.5 text-muted-foreground hover:text-foreground transition-colors cursor-pointer outline-none",
+              isPixelTheme
+                ? "rounded-xs hover:bg-amber-100/60 dark:hover:bg-amber-950/60"
+                : "rounded-lg hover:bg-accent"
+            )}
+            title="更多操作"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+          {isMenuOpen && (
+            <div
+              className={cn(
+                "absolute right-0 top-9 w-32 bg-card border p-1 z-50",
+                isPixelTheme
+                  ? "rounded-xs shadow-[3px_3px_0px_#000] border-2 border-border font-mono"
+                  : "rounded-xl shadow-lg border-border"
+              )}
+            >
               <button
                 type="button"
-                onClick={() => setIsMenuOpen(!isMenuOpen)}
                 className={cn(
-                  "p-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer outline-none",
+                  "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-foreground cursor-pointer text-left",
                   isPixelTheme
-                    ? "rounded-xs hover:bg-amber-100/60 dark:hover:bg-amber-950/60"
+                    ? "rounded-xs hover:bg-amber-100 dark:hover:bg-amber-950/80 font-mono font-bold"
                     : "rounded-lg hover:bg-accent"
                 )}
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onEditHabit(habit);
+                }}
               >
-                <MoreHorizontal size={20} />
+                <Edit2 size={13} /> 编辑
               </button>
-              {isMenuOpen && (
-                <div
-                  className={cn(
-                    "absolute right-0 top-10 w-36 bg-card border p-1 z-50",
-                    isPixelTheme
-                      ? "rounded-xs shadow-[3px_3px_0px_#000] border-2 border-border font-mono"
-                      : "rounded-xl shadow-lg border-border"
-                  )}
-                >
-                  <button
-                    type="button"
-                    className={cn(
-                      "w-full flex items-center gap-2 px-3 py-2 text-xs text-foreground cursor-pointer text-left",
-                      isPixelTheme
-                        ? "rounded-xs hover:bg-amber-100 dark:hover:bg-amber-950/80 font-mono font-bold"
-                        : "rounded-lg hover:bg-accent"
-                    )}
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      setIsEditModalVisible(true);
-                    }}
-                  >
-                    <Edit2 size={14} /> 编辑
-                  </button>
-                  <button
-                    type="button"
-                    className={cn(
-                      "w-full flex items-center gap-2 px-3 py-2 text-xs text-destructive cursor-pointer text-left",
-                      isPixelTheme
-                        ? "rounded-xs hover:bg-destructive/20 font-mono font-bold"
-                        : "rounded-lg hover:bg-destructive/10"
-                    )}
-                    onClick={() => {
-                      setIsMenuOpen(false);
-                      setIsConfirmDeleteOpen(true);
-                    }}
-                  >
-                    <Trash2 size={14} /> 删除
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </DrawerHeader>
-
-        <DrawerContent className={cn("space-y-4", isPixelTheme && "font-mono")}>
-          <div className="flex-shrink-0">
-            <OverviewCards habit={habit} currentDate={currentDate} />
-          </div>
-
-          <div
-            className={cn(
-              "bg-card p-4 flex-shrink-0",
-              isPixelTheme
-                ? "rounded-xs shadow-[2px_2px_0px_#000] border-2 border-border/90"
-                : "rounded-xl shadow-2xs border border-border"
-            )}
-          >
-            <CalendarHeatmapComponent habit={habit} />
-          </div>
-
-          {/* Pixel Achievement Hall for Habit (in Pixel Mode) */}
-          {isPixelTheme && (
-            <div className="flex-shrink-0 pb-6">
-              <PixelAchievementHall
-                currentStreak={stats.currentStreak}
-                totalDays={stats.totalCheckIns}
-              />
+              <button
+                type="button"
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-1.5 text-xs text-destructive cursor-pointer text-left",
+                  isPixelTheme
+                    ? "rounded-xs hover:bg-destructive/20 font-mono font-bold"
+                    : "rounded-lg hover:bg-destructive/10"
+                )}
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  onDeleteHabit(habit.id, habit.name);
+                }}
+              >
+                <Trash2 size={13} /> 删除
+              </button>
             </div>
           )}
-        </DrawerContent>
-      </Drawer>
+        </div>
+      </header>
 
-      <CreateEditModal
-        visible={isEditModalVisible}
-        onCancel={() => setIsEditModalVisible(false)}
-        onSubmit={async (data) => {
-          if (data.name) {
-            updateHabit(habit.id, data);
-          }
-          setIsEditModalVisible(false);
-        }}
-        initialData={habit}
-      />
+      {/* Sidebar Content (Scrollable) */}
+      <div className={cn("flex-1 flex flex-col p-4 gap-4 overflow-y-auto no-scrollbar", isPixelTheme && "font-mono")}>
+        <div className="shrink-0">
+          <OverviewCards habit={habit} currentDate={currentDate} />
+        </div>
 
-      {/* Replaced window.confirm with shadcn ConfirmDialog */}
-      <ConfirmDialog
-        open={isConfirmDeleteOpen}
-        onOpenChange={setIsConfirmDeleteOpen}
-        title={`删除习惯「${habit.name}」`}
-        description="确定要删除这个习惯吗？该习惯的所有历史打卡记录也将被清空且无法恢复。"
-        confirmText="确认删除"
-        cancelText="取消"
-        variant="destructive"
-        onConfirm={confirmDelete}
-      />
-    </>
+        <div
+          className={cn(
+            "bg-card p-3.5 shrink-0",
+            isPixelTheme
+              ? "rounded-xs shadow-[2px_2px_0px_#000] border-2 border-border/90"
+              : "rounded-xl shadow-2xs border border-border"
+          )}
+        >
+          <CalendarHeatmapComponent habit={habit} />
+        </div>
+
+        {/* Pixel Achievement Hall for Habit (in Pixel Mode) */}
+        {isPixelTheme && (
+          <div className="shrink-0 pb-4">
+            <PixelAchievementHall
+              currentStreak={stats.currentStreak}
+              totalDays={stats.totalCheckIns}
+            />
+          </div>
+        )}
+      </div>
+    </div>
   );
 });
-HabitSidebar.displayName = "HabitSidebar";
+HabitDetailSidebar.displayName = "HabitDetailSidebar";
 
 // ============================================================
 // Sub-component: HabitItem
@@ -1039,12 +1053,20 @@ HabitSidebar.displayName = "HabitSidebar";
 interface HabitItemProps {
   habit: Habit;
   currentDate: string;
+  isSelected?: boolean;
   onSelectDate: (date: string) => void;
   onCheckInEffect?: (x: number, y: number, text: string) => void;
   onClick: () => void;
 }
 
-const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelectDate, onCheckInEffect, onClick }) => {
+const HabitItem: React.FC<HabitItemProps> = memo(({
+  habit,
+  currentDate,
+  isSelected,
+  onSelectDate,
+  onCheckInEffect,
+  onClick,
+}) => {
   const { isPixelTheme } = useAppThemeStyle();
   const { data } = useHabitData();
   const checkIns = data?.checkIns ?? EMPTY_CHECKINS;
@@ -1078,10 +1100,14 @@ const HabitItem: React.FC<HabitItemProps> = memo(({ habit, currentDate, onSelect
     <Item
       onClick={onClick}
       className={cn(
-        "cursor-pointer group transition-colors",
+        "cursor-pointer group transition-all duration-150",
         isPixelTheme
-          ? "rounded-xs border-2 border-border/90 bg-card shadow-[3px_3px_0px_rgba(0,0,0,0.08)] hover:shadow-[4px_4px_0px_rgba(0,0,0,0.14)] hover:border-amber-700/60 font-mono"
-          : ""
+          ? isSelected
+            ? "rounded-xs border-2 border-amber-800 dark:border-amber-500 bg-amber-100/90 dark:bg-amber-950/70 shadow-[3px_3px_0px_#000] font-mono scale-[1.008]"
+            : "rounded-xs border-2 border-border/90 bg-card shadow-[3px_3px_0px_rgba(0,0,0,0.08)] hover:shadow-[4px_4px_0px_rgba(0,0,0,0.14)] hover:border-amber-700/60 font-mono"
+          : isSelected
+          ? "border-blue-500/60 dark:border-blue-500/50 bg-blue-500/[0.06] dark:bg-blue-500/[0.12] ring-1 ring-blue-500/40 shadow-xs"
+          : "hover:bg-accent/40"
       )}
     >
       <div className="flex items-center gap-4 min-w-0">
@@ -1167,21 +1193,31 @@ export const HabitPanel: React.FC = () => {
   const [currentDate, setCurrentDate] = useState<string>(todayYMD());
   const { data } = useHabitData();
   const habitsData = data?.habits ?? EMPTY_HABITS;
-  const { createHabit } = useHabitActions();
+  const { createHabit, updateHabit, deleteHabit } = useHabitActions();
 
   const habits = useMemo(() => getHabitsForDate(habitsData, currentDate), [habitsData, currentDate]);
 
   const [selectedHabitId, setSelectedHabitId] = useState<string | null>(null);
+  const [editingHabit, setEditingHabit] = useState<Habit | null>(null);
+  const [deletingHabit, setDeletingHabit] = useState<{ id: string; name: string } | null>(null);
+  const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
+  const [particles, setParticles] = useState<ExpParticleItem[]>([]);
+
+  // Automatically select first habit if current selection is invalid
+  useEffect(() => {
+    if (habits.length > 0) {
+      if (!selectedHabitId || !habits.some((h) => h.id === selectedHabitId)) {
+        setSelectedHabitId(habits[0].id);
+      }
+    } else {
+      setSelectedHabitId(null);
+    }
+  }, [habits, selectedHabitId]);
+
   const selectedHabit = useMemo(
     () => (selectedHabitId ? habitsData.find((h) => h.id === selectedHabitId) ?? null : null),
     [habitsData, selectedHabitId]
   );
-
-  const [isCreateModalVisible, setIsCreateModalVisible] = useState(false);
-  const [particles, setParticles] = useState<ExpParticleItem[]>([]);
-
-  const handleHabitClick = useCallback((habit: Habit) => setSelectedHabitId(habit.id), []);
-  const handleCloseSidebar = useCallback(() => setSelectedHabitId(null), []);
 
   const triggerParticle = useCallback((x: number, y: number, text = "+10 EXP ✨") => {
     const id = Math.random().toString(36).slice(2, 9);
@@ -1192,102 +1228,165 @@ export const HabitPanel: React.FC = () => {
     setParticles((prev) => prev.filter((p) => p.id !== id));
   }, []);
 
+  const handleEditHabit = useCallback((habit: Habit) => {
+    setEditingHabit(habit);
+    setIsCreateModalVisible(true);
+  }, []);
+
+  const handleDeleteHabit = useCallback((id: string, name: string) => {
+    setDeletingHabit({ id, name });
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    if (!deletingHabit) return;
+    deleteHabit(deletingHabit.id);
+    const remaining = habits.filter((h) => h.id !== deletingHabit.id);
+    setSelectedHabitId(remaining[0]?.id ?? null);
+    setDeletingHabit(null);
+  }, [deletingHabit, deleteHabit, habits]);
+
   return (
-    <div className="flex w-full h-full bg-transparent relative overflow-hidden select-none">
+    <section className="flex flex-col h-full w-full bg-transparent text-foreground overflow-hidden">
       {/* 8-bit Floating Particles (in Pixel Mode) */}
       {isPixelTheme && <ExpParticleContainer particles={particles} onFinish={removeParticle} />}
 
-      {/* Main Content Area */}
-      <div className="flex flex-col flex-1 w-full h-full transition-all duration-300">
-        {/* Date Switcher */}
-        <DateSwitcher currentDate={currentDate} onChange={setCurrentDate} />
+      {/* Main Split Layout: Left Habit List + Right Detail Sidebar */}
+      <section className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Left: Habit List Area */}
+        <section className="flex-1 flex flex-col min-w-0 overflow-hidden relative">
+          {/* 7-day Quick Switcher Bar (Left Column Header) */}
+          <DateSwitcher currentDate={currentDate} onChange={setCurrentDate} />
 
-        {/* Habit List Area */}
-        <div className="flex-1 bg-transparent overflow-y-auto p-6 pb-24 space-y-3">
-          {habits.length === 0 ? (
-            <div
-              className={cn(
-                "flex flex-col items-center justify-center h-64 text-center p-8 border-dashed",
-                isPixelTheme
-                  ? "border-2 border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20 rounded-xs font-mono shadow-[2px_2px_0px_rgba(120,53,15,0.2)]"
-                  : "border border-border rounded-2xl"
-              )}
-            >
-              {isPixelTheme ? (
-                <div className="w-14 h-14 rounded-xs bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-900/60 flex items-center justify-center text-muted-foreground mb-3 shadow-[2px_2px_0px_#000]">
-                  <PixelSlime size={28} />
-                </div>
-              ) : (
-                <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
-                  <Smile size={28} />
-                </div>
-              )}
-              <h3 className="text-base font-bold text-foreground mb-1">
-                {isPixelTheme ? "暂无修行契约" : "暂无习惯项目"}
-              </h3>
-              <p className="text-xs text-muted-foreground max-w-xs mb-4">
-                {isPixelTheme
-                  ? "点击右下角的「+」按钮开启你的自律冒险"
-                  : "点击右下角的「+」按钮创建你的第一个打卡项目"}
-              </p>
-              <Button
-                type="button"
-                size="sm"
-                onClick={() => setIsCreateModalVisible(true)}
+          <div className="flex-1 overflow-y-auto p-4 md:p-6 pb-24 space-y-3">
+            {habits.length === 0 ? (
+              <div
                 className={cn(
-                  "cursor-pointer",
+                  "flex flex-col items-center justify-center h-64 text-center p-8 border-dashed",
                   isPixelTheme
-                    ? "bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold border-2 border-amber-900 shadow-[2px_2px_0px_#000] rounded-xs active:translate-x-[1px] active:translate-y-[1px]"
-                    : "bg-blue-600 hover:bg-blue-700 text-white"
+                    ? "border-2 border-amber-900/60 bg-amber-50/40 dark:bg-amber-950/20 rounded-xs font-mono shadow-[2px_2px_0px_rgba(120,53,15,0.2)]"
+                    : "border border-border rounded-2xl"
                 )}
               >
-                {isPixelTheme ? "✨ 订立契约" : "新建习惯"}
-              </Button>
-            </div>
-          ) : (
-            habits.map((habit) => (
-              <HabitItem
-                key={habit.id}
-                habit={habit}
-                currentDate={currentDate}
-                onSelectDate={setCurrentDate}
-                onCheckInEffect={triggerParticle}
-                onClick={() => handleHabitClick(habit)}
-              />
-            ))
+                {isPixelTheme ? (
+                  <div className="w-14 h-14 rounded-xs bg-amber-50 dark:bg-amber-950/40 border-2 border-amber-900/60 flex items-center justify-center text-muted-foreground mb-3 shadow-[2px_2px_0px_#000]">
+                    <PixelSlime size={28} />
+                  </div>
+                ) : (
+                  <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
+                    <Smile size={28} />
+                  </div>
+                )}
+                <h3 className="text-base font-bold text-foreground mb-1">
+                  {isPixelTheme ? "暂无修行契约" : "暂无习惯项目"}
+                </h3>
+                <p className="text-xs text-muted-foreground max-w-xs mb-4">
+                  {isPixelTheme
+                    ? "点击右下角的「+」按钮开启你的自律冒险"
+                    : "点击右下角的「+」按钮创建你的第一个打卡项目"}
+                </p>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => {
+                    setEditingHabit(null);
+                    setIsCreateModalVisible(true);
+                  }}
+                  className={cn(
+                    "cursor-pointer",
+                    isPixelTheme
+                      ? "bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold border-2 border-amber-900 shadow-[2px_2px_0px_#000] rounded-xs active:translate-x-[1px] active:translate-y-[1px]"
+                      : "bg-blue-600 hover:bg-blue-700 text-white"
+                  )}
+                >
+                  {isPixelTheme ? "✨ 订立契约" : "新建习惯"}
+                </Button>
+              </div>
+            ) : (
+              habits.map((habit) => (
+                <HabitItem
+                  key={habit.id}
+                  habit={habit}
+                  currentDate={currentDate}
+                  isSelected={habit.id === selectedHabitId}
+                  onSelectDate={setCurrentDate}
+                  onCheckInEffect={triggerParticle}
+                  onClick={() => setSelectedHabitId(habit.id)}
+                />
+              ))
+            )}
+          </div>
+
+          {/* Floating Action Button: Create Habit */}
+          <Button
+            type="button"
+            size="icon"
+            className={cn(
+              "absolute bottom-6 right-6 z-20 h-12 w-12 transition-all duration-200 cursor-pointer flex items-center justify-center",
+              isPixelTheme
+                ? "rounded-xs border-2 border-amber-900 bg-amber-500 hover:bg-amber-600 text-amber-950 shadow-[3px_3px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
+                : "rounded-full shadow-lg hover:shadow-xl hover:scale-105 active:scale-95"
+            )}
+            onClick={() => {
+              setEditingHabit(null);
+              setIsCreateModalVisible(true);
+            }}
+            title={isPixelTheme ? "订立修行契约" : "新建习惯"}
+            aria-label={isPixelTheme ? "订立修行契约" : "新建习惯"}
+          >
+            <Plus size={22} className={isPixelTheme ? "stroke-[3]" : ""} />
+          </Button>
+        </section>
+
+        {/* Right: Permanent Detail Sidebar */}
+        <aside
+          className={cn(
+            "w-80 md:w-88 min-h-0 shrink-0 overflow-hidden flex flex-col",
+            isPixelTheme
+              ? "border-l-2 border-border/90 bg-card/60 font-mono shadow-[-2px_0px_0px_rgba(0,0,0,0.03)]"
+              : "border-l border-border bg-card/40"
           )}
-        </div>
-      </div>
+        >
+          <HabitDetailSidebar
+            habit={selectedHabit}
+            currentDate={currentDate}
+            onEditHabit={handleEditHabit}
+            onDeleteHabit={handleDeleteHabit}
+          />
+        </aside>
+      </section>
 
-      {/* Floating Action Button: Create Habit */}
-      <Button
-        type="button"
-        size="icon"
-        className={cn(
-          "absolute bottom-6 right-6 z-20 h-12 w-12 transition-all duration-200 cursor-pointer flex items-center justify-center",
-          isPixelTheme
-            ? "rounded-xs border-2 border-amber-900 bg-amber-500 hover:bg-amber-600 text-amber-950 shadow-[3px_3px_0px_#000] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none"
-            : "rounded-full shadow-lg hover:shadow-xl hover:scale-105 active:scale-95"
-        )}
-        onClick={() => setIsCreateModalVisible(true)}
-        title={isPixelTheme ? "订立修行契约" : "新建习惯"}
-        aria-label={isPixelTheme ? "订立修行契约" : "新建习惯"}
-      >
-        <Plus size={22} className={isPixelTheme ? "stroke-[3]" : ""} />
-      </Button>
-
-      {/* Sidebar Drawer */}
-      {selectedHabit && (
-        <HabitSidebar habit={selectedHabit} currentDate={currentDate} onClose={handleCloseSidebar} />
-      )}
-
+      {/* Modals & Dialogs */}
       <CreateEditModal
         visible={isCreateModalVisible}
-        onCancel={() => setIsCreateModalVisible(false)}
+        initialData={editingHabit}
+        onCancel={() => {
+          setIsCreateModalVisible(false);
+          setEditingHabit(null);
+        }}
         onSubmit={async (payload) => {
-          createHabit(payload);
+          if (editingHabit) {
+            updateHabit(editingHabit.id, payload);
+          } else {
+            const newHabit = createHabit(payload);
+            if (newHabit?.id) {
+              setSelectedHabitId(newHabit.id);
+            }
+          }
+          setIsCreateModalVisible(false);
+          setEditingHabit(null);
         }}
       />
-    </div>
+
+      <ConfirmDialog
+        open={Boolean(deletingHabit)}
+        onOpenChange={(open) => !open && setDeletingHabit(null)}
+        title={deletingHabit ? `删除习惯「${deletingHabit.name}」` : ""}
+        description="确定要删除这个习惯吗？该习惯的所有历史打卡记录也将被清空且无法恢复。"
+        confirmText="确认删除"
+        cancelText="取消"
+        variant="destructive"
+        onConfirm={confirmDelete}
+      />
+    </section>
   );
 };
