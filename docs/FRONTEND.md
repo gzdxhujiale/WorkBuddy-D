@@ -53,13 +53,20 @@ Task descriptions use the same serialized Tiptap-document format while remaining
 
 Tailwind 4 is configured through `src/index.css`; it is the application's Tailwind CSS-first entry point, not a second styling system. That file owns semantic light/dark tokens, radius, shared animation definitions, and narrowly scoped global rules. `src/components/ui/` provides standard primitives; compose them before creating another parallel primitive.
 
-Key reusable primitives in `src/components/ui/`:
-- `modal.tsx` — bridges the official `@arco-design/web-react` Modal component and official Arco styling for desktop dialogs.
-- `select.tsx` — bridges the official `@arco-design/web-react` Select dropdown component with search and grouping support.
-- `input-tag.tsx` — bridges the official `@arco-design/web-react` InputTag component for responsive tag management with enter/blur creation, deletion, and theme synchronization.
-- `dropdown-menu.tsx` — accessible floating dropdown menu replacing ad-hoc `useClickOutside` layers.
-- `toast.tsx` — application-wide toast notification system mounted globally in `AppLayout.tsx`.
-- `popconfirm.tsx` — inline confirmation popovers for destructive and critical actions.
+Key reusable primitives in `src/components/ui/` (all integrated with `useAppThemeStyle` for dual-theme token support):
+- `dialog.tsx` — accessible modal dialogs with dual-theme border, shadow, and title tokens.
+- `modal.tsx` — bridges the official `@arco-design/web-react` Modal component with theme style penetration.
+- `drawer.tsx` — slide-over panels for knowledge details and focus sessions with theme tokens.
+- `date-picker.tsx` — standalone (`DatePicker`) and range (`DateRangePicker`) picker with dual-month grid, time modes, and theme tokens.
+- `select.tsx` — bridges the official `@arco-design/web-react` Select dropdown component with pixel theme tokens.
+- `input-tag.tsx` — bridges the official `@arco-design/web-react` InputTag component with theme-aware tag rendering.
+- `dropdown-menu.tsx` — accessible floating dropdown menu with 3px solid black shadow in pixel mode.
+- `toast.tsx` — application-wide toast notification system with dual-theme badge styling.
+- `popconfirm.tsx` — inline confirmation popovers for destructive and critical actions with dual-theme tokens.
+- `button.tsx` — foundation button primitive with dual-theme variants, active press translation, and shadow tokens.
+- `input.tsx` — foundation single-line text input with dual-theme border, focus glow, and shadow tokens.
+- `badge.tsx` — status and priority badges with theme-aware border and monospace tokens.
+- `card.tsx` & `item.tsx` — universal card and list-item containers with dual-theme background, border, and shadow tokens.
 
 ### Theme style system and multi-window IPC synchronization
 

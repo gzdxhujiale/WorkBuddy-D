@@ -8,6 +8,7 @@ interface UiState {
   activeNoteId: string | null;
   isDrawerOpen: boolean;
   hoveredStageId: string | null;
+  hoveredTaskId: string | null;
   activeProjectId: string | null;
   setUserId: (userId: string | null) => void;
   setActiveListId: (id: string | null) => void;
@@ -16,6 +17,7 @@ interface UiState {
   setActiveNoteId: (id: string | null) => void;
   setDrawerOpen: (open: boolean) => void;
   setHoveredStageId: (id: string | null) => void;
+  setHoveredTaskId: (id: string | null) => void;
   setActiveProjectId: (id: string | null) => void;
   hydrateForUser: (userId: string) => void;
 }
@@ -28,6 +30,7 @@ const initialState = {
   activeNoteId: null,
   isDrawerOpen: false,
   hoveredStageId: null,
+  hoveredTaskId: null,
   activeProjectId: null,
 };
 
@@ -40,6 +43,7 @@ export const useUiStore = create<UiState>((set) => ({
   setActiveNoteId: (activeNoteId) => set({ activeNoteId }),
   setDrawerOpen: (isDrawerOpen) => set({ isDrawerOpen }),
   setHoveredStageId: (hoveredStageId) => set({ hoveredStageId }),
+  setHoveredTaskId: (hoveredTaskId) => set({ hoveredTaskId }),
   setActiveProjectId: (activeProjectId) => set({ activeProjectId }),
   hydrateForUser: (userId) => {
     try {

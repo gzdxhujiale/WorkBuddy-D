@@ -225,8 +225,8 @@ export const StageTaskPopover: React.FC<StageTaskPopoverProps> = ({
           )}>
             <div
               className={cn(
-                "h-full bg-emerald-500 transition-all duration-300",
-                isPixelTheme ? "rounded-xs" : "rounded-full"
+                "h-full transition-all duration-300",
+                isPixelTheme ? "bg-amber-500 rounded-xs" : "bg-emerald-500 rounded-full"
               )}
               style={{ width: `${percent}%` }}
             />

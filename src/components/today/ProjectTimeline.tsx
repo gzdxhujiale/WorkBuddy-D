@@ -150,6 +150,8 @@ export const ProjectTimeline: React.FC = () => {
   const { saveTask } = useProjectActions();
   const hoveredStageId = useUiStore((s) => s.hoveredStageId);
   const setHoveredStageId = useUiStore((s) => s.setHoveredStageId);
+  const hoveredTaskId = useUiStore((s) => s.hoveredTaskId);
+  const setHoveredTaskId = useUiStore((s) => s.setHoveredTaskId);
   const setActiveProjectId = useUiStore((s) => s.setActiveProjectId);
 
   const projects = projectsData?.projects ?? [];
@@ -869,7 +871,14 @@ export const ProjectTimeline: React.FC = () => {
                                 {group.project.name}
                               </span>
                             </div>
-                            <span className="text-[11px] font-semibold tabular-nums text-muted-foreground shrink-0">
+                            <span
+                              className={cn(
+                                "text-[11px] tabular-nums shrink-0 font-semibold",
+                                isPixelTheme
+                                  ? "px-1.5 py-0.2 text-[10px] font-mono font-bold bg-sky-100 dark:bg-sky-950/80 text-sky-800 dark:text-sky-300 border border-sky-700/50 rounded-xs shadow-[1px_1px_0px_#000]"
+                                  : "text-muted-foreground"
+                              )}
+                            >
                               {group.completedTasksCount}/{group.totalTasksCount}
                             </span>
                           </div>
@@ -948,7 +957,18 @@ export const ProjectTimeline: React.FC = () => {
                                   </div>
 
                                   <div className="flex items-center gap-1 shrink-0 text-[11px] font-semibold tabular-nums text-muted-foreground">
-                                    <span className={cn(isStageAllDone && "text-emerald-700 dark:text-emerald-300 font-bold")}>
+                                    <span
+                                      className={cn(
+                                        isPixelTheme && "px-1.5 py-0.2 text-[10px] font-mono font-bold rounded-xs border shadow-[1px_1px_0px_#000]",
+                                        isStageAllDone
+                                          ? isPixelTheme
+                                            ? "bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 border-emerald-700/50"
+                                            : "text-emerald-700 dark:text-emerald-300 font-bold"
+                                          : isPixelTheme
+                                          ? "bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 border-amber-700/50"
+                                          : ""
+                                      )}
+                                    >
                                       {completedCount}/{stageTasks.length}
                                     </span>
                                   </div>
@@ -957,61 +977,70 @@ export const ProjectTimeline: React.FC = () => {
                                 {/* 展开阶段后的具体任务项 (Task Rows) */}
                                 {!isCollapsed && (
                                   <div className="divide-y divide-border/30">
-                                    {stageTasks.map((task) => (
-                                      <div
-                                        key={task.id}
-                                        onClick={(e) => {
-                                          void openQuickEditWindow({
-                                            task,
-                                            anchorEl: e.currentTarget,
-                                            onCommit: (taskId, updates) => {
-                                              void saveTask({ ...task, ...updates, id: taskId });
-                                            },
-                                            onClosed: () => {},
-                                          });
-                                        }}
-                                        className={cn(
-                                          "h-8.5 pr-3 flex items-center justify-between cursor-pointer transition-colors group select-none",
-                                          isAllView ? "pl-11" : "pl-7",
-                                          task.completed
-                                            ? "opacity-60 bg-card hover:opacity-100 hover:bg-accent/40"
-                                            : "hover:bg-accent/50"
-                                        )}
-                                        title={`【任务】${task.title}\n⏱️ 状态：${task.completed ? "已完成" : "进行中"}\n💡 点击快速编辑任务详情与排期`}
-                                      >
-                                        <div className="flex items-center gap-2 min-w-0 flex-1 pr-1">
-                                          <button
-                                            type="button"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              void handleToggleTask(task);
-                                            }}
-                                            className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
-                                          >
-                                            {task.completed ? (
-                                              <CheckCircle2 size={13} className="text-emerald-600 fill-emerald-600/20" />
-                                            ) : (
-                                              <Circle size={13} />
-                                            )}
-                                          </button>
-                                          <span
-                                            className={cn(
-                                              "text-xs truncate",
-                                              task.completed && "line-through text-muted-foreground",
-                                              isPixelTheme && "font-mono"
-                                            )}
-                                          >
-                                            {task.title}
-                                          </span>
-                                        </div>
+                                    {stageTasks.map((task) => {
+                                      const isTaskHovered = hoveredTaskId === task.id;
+                                      return (
+                                        <div
+                                          key={task.id}
+                                          onMouseEnter={() => setHoveredTaskId(task.id)}
+                                          onMouseLeave={() => setHoveredTaskId(null)}
+                                          onClick={(e) => {
+                                            void openQuickEditWindow({
+                                              task,
+                                              anchorEl: e.currentTarget,
+                                              onCommit: (taskId, updates) => {
+                                                void saveTask({ ...task, ...updates, id: taskId });
+                                              },
+                                              onClosed: () => {},
+                                            });
+                                          }}
+                                          className={cn(
+                                            "h-8.5 pr-3 flex items-center justify-between cursor-pointer transition-all group select-none",
+                                            isAllView ? "pl-11" : "pl-7",
+                                            isTaskHovered
+                                              ? isPixelTheme
+                                                ? "bg-amber-100/70 dark:bg-amber-950/70 font-semibold"
+                                                : "bg-muted/80 font-medium"
+                                              : task.completed
+                                              ? "opacity-60 bg-card hover:opacity-100 hover:bg-accent/40"
+                                              : "hover:bg-accent/50"
+                                          )}
+                                          title={`【任务】${task.title}\n⏱️ 状态：${task.completed ? "已完成" : "进行中"}\n💡 点击快速编辑任务详情与排期`}
+                                        >
+                                          <div className="flex items-center gap-2 min-w-0 flex-1 pr-1">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                void handleToggleTask(task);
+                                              }}
+                                              className="text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                                            >
+                                              {task.completed ? (
+                                                <CheckCircle2 size={13} className="text-emerald-600 fill-emerald-600/20" />
+                                              ) : (
+                                                <Circle size={13} />
+                                              )}
+                                            </button>
+                                            <span
+                                              className={cn(
+                                                "text-xs truncate",
+                                                task.completed && "line-through text-muted-foreground",
+                                                isPixelTheme && "font-mono"
+                                              )}
+                                            >
+                                              {task.title}
+                                            </span>
+                                          </div>
 
-                                        {task.assigneeName && (
-                                          <span className="text-[10px] text-muted-foreground/80 bg-muted px-1 py-0.2 rounded shrink-0 ml-1">
-                                            {task.assigneeName}
-                                          </span>
-                                        )}
-                                      </div>
-                                    ))}
+                                          {task.assigneeName && (
+                                            <span className="text-[10px] text-muted-foreground/80 bg-muted px-1 py-0.2 rounded shrink-0 ml-1">
+                                              {task.assigneeName}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })}
 
                                     {stageTasks.length === 0 && (
                                       <div
@@ -1097,10 +1126,10 @@ export const ProjectTimeline: React.FC = () => {
                                 onClick={() => toggleProjectCollapse(group.project.id)}
                                 onDoubleClick={() => handleProjectDoubleClick(group.project.id)}
                                 className={cn(
-                                  "absolute h-5 rounded-full px-2 flex items-center justify-between text-[10px] font-semibold transition-all z-10 select-none shadow-2xs opacity-85 cursor-pointer",
+                                  "absolute h-5.5 px-2 flex items-center justify-between text-[10px] font-semibold transition-all z-10 select-none cursor-pointer overflow-hidden",
                                   isPixelTheme
-                                    ? "bg-sky-900/70 text-sky-200 border border-sky-700 font-mono"
-                                    : "bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-400/50 hover:bg-sky-500/30"
+                                    ? "bg-sky-950/90 text-sky-200 border-2 border-sky-600 font-mono rounded-xs shadow-[2px_2px_0px_#000]"
+                                    : "bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-400/50 hover:bg-sky-500/30 rounded-full shadow-2xs opacity-90"
                                 )}
                                 style={{
                                   left: `${projSpan.leftPct}%`,
@@ -1108,8 +1137,23 @@ export const ProjectTimeline: React.FC = () => {
                                 }}
                                 title={`【项目】${group.project.name}\n📅 整体周期：${group.computedStart ? formatShortDate(group.computedStart) : ""} - ${group.computedEnd ? formatShortDate(group.computedEnd) : ""}\n📊 完成进度：${group.completedTasksCount}/${group.totalTasksCount} 项\n💡 单击折叠/展开项目 · 双击直达项目中心`}
                               >
-                                <span className="truncate">{group.project.name}</span>
-                                <span className="text-[9px] tabular-nums shrink-0 ml-1 font-bold">
+                                {/* Inner Project Progress Fill */}
+                                {group.totalTasksCount > 0 && group.completedTasksCount > 0 && (
+                                  <div
+                                    className={cn(
+                                      "absolute left-0 top-0 bottom-0 pointer-events-none",
+                                      isPixelTheme
+                                        ? "bg-sky-500/40 border-r-2 border-sky-400"
+                                        : "bg-sky-500/25 rounded-full"
+                                    )}
+                                    style={{
+                                      width: `${Math.round((group.completedTasksCount / group.totalTasksCount) * 100)}%`,
+                                    }}
+                                  />
+                                )}
+
+                                <span className="truncate z-10 font-bold">{group.project.name}</span>
+                                <span className="text-[9px] tabular-nums shrink-0 ml-1 font-bold z-10">
                                   {group.totalTasksCount > 0
                                     ? `${Math.round((group.completedTasksCount / group.totalTasksCount) * 100)}%`
                                     : ""}
@@ -1172,19 +1216,20 @@ export const ProjectTimeline: React.FC = () => {
                                     ))}
                                   </div>
 
-                                  {/* Stage Progress Bar (无额外高亮边框，仅自然背景与悬浮提示) */}
+                                  {/* Stage Progress Bar */}
                                   {stageSpan && (
                                     <div
                                       onClick={() => handleStageClick(stage.id)}
                                       onDoubleClick={(e) => handleStageDoubleClick(stage.projectId, e)}
                                       className={cn(
-                                        "absolute h-6 rounded px-2 flex items-center justify-between text-xs transition-all z-10 select-none cursor-pointer shadow-xs",
+                                        "absolute h-6 px-2 flex items-center justify-between text-xs transition-all z-10 select-none cursor-pointer overflow-hidden",
+                                        isPixelTheme ? "rounded-xs font-mono" : "rounded shadow-xs",
                                         isStageAllDone
                                           ? isPixelTheme
-                                            ? "bg-emerald-600 text-white font-bold border border-emerald-800 shadow-[2px_2px_0px_#064e3b]"
+                                            ? "bg-emerald-700 text-white font-bold border-2 border-emerald-900 shadow-[2px_2px_0px_#064e3b]"
                                             : "bg-emerald-600 text-white font-semibold shadow-xs"
                                           : isPixelTheme
-                                          ? "bg-amber-200 dark:bg-amber-950 text-amber-950 dark:text-amber-100 border border-amber-800 shadow-[2px_2px_0px_#000]"
+                                          ? "bg-amber-200 dark:bg-amber-950 text-amber-950 dark:text-amber-100 border-2 border-amber-800 shadow-[2px_2px_0px_#000]"
                                           : "bg-secondary text-secondary-foreground border border-border/80"
                                       )}
                                       style={{
@@ -1197,8 +1242,10 @@ export const ProjectTimeline: React.FC = () => {
                                       {!isStageAllDone && stageProgress > 0 && (
                                         <div
                                           className={cn(
-                                            "absolute left-0 top-0 bottom-0 opacity-25 pointer-events-none rounded",
-                                            isPixelTheme ? "bg-amber-600" : "bg-primary"
+                                            "absolute left-0 top-0 bottom-0 pointer-events-none",
+                                            isPixelTheme
+                                              ? "bg-amber-500/50 dark:bg-amber-400/40 border-r-2 border-amber-700"
+                                              : "bg-primary/25 rounded"
                                           )}
                                           style={{ width: `${stageProgress}%` }}
                                         />
@@ -1253,6 +1300,8 @@ export const ProjectTimeline: React.FC = () => {
                                         {/* Task Bar */}
                                         {taskSpan ? (
                                           <div
+                                            onMouseEnter={() => setHoveredTaskId(task.id)}
+                                            onMouseLeave={() => setHoveredTaskId(null)}
                                             onClick={(e) => {
                                               void openQuickEditWindow({
                                                 task,
@@ -1265,6 +1314,7 @@ export const ProjectTimeline: React.FC = () => {
                                             }}
                                             className={cn(
                                               "absolute h-5 rounded px-2 flex items-center justify-between text-[10px] font-medium transition-all z-10 select-none cursor-pointer shadow-2xs truncate",
+                                              hoveredTaskId === task.id && "ring-2 ring-amber-500 scale-[1.03] shadow-md z-30 animate-pulse",
                                               task.completed
                                                 ? isPixelTheme
                                                   ? "bg-emerald-800/60 text-emerald-100 line-through border border-emerald-900"
