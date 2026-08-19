@@ -1,6 +1,7 @@
 import * as React from "react";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
 
 export interface DrawerProps {
@@ -12,12 +13,22 @@ export interface DrawerProps {
 }
 
 export function Drawer({ open, onOpenChange, side = "right", className, children }: DrawerProps) {
+  const { isPixelTheme } = useAppThemeStyle();
   if (!open) return null;
 
   const sideClasses = {
-    right: "top-0 right-0 h-full w-[440px] max-w-full border-l animate-in slide-in-from-right duration-300",
-    left: "top-0 left-0 h-full w-[440px] max-w-full border-r animate-in slide-in-from-left duration-300",
-    bottom: "bottom-0 left-0 right-0 w-full max-h-[85vh] border-t rounded-t-2xl animate-in slide-in-from-bottom duration-300",
+    right: cn(
+      "top-0 right-0 h-full w-[440px] max-w-full animate-in slide-in-from-right duration-300",
+      isPixelTheme ? "border-l-2" : "border-l"
+    ),
+    left: cn(
+      "top-0 left-0 h-full w-[440px] max-w-full animate-in slide-in-from-left duration-300",
+      isPixelTheme ? "border-r-2" : "border-r"
+    ),
+    bottom: cn(
+      "bottom-0 left-0 right-0 w-full max-h-[85vh] animate-in slide-in-from-bottom duration-300",
+      isPixelTheme ? "border-t-2 rounded-t-xs" : "border-t rounded-t-2xl"
+    ),
   };
 
   return createPortal(
@@ -30,7 +41,10 @@ export function Drawer({ open, onOpenChange, side = "right", className, children
       {/* Panel */}
       <div
         className={cn(
-          "absolute bg-card text-card-foreground shadow-2xl border-border flex flex-col z-50",
+          "absolute bg-card text-card-foreground border-border flex flex-col z-50",
+          isPixelTheme
+            ? "shadow-[4px_4px_0px_#000] font-mono"
+            : "shadow-2xl",
           sideClasses[side],
           className
         )}
@@ -43,14 +57,28 @@ export function Drawer({ open, onOpenChange, side = "right", className, children
 }
 
 export function DrawerHeader({ className, children, onClose, ...props }: React.HTMLAttributes<HTMLDivElement> & { onClose?: () => void }) {
+  const { isPixelTheme } = useAppThemeStyle();
+
   return (
-    <div className={cn("h-16 flex items-center justify-between px-6 flex-shrink-0 border-b border-border", className)} {...props}>
+    <div
+      className={cn(
+        "h-16 flex items-center justify-between px-6 flex-shrink-0",
+        isPixelTheme ? "border-b-2 border-border font-mono" : "border-b border-border",
+        className
+      )}
+      {...props}
+    >
       <div className="min-w-0 flex-1">{children}</div>
       {onClose && (
         <button
           type="button"
           onClick={onClose}
-          className="p-2 text-muted-foreground hover:text-foreground hover:bg-accent rounded-lg transition-colors cursor-pointer"
+          className={cn(
+            "p-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
+            isPixelTheme
+              ? "rounded-xs border border-border bg-muted hover:bg-accent shadow-[1px_1px_0px_#000]"
+              : "rounded-lg hover:bg-accent"
+          )}
         >
           <X className="size-5" />
           <span className="sr-only">Close</span>
@@ -61,7 +89,17 @@ export function DrawerHeader({ className, children, onClose, ...props }: React.H
 }
 
 export function DrawerTitle({ className, ...props }: React.HTMLAttributes<HTMLHeadingElement>) {
-  return <h2 className={cn("text-lg font-bold text-foreground truncate", className)} {...props} />;
+  const { isPixelTheme } = useAppThemeStyle();
+  return (
+    <h2
+      className={cn(
+        "text-lg font-bold text-foreground truncate",
+        isPixelTheme && "font-mono",
+        className
+      )}
+      {...props}
+    />
+  );
 }
 
 export function DrawerContent({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {

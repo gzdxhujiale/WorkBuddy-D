@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { CheckCircle, AlertCircle, Info } from "lucide-react";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
 
 export type ToastType = "success" | "error" | "info";
@@ -50,6 +51,7 @@ class ToastManager {
 export const toast = new ToastManager();
 
 export function Toaster() {
+  const { isPixelTheme } = useAppThemeStyle();
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   useEffect(() => {
@@ -81,18 +83,21 @@ export function Toaster() {
         <div
           key={t.id}
           className={cn(
-            "pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-2xl bg-foreground/90 dark:bg-background/90 text-background dark:text-foreground shadow-2xl backdrop-blur-md border border-border text-sm font-medium transition-all duration-300",
+            "pointer-events-auto flex items-center gap-3 transition-all duration-300",
+            isPixelTheme
+              ? "rounded-xs border-2 border-border bg-popover text-popover-foreground shadow-[4px_4px_0px_#000] font-mono text-xs px-3.5 py-2.5"
+              : "px-4 py-3 rounded-2xl bg-foreground/90 dark:bg-background/90 text-background dark:text-foreground shadow-2xl backdrop-blur-md border border-border text-sm font-medium",
             t.isFadingOut ? "opacity-0 translate-y-2" : "animate-in slide-in-from-bottom-4"
           )}
         >
           {t.type === "success" && (
-            <CheckCircle size={18} className="text-emerald-400 dark:text-emerald-500 shrink-0" />
+            <CheckCircle size={18} className={cn("shrink-0", isPixelTheme ? "text-emerald-500" : "text-emerald-400 dark:text-emerald-500")} />
           )}
           {t.type === "error" && (
-            <AlertCircle size={18} className="text-red-400 dark:text-red-500 shrink-0" />
+            <AlertCircle size={18} className={cn("shrink-0", isPixelTheme ? "text-red-500" : "text-red-400 dark:text-red-500")} />
           )}
           {t.type === "info" && (
-            <Info size={18} className="text-blue-400 dark:text-blue-500 shrink-0" />
+            <Info size={18} className={cn("shrink-0", isPixelTheme ? "text-amber-500" : "text-blue-400 dark:text-blue-500")} />
           )}
           <span>{t.message}</span>
         </div>

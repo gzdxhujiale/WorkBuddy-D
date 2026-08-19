@@ -45,7 +45,7 @@ WorkBuddy-D 支持在「设置 - 通用设置」中全局切换视觉风格体�
 | --- | --- | --- |
 | Desktop chrome | Window controls and persistent tool navigation | `src/components/layout/AppLayout.tsx` |
 | Route canvas | Active task, habit, knowledge, or review work | `src/router.tsx`, `src/pages/` |
-| Today Panel | 2-tier daily workspace: Top (Tasks + Filter Pills `[全部/仅项目/仅独立]` + Habits & Review) and Bottom (Full-width Project Gantt Timeline with multi-level tree hierarchy, hover aura highlight, and quick scheduling) | `src/components/today/TodayPanel.tsx`, `ProjectTimeline.tsx` |
+| Today Panel | 2-tier daily workspace: Top (Tasks + Filter Pills `[全部/仅项目/仅独立]` + Habits & Review) and Bottom (Full-width Project Gantt Timeline with pinned headers, single scroll engine, window intersection filtering, and quick scheduling) | `src/components/today/TodayPanel.tsx`, `ProjectTimeline.tsx` |
 | Task Center | 4 Quadrants (`🔥 紧急讨伐`, `🌿 核心修炼`, `⚡ 突发委托`, `💧 支线见闻`) and period grouping | `src/components/time-management/DailyQuadrants.tsx`, `TimeManagementPanel.tsx` |
 | Project Center | Priority- and progress-sorted projects list, smart multi-dimensional status badge, compact 2x2 properties bar with Arco InputTag, Linear-style unified view control bar, vertical stage quadrant cards with schedule grouping, and full quick-edit integration | `src/pages/ProjectsPage.tsx`, `ProjectStageBoard.tsx`, `ProjectTemplateManager.tsx` |
 | Knowledge Base | 3-pane knowledge workspace: Sidebar (Folder/List tree + `📜 知识宝典`), Note List (Grouped scroll cards + Quick add feather), and Resizable Rich-Text Drawer (`ReactjsTiptapEditor` with debounced auto-seal status) | `src/pages/KnowledgePage.tsx`, `KnowledgePanel.tsx` |

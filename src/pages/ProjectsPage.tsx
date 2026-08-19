@@ -15,6 +15,8 @@ import {
   Archive,
   ArchiveRestore,
   MoreHorizontal,
+  ChevronDown,
+  Check,
 } from "lucide-react";
 import { ProjectStageBoard } from "@/components/projects/ProjectStageBoard";
 import { ProjectGanttView } from "@/components/projects/ProjectGanttView";
@@ -182,7 +184,12 @@ function CreateProjectDialog({
               autoFocus
               value={name}
               onChange={(event) => setName(event.target.value)}
-              className="h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className={cn(
+                "h-9 px-3 text-sm outline-none transition-colors",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                  : "rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring"
+              )}
             />
           </label>
           <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
@@ -190,7 +197,12 @@ function CreateProjectDialog({
             <textarea
               value={description}
               onChange={(event) => setDescription(event.target.value)}
-              className="min-h-16 rounded-lg border border-border bg-background p-3 text-sm outline-none focus:ring-2 focus:ring-ring"
+              className={cn(
+                "min-h-16 p-3 text-sm outline-none transition-colors",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                  : "rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring"
+              )}
             />
           </label>
           <div className="grid gap-1.5 text-sm font-medium sm:col-span-2">
@@ -211,7 +223,12 @@ function CreateProjectDialog({
               value={ownerName}
               onChange={(event) => setOwnerName(event.target.value)}
               placeholder="例如：李明"
-              className="h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none"
+              className={cn(
+                "h-9 px-3 text-sm outline-none transition-colors",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                  : "rounded-lg border border-border bg-background"
+              )}
             />
           </label>
           <label className="grid gap-1.5 text-sm font-medium">
@@ -219,11 +236,16 @@ function CreateProjectDialog({
             <select
               value={priority}
               onChange={(event) => setPriority(event.target.value as Priority)}
-              className="h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none"
+              className={cn(
+                "h-9 px-3 text-sm outline-none transition-colors cursor-pointer",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                  : "rounded-lg border border-border bg-background"
+              )}
             >
               {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>
-                  {label}
+                  {label}优先级
                 </option>
               ))}
             </select>
@@ -234,7 +256,12 @@ function CreateProjectDialog({
               value={tags}
               onChange={(event) => setTags(event.target.value)}
               placeholder="多个标签用逗号分隔"
-              className="h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none"
+              className={cn(
+                "h-9 px-3 text-sm outline-none transition-colors",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                  : "rounded-lg border border-border bg-background"
+              )}
             />
           </label>
           <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
@@ -242,7 +269,12 @@ function CreateProjectDialog({
             <select
               value={templateId}
               onChange={(event) => setTemplateId(event.target.value)}
-              className="h-9 rounded-lg border border-border bg-background px-3 text-sm outline-none"
+              className={cn(
+                "h-9 px-3 text-sm outline-none transition-colors cursor-pointer",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                  : "rounded-lg border border-border bg-background"
+              )}
             >
               <option value="">从空白项目开始</option>
               {templates.map((template) => (
@@ -830,22 +862,67 @@ export function ProjectsPage() {
               <div className="flex items-center gap-2">
                 <Flag className="size-3.5 text-muted-foreground shrink-0" />
                 <span className="text-xs text-muted-foreground shrink-0">优先级</span>
-                <select
-                  value={selected.priority}
-                  disabled={busy}
-                  onChange={(e) => void run(() => saveProject({ ...selected, priority: e.target.value as Priority }))}
-                  className={cn(
-                    "h-6.5 px-2 text-xs font-medium outline-none bg-background border",
-                    isPixelTheme ? "rounded-xs border-2 border-border font-mono shadow-[1px_1px_0px_#000]" : "rounded-md",
-                    priorityClasses[selected.priority]
-                  )}
-                >
-                  {Object.entries(PRIORITY_LABELS).map(([val, label]) => (
-                    <option key={val} value={val}>
-                      {label}优先级
-                    </option>
-                  ))}
-                </select>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      className={cn(
+                        "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer select-none",
+                        isPixelTheme
+                          ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted font-mono shadow-[1px_1px_0px_#000]"
+                          : "rounded-lg border border-border/80 bg-background hover:bg-accent shadow-2xs text-foreground"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "size-2 rounded-full shrink-0",
+                          selected.priority === "urgent"
+                            ? "bg-rose-500"
+                            : selected.priority === "high"
+                            ? "bg-amber-500"
+                            : selected.priority === "medium"
+                            ? "bg-sky-500"
+                            : "bg-slate-400"
+                        )}
+                      />
+                      <span>{PRIORITY_LABELS[selected.priority]}优先级</span>
+                      <ChevronDown className="size-3 opacity-60 text-muted-foreground" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="min-w-36">
+                    {(Object.entries(PRIORITY_LABELS) as [Priority, string][]).map(([val, label]) => {
+                      const isSelected = selected.priority === val;
+                      return (
+                        <DropdownMenuItem
+                          key={val}
+                          onClick={() => void run(() => saveProject({ ...selected, priority: val }))}
+                          className={cn(
+                            "justify-between cursor-pointer",
+                            isSelected && (isPixelTheme ? "bg-accent font-bold" : "bg-accent font-semibold")
+                          )}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={cn(
+                                "size-2 rounded-full shrink-0",
+                                val === "urgent"
+                                  ? "bg-rose-500"
+                                  : val === "high"
+                                  ? "bg-amber-500"
+                                  : val === "medium"
+                                  ? "bg-sky-500"
+                                  : "bg-slate-400"
+                              )}
+                            />
+                            <span>{label}优先级</span>
+                          </div>
+                          {isSelected && <Check size={12} className="text-foreground shrink-0 ml-1" />}
+                        </DropdownMenuItem>
+                      );
+                    })}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {/* Owner */}

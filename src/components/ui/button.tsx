@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
@@ -38,10 +39,24 @@ export interface ButtonProps
     VariantProps<typeof buttonVariants> {}
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, ...props }, ref) => {
+  ({ className, variant = "default", size, ...props }, ref) => {
+    const { isPixelTheme } = useAppThemeStyle();
+
+    const pixelStyle = isPixelTheme
+      ? cn(
+          "rounded-xs font-mono active:scale-100",
+          variant !== "link" && variant !== "ghost" && "border-2 border-border shadow-[2px_2px_0px_#000] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none",
+          variant === "ghost" && "hover:border hover:border-border hover:shadow-[1px_1px_0px_#000]",
+          variant === "default" && "bg-amber-500 text-amber-950 font-bold border-amber-900 hover:bg-amber-400 dark:bg-amber-500 dark:text-amber-950",
+          variant === "destructive" && "bg-red-600 text-white font-bold border-red-950 hover:bg-red-500",
+          variant === "outline" && "border-2 border-border bg-muted/60 hover:bg-muted font-medium text-foreground",
+          variant === "secondary" && "border-2 border-border bg-secondary text-secondary-foreground font-medium"
+        )
+      : "";
+
     return (
       <button
-        className={cn(buttonVariants({ variant, size, className }))}
+        className={cn(buttonVariants({ variant, size }), pixelStyle, className)}
         ref={ref}
         {...props}
       />

@@ -13,6 +13,7 @@ import {
   Timer,
   SlidersHorizontal,
   Check,
+  ChevronDown,
 } from "lucide-react";
 import { useTimeManagementData, useTaskActions } from "@/hooks/useTimeManagement";
 import { Task, QuadrantType } from "@/types/timeManagement";
@@ -33,6 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { cn } from "@/lib/utils";
 
 export type ViewType = "quadrant" | "day" | "week" | "month";
 export type StatusFilterType = "uncompleted" | "all" | "completed";
@@ -289,35 +291,39 @@ export const TimeManagementPanel: React.FC = () => {
           </button>
           <DropdownMenu>
             <DropdownMenuTrigger
-              className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-foreground transition-colors cursor-pointer ${
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-colors cursor-pointer select-none",
                 isPixelTheme
-                  ? "rounded-xs border border-border bg-card shadow-[1px_1px_0px_#000] hover:bg-muted font-mono"
-                  : "rounded-lg border border-border bg-card hover:bg-accent"
-              }`}
+                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted font-mono shadow-[1px_1px_0px_#000]"
+                  : "rounded-lg border border-border/80 bg-background hover:bg-accent shadow-2xs text-foreground"
+              )}
               aria-label="筛选任务"
             >
-              <SlidersHorizontal size={14} />
-              筛选
+              <SlidersHorizontal size={13} className={isPixelTheme ? "text-amber-600 dark:text-amber-400" : "text-sky-500"} />
+              <span>筛选</span>
+              <ChevronDown className="size-3 opacity-60 text-muted-foreground" />
             </DropdownMenuTrigger>
             <DropdownMenuContent
               align="end"
-              className={`w-56 gap-3 p-3 ${
+              className={cn(
+                "w-60 gap-3 p-3",
                 isPixelTheme
                   ? "rounded-xs border-2 border-border bg-popover font-mono shadow-[3px_3px_0px_#000]"
-                  : "rounded-xl border border-border bg-popover"
-              }`}
+                  : "rounded-xl border border-border bg-popover shadow-lg"
+              )}
               aria-label="任务筛选选项"
             >
               <label className="grid gap-1.5 text-xs font-medium text-foreground">
-                任务范围
+                <span className="text-muted-foreground text-[11px]">任务范围</span>
                 <select
                   value={projectTaskFilter}
                   onChange={(event) => setProjectTaskFilter(event.target.value as ProjectTaskFilter)}
-                  className={`h-8 px-2 text-xs font-normal outline-none bg-background text-foreground ${
+                  className={cn(
+                    "h-8 px-2.5 text-xs font-medium outline-none bg-background text-foreground transition-colors cursor-pointer",
                     isPixelTheme
-                      ? "rounded-xs border border-border font-mono"
-                      : "rounded-md border border-border focus:ring-1 focus:ring-ring"
-                  }`}
+                      ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                      : "rounded-lg border border-border/80 bg-background hover:bg-accent focus:ring-1 focus:ring-ring"
+                  )}
                 >
                   <option value="non-project">仅非项目任务</option>
                   <option value="all">全部任务</option>
@@ -325,15 +331,16 @@ export const TimeManagementPanel: React.FC = () => {
                 </select>
               </label>
               <label className="grid gap-1.5 text-xs font-medium text-foreground">
-                状态
+                <span className="text-muted-foreground text-[11px]">状态</span>
                 <select
                   value={statusFilter}
                   onChange={(event) => setStatusFilter(event.target.value as StatusFilterType)}
-                  className={`h-8 px-2 text-xs font-normal outline-none bg-background text-foreground ${
+                  className={cn(
+                    "h-8 px-2.5 text-xs font-medium outline-none bg-background text-foreground transition-colors cursor-pointer",
                     isPixelTheme
-                      ? "rounded-xs border border-border font-mono"
-                      : "rounded-md border border-border focus:ring-1 focus:ring-ring"
-                  }`}
+                      ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                      : "rounded-lg border border-border/80 bg-background hover:bg-accent focus:ring-1 focus:ring-ring"
+                  )}
                 >
                   <option value="uncompleted">未完成</option>
                   <option value="all">全部</option>
@@ -341,15 +348,16 @@ export const TimeManagementPanel: React.FC = () => {
                 </select>
               </label>
               <label className="grid gap-1.5 text-xs font-medium text-foreground">
-                优先级
+                <span className="text-muted-foreground text-[11px]">优先级</span>
                 <select
                   value={quadrantFilter}
                   onChange={(event) => setQuadrantFilter(event.target.value)}
-                  className={`h-8 px-2 text-xs font-normal outline-none bg-background text-foreground ${
+                  className={cn(
+                    "h-8 px-2.5 text-xs font-medium outline-none bg-background text-foreground transition-colors cursor-pointer",
                     isPixelTheme
-                      ? "rounded-xs border border-border font-mono"
-                      : "rounded-md border border-border focus:ring-1 focus:ring-ring"
-                  }`}
+                      ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                      : "rounded-lg border border-border/80 bg-background hover:bg-accent focus:ring-1 focus:ring-ring"
+                  )}
                 >
                   <option value="ALL">全部</option>
                   <option value="Q1">Q1 · 重要且紧急</option>

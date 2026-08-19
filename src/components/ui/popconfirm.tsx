@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { AlertCircle, AlertTriangle, Info, CheckCircle2, LoaderCircle } from "lucide-react";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
 
 export type PopconfirmPosition =
@@ -69,6 +70,7 @@ export function Popconfirm({
   className,
   showArrow = true,
 }: PopconfirmProps) {
+  const { isPixelTheme } = useAppThemeStyle();
   const [uncontrolledVisible, setUncontrolledVisible] = useState(defaultPopupVisible);
   const isControlled = controlledVisible !== undefined;
   const isVisible = isControlled ? controlledVisible : uncontrolledVisible;
@@ -425,7 +427,10 @@ export function Popconfirm({
               ref={popoverRef}
               style={{ top: `${coords.top}px`, left: `${coords.left}px` }}
               className={cn(
-                "fixed z-[1060] min-w-[220px] max-w-[320px] rounded-lg border border-border/80 bg-popover text-popover-foreground p-3.5 shadow-[0_4px_16px_rgba(0,0,0,0.1),0_2px_4px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.5)] animate-in fade-in zoom-in-95 duration-150",
+                "fixed z-[1060] min-w-[220px] max-w-[320px] p-3.5 animate-in fade-in zoom-in-95 duration-150",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border bg-popover text-popover-foreground shadow-[3px_3px_0px_#000] font-mono"
+                  : "rounded-lg border border-border/80 bg-popover text-popover-foreground shadow-[0_4px_16px_rgba(0,0,0,0.1),0_2px_4px_rgba(0,0,0,0.06)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.5)]",
                 className
               )}
               onClick={(e) => e.stopPropagation()}
@@ -442,11 +447,11 @@ export function Popconfirm({
               <div className="flex items-start gap-2.5">
                 {renderIcon()}
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-semibold text-foreground leading-snug break-words">
+                  <div className={cn("text-xs font-semibold text-foreground leading-snug break-words", isPixelTheme && "font-mono")}>
                     {title}
                   </div>
                   {descNode && (
-                    <div className="text-[12px] text-muted-foreground leading-relaxed mt-1 break-words">
+                    <div className={cn("text-[12px] text-muted-foreground leading-relaxed mt-1 break-words", isPixelTheme && "font-mono")}>
                       {descNode}
                     </div>
                   )}
@@ -459,7 +464,12 @@ export function Popconfirm({
                   type="button"
                   disabled={loading}
                   onClick={handleCancel}
-                  className="inline-flex items-center justify-center h-6 px-2.5 text-xs rounded border border-border bg-transparent text-foreground hover:bg-muted active:bg-muted/80 transition-colors cursor-pointer select-none disabled:opacity-50"
+                  className={cn(
+                    "inline-flex items-center justify-center h-6 px-2.5 text-xs transition-colors cursor-pointer select-none disabled:opacity-50",
+                    isPixelTheme
+                      ? "rounded-xs border border-border bg-muted hover:bg-accent text-foreground font-mono shadow-[1px_1px_0px_#000]"
+                      : "rounded border border-border bg-transparent text-foreground hover:bg-muted active:bg-muted/80"
+                  )}
                 >
                   {cancelText}
                 </button>
@@ -468,10 +478,15 @@ export function Popconfirm({
                   disabled={loading}
                   onClick={handleOk}
                   className={cn(
-                    "inline-flex items-center justify-center gap-1 h-6 px-2.5 text-xs rounded font-medium text-white shadow-xs transition-colors cursor-pointer select-none disabled:opacity-50",
+                    "inline-flex items-center justify-center gap-1 h-6 px-2.5 text-xs font-medium text-white transition-colors cursor-pointer select-none disabled:opacity-50",
+                    isPixelTheme ? "rounded-xs font-mono shadow-[1px_1px_0px_#000]" : "rounded shadow-xs",
                     okType === "danger"
-                      ? "bg-[#f53f3f] hover:bg-[#e03535] active:bg-[#cb2727] dark:bg-[#f76560] dark:hover:bg-[#f53f3f]"
-                      : "bg-[#165dff] hover:bg-[#0e42d2] active:bg-[#0935b5] dark:bg-[#3c7eff] dark:hover:bg-[#165dff]"
+                      ? isPixelTheme
+                        ? "bg-red-600 hover:bg-red-700 active:bg-red-800 border border-red-950 text-white font-bold"
+                        : "bg-[#f53f3f] hover:bg-[#e03535] active:bg-[#cb2727] dark:bg-[#f76560] dark:hover:bg-[#f53f3f]"
+                      : isPixelTheme
+                        ? "bg-amber-500 hover:bg-amber-600 active:bg-amber-700 border border-amber-900 text-amber-950 font-bold"
+                        : "bg-[#165dff] hover:bg-[#0e42d2] active:bg-[#0935b5] dark:bg-[#3c7eff] dark:hover:bg-[#165dff]"
                   )}
                 >
                   {loading && <LoaderCircle size={12} className="animate-spin shrink-0" />}

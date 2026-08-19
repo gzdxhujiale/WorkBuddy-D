@@ -10,6 +10,7 @@ import React, {
   ButtonHTMLAttributes,
 } from "react";
 import { cn } from "@/lib/utils";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 
 interface DropdownMenuContextValue {
   open: boolean;
@@ -117,18 +118,23 @@ export function DropdownMenuContent({
   ...props
 }: DropdownMenuContentProps) {
   const { open, close, triggerRef } = useDropdownMenu();
+  const { isPixelTheme } = useAppThemeStyle();
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
 
-      const handlePointerDown = (e: MouseEvent) => {
-        const target = e.target as Node;
-        if (target instanceof Element && target.closest("[data-dropdown-menu-overlay]")) {
-          return;
-        }
-        if (contentRef.current && !contentRef.current.contains(target) &&
-          triggerRef.current && !triggerRef.current.contains(target)) {
+    const handlePointerDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (target instanceof Element && target.closest("[data-dropdown-menu-overlay]")) {
+        return;
+      }
+      if (
+        contentRef.current &&
+        !contentRef.current.contains(target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(target)
+      ) {
         close();
       }
     };
@@ -157,8 +163,11 @@ export function DropdownMenuContent({
         ...style,
       }}
       className={cn(
-        "absolute top-full z-50 min-w-36 p-1 bg-popover text-popover-foreground border border-border rounded-lg shadow-[0_4px_12px_rgba(0,0,0,0.1)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)] flex flex-col animate-in fade-in zoom-in-95 duration-100",
+        "absolute top-full z-50 min-w-36 p-1 bg-popover text-popover-foreground flex flex-col animate-in fade-in zoom-in-95 duration-100",
         align === "end" ? "right-0" : "left-0",
+        isPixelTheme
+          ? "rounded-xs border-2 border-border font-mono shadow-[3px_3px_0px_#000]"
+          : "border border-border rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)]",
         className
       )}
       onClick={(e) => e.stopPropagation()}
@@ -184,6 +193,7 @@ export function DropdownMenuItem({
   ...props
 }: DropdownMenuItemProps) {
   const { close } = useDropdownMenu();
+  const { isPixelTheme } = useAppThemeStyle();
 
   const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
     if (disabled) return;
@@ -199,7 +209,8 @@ export function DropdownMenuItem({
       type="button"
       disabled={disabled}
       className={cn(
-        "w-full text-left px-2.5 py-1.5 text-xs rounded-sm transition-colors cursor-pointer flex items-center justify-start gap-2 select-none",
+        "w-full text-left px-2.5 py-1.5 text-xs transition-colors cursor-pointer flex items-center justify-start gap-2 select-none",
+        isPixelTheme ? "rounded-xs font-mono" : "rounded-lg",
         destructive
           ? "text-destructive hover:bg-destructive/10"
           : "text-foreground hover:bg-muted",

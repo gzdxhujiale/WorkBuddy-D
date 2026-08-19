@@ -231,8 +231,10 @@ export function ProjectTableView({
             value={stageFilter}
             onChange={(e) => setStageFilter(e.target.value)}
             className={cn(
-              "h-8 px-2 text-xs bg-background border outline-none cursor-pointer",
-              isPixelTheme ? "rounded-xs border-2 border-border font-mono shadow-[1px_1px_0px_#000]" : "rounded-lg border-border"
+              "h-8 px-2.5 text-xs outline-none transition-colors cursor-pointer text-foreground",
+              isPixelTheme
+                ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                : "rounded-lg border border-border/80 bg-background hover:bg-accent"
             )}
           >
             <option value="all">全部阶段 ({tasks.length})</option>
@@ -248,8 +250,10 @@ export function ProjectTableView({
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value as "all" | "pending" | "completed")}
             className={cn(
-              "h-8 px-2 text-xs bg-background border outline-none cursor-pointer",
-              isPixelTheme ? "rounded-xs border-2 border-border font-mono shadow-[1px_1px_0px_#000]" : "rounded-lg border-border"
+              "h-8 px-2.5 text-xs outline-none transition-colors cursor-pointer text-foreground",
+              isPixelTheme
+                ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                : "rounded-lg border border-border/80 bg-background hover:bg-accent"
             )}
           >
             <option value="all">全部状态</option>
@@ -409,8 +413,10 @@ export function ProjectTableView({
                       disabled={disabled}
                       onChange={(e) => onSaveTask({ ...task, projectStageId: e.target.value || undefined })}
                       className={cn(
-                        "h-6 px-1.5 text-[11px] bg-background border outline-none cursor-pointer w-full max-w-[120px]",
-                        isPixelTheme ? "rounded-xs border font-mono shadow-[1px_1px_0px_#000]" : "rounded"
+                        "h-6.5 px-2 text-[11px] outline-none transition-colors cursor-pointer w-full max-w-[130px] text-foreground",
+                        isPixelTheme
+                          ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                          : "rounded-md border border-border/80 bg-background hover:bg-accent"
                       )}
                     >
                       <option value="">未分类阶段</option>
@@ -535,8 +541,10 @@ export function ProjectTableView({
             value={quickStageId}
             onChange={(e) => setQuickStageId(e.target.value)}
             className={cn(
-              "h-7 px-2 text-[11px] bg-background border outline-none cursor-pointer",
-              isPixelTheme ? "rounded-xs border font-mono shadow-[1px_1px_0px_#000]" : "rounded"
+              "h-7 px-2 text-[11px] outline-none transition-colors cursor-pointer text-foreground",
+              isPixelTheme
+                ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                : "rounded-md border border-border/80 bg-background hover:bg-accent"
             )}
           >
             {stages.map((s) => (

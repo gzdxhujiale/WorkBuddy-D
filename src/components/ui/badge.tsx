@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
 
 const badgeVariants = cva(
@@ -34,7 +35,15 @@ export interface BadgeProps
     VariantProps<typeof badgeVariants> {}
 
 export function Badge({ className, variant, size, ...props }: BadgeProps) {
+  const { isPixelTheme } = useAppThemeStyle();
   return (
-    <div className={cn(badgeVariants({ variant, size }), className)} {...props} />
+    <div
+      className={cn(
+        badgeVariants({ variant, size }),
+        isPixelTheme && "rounded-xs font-mono border-2 shadow-[1px_1px_0px_#000]",
+        className
+      )}
+      {...props}
+    />
   );
 }

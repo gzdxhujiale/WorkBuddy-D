@@ -9,6 +9,7 @@ import {
   ChevronsRight,
   X,
 } from "lucide-react";
+import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -330,6 +331,7 @@ const DatePickerInternal = React.forwardRef<HTMLDivElement, DatePickerProps>(
     },
     ref
   ) => {
+    const { isPixelTheme } = useAppThemeStyle();
     const isControlled = propValue !== undefined;
     const [internalValue, setInternalValue] = React.useState<Dayjs | null>(() =>
       toDayjs(propValue ?? defaultValue)
@@ -459,11 +461,13 @@ const DatePickerInternal = React.forwardRef<HTMLDivElement, DatePickerProps>(
           tabIndex={disabled ? -1 : 0}
           onClick={() => !disabled && setOpen(!open)}
           className={cn(
-            "w-full rounded border border-border bg-background text-foreground transition-colors duration-150",
-            "flex items-center justify-between cursor-pointer hover:border-primary focus:outline-none",
+            "w-full transition-colors duration-150 flex items-center justify-between cursor-pointer focus:outline-none",
+            isPixelTheme
+              ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted text-foreground font-mono shadow-[1px_1px_0px_#000] focus:border-amber-600 focus:bg-background"
+              : "rounded border border-border bg-background text-foreground hover:border-primary",
             sizeClasses[size],
             disabled && "opacity-50 pointer-events-none cursor-not-allowed bg-muted/40",
-            open && "border-primary ring-1 ring-primary"
+            open && (isPixelTheme ? "border-amber-600 ring-1 ring-amber-600" : "border-primary ring-1 ring-primary")
           )}
         >
           <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
@@ -496,7 +500,12 @@ const DatePickerInternal = React.forwardRef<HTMLDivElement, DatePickerProps>(
                 left: `${popoverPos.left}px`,
                 visibility: popoverPos.ready ? "visible" : "hidden",
               }}
-              className="fixed z-[2000] bg-card text-card-foreground rounded border border-border shadow-xl p-2 animate-in fade-in zoom-in-95 duration-150 select-none w-[230px]"
+              className={cn(
+                "fixed z-[2000] text-card-foreground p-2 animate-in fade-in zoom-in-95 duration-150 select-none w-[230px]",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border shadow-[4px_4px_0px_#000] bg-popover font-mono"
+                  : "rounded border border-border shadow-xl bg-card"
+              )}
             >
               {viewMode === "date" ? (
                 <>
@@ -577,10 +586,11 @@ const DatePickerInternal = React.forwardRef<HTMLDivElement, DatePickerProps>(
                             disabled={isDisabled}
                             onClick={() => !isDisabled && handleSelectDay(d)}
                             className={cn(
-                              "size-6 rounded-full text-[11px] font-normal transition-colors cursor-pointer relative flex items-center justify-center",
+                              "size-6 text-[11px] font-normal transition-colors cursor-pointer relative flex items-center justify-center",
+                              isPixelTheme ? "rounded-xs font-mono" : "rounded-full",
                               !isCurrentMonth && "text-muted-foreground/30 pointer-events-none cursor-default",
                               isCurrentMonth && !isSelected && "text-foreground hover:bg-accent",
-                              isSelected && "bg-primary text-primary-foreground font-medium",
+                              isSelected && (isPixelTheme ? "bg-amber-500 text-amber-950 font-bold border border-amber-900 shadow-[1px_1px_0px_#000]" : "bg-primary text-primary-foreground font-medium"),
                               isDisabled && "opacity-20 pointer-events-none"
                             )}
                           >
@@ -704,6 +714,7 @@ export const DateRangePicker = React.forwardRef<HTMLDivElement, DateRangePickerP
     },
     ref
   ) => {
+    const { isPixelTheme } = useAppThemeStyle();
     const isControlled = propValue !== undefined;
     const [internalRange, setInternalRange] = React.useState<[Dayjs | null, Dayjs | null]>(() => {
       const initial = propValue ?? defaultValue;
@@ -945,9 +956,9 @@ export const DateRangePicker = React.forwardRef<HTMLDivElement, DateRangePickerP
                 className={cn(
                   "h-6.5 flex items-center justify-center relative",
                   // Arco 直角纯色块背景
-                  hasRangeBg && "bg-[#e8f3ff] dark:bg-primary/20",
-                  isCurrentMonth && isStartDay && !isSingle && rangeEnd && "before:absolute before:right-0 before:top-0 before:bottom-0 before:w-1/2 before:bg-[#e8f3ff] dark:before:bg-primary/20",
-                  isCurrentMonth && isEndDay && !isSingle && rangeStart && "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1/2 before:bg-[#e8f3ff] dark:before:bg-primary/20"
+                  hasRangeBg && (isPixelTheme ? "bg-amber-100/60 dark:bg-amber-950/40" : "bg-[#e8f3ff] dark:bg-primary/20"),
+                  isCurrentMonth && isStartDay && !isSingle && rangeEnd && (isPixelTheme ? "before:absolute before:right-0 before:top-0 before:bottom-0 before:w-1/2 before:bg-amber-100/60 dark:before:bg-amber-950/40" : "before:absolute before:right-0 before:top-0 before:bottom-0 before:w-1/2 before:bg-[#e8f3ff] dark:before:bg-primary/20"),
+                  isCurrentMonth && isEndDay && !isSingle && rangeStart && (isPixelTheme ? "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1/2 before:bg-amber-100/60 dark:before:bg-amber-950/40" : "before:absolute before:left-0 before:top-0 before:bottom-0 before:w-1/2 before:bg-[#e8f3ff] dark:before:bg-primary/20")
                 )}
               >
                 <button
@@ -955,11 +966,12 @@ export const DateRangePicker = React.forwardRef<HTMLDivElement, DateRangePickerP
                   disabled={isDisabled}
                   onClick={() => isCurrentMonth && !isDisabled && handleCellClick(d)}
                   className={cn(
-                    "size-6 rounded-full text-[11px] font-normal transition-colors cursor-pointer relative flex items-center justify-center z-10",
+                    "size-6 text-[11px] font-normal transition-colors cursor-pointer relative flex items-center justify-center z-10",
+                    isPixelTheme ? "rounded-xs font-mono" : "rounded-full",
                     !isCurrentMonth && "text-muted-foreground/30 pointer-events-none cursor-default",
                     isCurrentMonth && !isStartDay && !isEndDay && !inRange && "text-foreground hover:bg-accent",
                     isCurrentMonth && inRange && "text-foreground font-medium",
-                    isCurrentMonth && (isStartDay || isEndDay) && "bg-primary text-primary-foreground font-medium",
+                    isCurrentMonth && (isStartDay || isEndDay) && (isPixelTheme ? "bg-amber-500 text-amber-950 font-bold border border-amber-900 shadow-[1px_1px_0px_#000]" : "bg-primary text-primary-foreground font-medium"),
                     isDisabled && "opacity-20 pointer-events-none"
                   )}
                 >
@@ -984,11 +996,13 @@ export const DateRangePicker = React.forwardRef<HTMLDivElement, DateRangePickerP
           tabIndex={disabled ? -1 : 0}
           onClick={() => !disabled && setOpen(!open)}
           className={cn(
-            "w-full rounded border border-border bg-background text-foreground transition-colors duration-150",
-            "flex items-center justify-between cursor-pointer hover:border-primary focus:outline-none",
+            "w-full transition-colors duration-150 flex items-center justify-between cursor-pointer focus:outline-none",
+            isPixelTheme
+              ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted text-foreground font-mono shadow-[1px_1px_0px_#000] focus:border-amber-600 focus:bg-background"
+              : "rounded border border-border bg-background text-foreground hover:border-primary",
             sizeClasses[size],
             disabled && "opacity-50 pointer-events-none cursor-not-allowed bg-muted/40",
-            open && "border-primary ring-1 ring-primary"
+            open && (isPixelTheme ? "border-amber-600 ring-1 ring-amber-600" : "border-primary ring-1 ring-primary")
           )}
         >
           <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
@@ -1025,7 +1039,12 @@ export const DateRangePicker = React.forwardRef<HTMLDivElement, DateRangePickerP
                 left: `${popoverPos.left}px`,
                 visibility: popoverPos.ready ? "visible" : "hidden",
               }}
-              className="fixed z-[2000] bg-card text-card-foreground rounded border border-border shadow-xl p-2.5 animate-in fade-in zoom-in-95 duration-150 select-none w-[440px]"
+              className={cn(
+                "fixed z-[2000] text-card-foreground p-2.5 animate-in fade-in zoom-in-95 duration-150 select-none w-[440px]",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border shadow-[4px_4px_0px_#000] bg-popover font-mono"
+                  : "rounded border border-border shadow-xl bg-card"
+              )}
             >
               {viewMode === "date" ? (
                 <>
