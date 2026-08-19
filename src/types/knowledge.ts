@@ -31,8 +31,10 @@ export interface Note {
   sortOrder?: number;
   createdAt: number;
   updatedAt: number;
-  /** Server version the pending edit was based on; omitted for a new note. */
-  baseUpdatedAt?: number;
+  /** Monotonic database version used for optimistic concurrency; omitted for a new note. */
+  lockVersion?: number;
+  /** Local-only marker; cleared after the first successful database insert. */
+  isNew?: boolean;
 }
 
 export interface KnowledgeTemplate {

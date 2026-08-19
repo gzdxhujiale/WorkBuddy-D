@@ -202,6 +202,7 @@ export interface ListNoteRow {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  lock_version: number;
   deleted_at: string | null;
 }
 

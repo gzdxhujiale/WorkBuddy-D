@@ -39,7 +39,7 @@ Domain hooks compose Query with services. Services perform Supabase reads and RP
 
 Optimistic writes are immediate and may be debounced by `useDebouncedMutation` or `useOptimisticSync`. Writes for the list, task, habit, and daily-review domains use `runOrQueue` where their service supports offline replay. A queued operation replaces an older pending operation for the same entity key; non-network errors are not silently queued.
 
-The main window’s private Broadcast listener invalidates matching Query keys. It does not merge Broadcast payloads into authoritative records. See [Architecture](/architecture) for the current localized list-note Tauri-event divergence.
+The main window’s private Broadcast listener invalidates matching Query keys. It does not merge Broadcast payloads into authoritative records. Note writes keep the affected knowledge scope pending until their serialized RPC chain settles, so a writer does not refetch its own Broadcast hint mid-save.
 
 ## Rich-text editor boundary
 

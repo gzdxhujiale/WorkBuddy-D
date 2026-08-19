@@ -80,6 +80,7 @@ These rows are the lists/containers displayed inside a knowledge base; older cod
 | `title` | `text` | Note title. |
 | `content` | `text` | Tiptap JSON content. The application deliberately fetches it on demand. |
 | `sort_order` | `integer` | Display order within the group/root scope. |
+| `lock_version` | `bigint` | Monotonic optimistic-concurrency token for versioned note RPCs. |
 
 #### `knowledge_base_templates`
 
@@ -213,11 +214,11 @@ The payload is:
 { table, operation, id, folder_id, previous_folder_id }
 ```
 
-It deliberately excludes note bodies and complete row values. The main client converts the hint into a narrow Query-key invalidation and refetches with ordinary RLS-protected queries. See [the synchronization decision](/design-docs/sync-and-editor-consistency) for constraints and the current Tauri-event implementation divergence.
+It deliberately excludes note bodies and complete row values. The main client converts the hint into a narrow Query-key invalidation and refetches with ordinary RLS-protected queries. See [the synchronization decision](/design-docs/sync-and-editor-consistency) for constraints.
 
 ## Timestamp ownership, locking, and ordering
 
-`created_at` defaults to `now()` and `updated_at` is maintained by a database `BEFORE UPDATE` trigger. Client write payloads never set either field. Versioned writes pass the last observed `updated_at` as `p_expected_updated_at`; successful writes return a database-generated version, while stale writes raise `VERSION_CONFLICT`.
+`created_at` defaults to `now()` and `updated_at` is maintained by a database `BEFORE UPDATE` trigger. Client write payloads never set either field. Notes additionally maintain a monotonic `lock_version` in a `BEFORE UPDATE` trigger; their V2 RPCs pass it as `p_expected_lock_version`, return the new value, and raise `VERSION_CONFLICT` for stale writes. Other versioned domains continue to use their own documented contracts.
 
 `deleted_at` is assigned by soft-delete RPCs. `completed_at` is assigned or cleared as task completion changes. Focus-session `started_at` and terminal `ended_at` are assigned by focus RPCs. New list/group/note ordering is assigned by save RPCs using transaction advisory locks within the relevant parent scope.
 

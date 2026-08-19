@@ -1,13 +1,12 @@
 import { useEffect, useMemo } from 'react';
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { emit, listen } from '@tauri-apps/api/event';
 import {
   queryKeys,
   HIGH_FREQ_DELAY,
   LOW_FREQ_DELAY,
   NOTE_EDIT_DELAY,
-  logSilent,
 } from '@/lib/syncEngine';
+import { clearPendingScope, markPendingScope } from '@/lib/queryPending';
 import { useDebouncedMutation } from '@/hooks/useDebouncedMutation';
 import * as knowledgeService from '@/services/knowledgeService';
 import type { KnowledgeFolder, KnowledgeBase, Note, NoteGroup } from '@/types/knowledge';
@@ -27,45 +26,9 @@ import {
  * derive views via `knowledgeSelectors`. `useKnowledgeActions` is the write path:
  * synchronous optimistic cache updates + debounced persistence through
  * `sharedSyncEngine` (`list:` completions are refetched by useSyncQueryInvalidator).
- * Cross-window note sync (registered once per window) patches the same cache.
+ * Cross-window changes arrive as Supabase Broadcast invalidation hints, then refetch
+ * under RLS; no window mirrors another window's note body into its local cache.
  */
-
-// ── Cross-window note sync (Tauri events) ───────────────────────────────────
-// BroadcastChannel does not cross Tauri windows on macOS WKWebView, so note
-// changes fan out over Tauri events. `emit` echoes back to the sender window;
-// the instance id filters out self-echo.
-const SYNC_SOURCE_ID = crypto.randomUUID();
-const NOTE_UPDATED_EVENT = 'lists:note-updated';
-const NOTE_DELETED_EVENT = 'lists:note-deleted';
-const NOTES_REORDERED_EVENT = 'lists:notes-reordered';
-
-interface NoteSyncPayload {
-  source: string;
-  noteId: string;
-  updates?: Partial<Note>;
-}
-
-interface NotesReorderPayload {
-  source: string;
-  /** [noteId, sortOrder] */
-  items: Array<[string, number]>;
-}
-
-function broadcastNoteUpdate(noteId: string, updates: Partial<Note>) {
-  emit(NOTE_UPDATED_EVENT, { source: SYNC_SOURCE_ID, noteId, updates } satisfies NoteSyncPayload)
-    .catch(e => logSilent('useKnowledgeQuery', 'note sync broadcast failed', e));
-}
-
-function broadcastNoteDelete(noteId: string) {
-  emit(NOTE_DELETED_EVENT, { source: SYNC_SOURCE_ID, noteId } satisfies NoteSyncPayload)
-    .catch(e => logSilent('useKnowledgeQuery', 'note sync broadcast failed', e));
-}
-
-function broadcastNotesReorder(items: Array<[string, number]>) {
-  if (items.length === 0) return;
-  emit(NOTES_REORDERED_EVENT, { source: SYNC_SOURCE_ID, items } satisfies NotesReorderPayload)
-    .catch(e => logSilent('useKnowledgeQuery', 'note sync broadcast failed', e));
-}
 
 // ── Query data ──────────────────────────────────────────────────────────────
 
@@ -101,58 +64,12 @@ function setData(queryClient: QueryClient, userId: string, updater: (prev: Knowl
   queryClient.setQueryData<KnowledgeQueryData>(queryKeys.lists.all(userId), prev => updater(prev ?? EMPTY_DATA));
 }
 
-// Register the cross-window listeners exactly once per window. Each Tauri window
-// has its own JS context (and thus its own module instance + queryClient), so a
-// module-level guard is per-window — precisely the desired scope.
-let crossWindowRegistered = false;
-function registerCrossWindowSync(queryClient: QueryClient, userId: string) {
-  if (crossWindowRegistered) return;
-  crossWindowRegistered = true;
-
-  void listen<NoteSyncPayload>(NOTE_UPDATED_EVENT, (event) => {
-    const { source, noteId, updates } = event.payload;
-    if (source === SYNC_SOURCE_ID) return;
-    setData(queryClient, userId, (data) => {
-      const index = data.notes.findIndex(n => n.id === noteId);
-      if (index === -1) return data;
-      const newNotes = [...data.notes];
-      newNotes[index] = { ...newNotes[index], ...updates, updatedAt: Date.now() };
-      return { ...data, notes: newNotes };
-    });
-  }).catch(e => logSilent('useKnowledgeQuery', 'note sync listen failed', e));
-
-  void listen<NoteSyncPayload>(NOTE_DELETED_EVENT, (event) => {
-    const { source, noteId } = event.payload;
-    if (source === SYNC_SOURCE_ID) return;
-    setData(queryClient, userId, (data) => ({
-      ...data,
-      notes: data.notes.filter(n => n.id !== noteId),
-    }));
-  }).catch(e => logSilent('useKnowledgeQuery', 'note sync listen failed', e));
-
-  void listen<NotesReorderPayload>(NOTES_REORDERED_EVENT, (event) => {
-    const { source, items } = event.payload;
-    if (source === SYNC_SOURCE_ID) return;
-    const orderMap = new Map(items);
-    setData(queryClient, userId, (data) => ({
-      ...data,
-      notes: data.notes.map(n => (orderMap.has(n.id) ? { ...n, sortOrder: orderMap.get(n.id)! } : n)),
-    }));
-  }).catch(e => logSilent('useKnowledgeQuery', 'note sync listen failed', e));
-}
-
 /**
  * Fetches only the module shell. Use `useKnowledgeFolderContents` after the user selects
  * a list; templates and note bodies have their own on-demand queries.
  */
 export function useKnowledgeData() {
-  const queryClient = useQueryClient();
   const { userId } = useAuth();
-
-  useEffect(() => {
-    registerCrossWindowSync(queryClient, userId);
-  }, [queryClient, userId]);
-
 
   return useQuery({
     queryKey: queryKeys.lists.all(userId),
@@ -198,11 +115,22 @@ export function useKnowledgeFolderContents(folderId: string | null) {
   });
   useEffect(() => {
     if (!folderId || !query.data) return;
-    setData(queryClient, userId, (current) => ({
-      ...current,
-      noteGroups: [...current.noteGroups.filter(group => group.folderId !== folderId), ...query.data.noteGroups],
-      notes: [...current.notes.filter(note => note.folderId !== folderId), ...query.data.notes],
-    }));
+    setData(queryClient, userId, (current) => {
+      const existingById = new Map(current.notes.map(note => [note.id, note]));
+      const notes = query.data.notes.map((summary) => {
+        const cached = existingById.get(summary.id);
+        // List-content queries deliberately omit note bodies. Keep a loaded
+        // body only while the database version still matches the summary.
+        return cached?.contentLoaded && cached.lockVersion === summary.lockVersion
+          ? { ...summary, content: cached.content, contentLoaded: true }
+          : summary;
+      });
+      return {
+        ...current,
+        noteGroups: [...current.noteGroups.filter(group => group.folderId !== folderId), ...query.data.noteGroups],
+        notes: [...current.notes.filter(note => note.folderId !== folderId), ...notes],
+      };
+    });
   }, [folderId, query.data, queryClient, userId]);
   return query;
 }
@@ -210,7 +138,14 @@ export function useKnowledgeFolderContents(folderId: string | null) {
 export function useKnowledgeActions(): KnowledgeActions {
   const queryClient = useQueryClient();
   const { userId } = useAuth();
-  const debouncedSync = useDebouncedMutation();
+  const debouncedSync = useDebouncedMutation({
+    onTaskStateChange: (key, pending) => {
+      if (!key.startsWith('note:') && key !== 'reorder:notes') return;
+      const scope = `knowledge:${userId}`;
+      if (pending) markPendingScope(scope);
+      else clearPendingScope(scope);
+    },
+  });
 
   return useMemo<KnowledgeActions>(() => {
     // ── Lists ──
@@ -357,16 +292,25 @@ export function useKnowledgeActions(): KnowledgeActions {
         sortOrder: siblingNotes.length,
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        isNew: true,
       };
       setData(queryClient, userId, () => ({ ...data, notes: [...data.notes, newNote] }));
       debouncedSync.schedule(`note:${newNote.id}`, async () => {
-        const saved = await knowledgeService.upsertNote(newNote);
+        const latest = getData(queryClient, userId).notes.find(item => item.id === newNote.id);
+        if (!latest) return;
+        const saved = await knowledgeService.upsertNote(latest);
         if (saved === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
           notes: current.notes.map((item) =>
-            item.id === newNote.id && item.updatedAt === newNote.updatedAt
-              ? { ...item, updatedAt: saved.updatedAt, baseUpdatedAt: saved.updatedAt, sortOrder: saved.sortOrder }
+            item.id === newNote.id && item.lockVersion === latest.lockVersion
+              ? {
+                  ...item,
+                  updatedAt: item.updatedAt === latest.updatedAt ? saved.updatedAt : item.updatedAt,
+                  lockVersion: saved.lockVersion,
+                  isNew: false,
+                  sortOrder: saved.sortOrder,
+                }
               : item,
           ),
         }));
@@ -381,15 +325,13 @@ export function useKnowledgeActions(): KnowledgeActions {
       const data = getData(queryClient, userId);
       const index = data.notes.findIndex(n => n.id === id);
       if (index === -1) {
-        // Defensive fallback if note is not yet loaded in query cache.
-        broadcastNoteUpdate(id, updates);
-        debouncedSync.schedule(`note:${id}`, async () => {
-          const savedUpdatedAt = await knowledgeService.patchNote({
-            id,
-            ...updates,
-          });
-          if (savedUpdatedAt === undefined) return;
-        }, delay);
+        // A metadata-only cache cannot safely manufacture an expected version.
+        // Refetch instead of issuing an unconditional patch that can overwrite
+        // another window's newer note body.
+        void queryClient.invalidateQueries({
+          queryKey: queryKeys.lists.all(userId),
+          refetchType: 'active',
+        });
         return;
       }
       const currentNote = data.notes[index];
@@ -404,46 +346,45 @@ export function useKnowledgeActions(): KnowledgeActions {
         ...updates,
         updatedAt: Date.now(),
         contentLoaded: newNotes[index].contentLoaded || updates.content !== undefined,
-        baseUpdatedAt: newNotes[index].baseUpdatedAt,
+        lockVersion: newNotes[index].lockVersion,
       };
       // Content writes must retain this complete snapshot. A folder-content
       // refetch contains note metadata only and can replace the cache entry
       // before the debounce expires.
-      const noteToSave = newNotes[index];
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
-      broadcastNoteUpdate(id, updates);
       debouncedSync.schedule(`note:${id}`, async () => {
         const latest = getData(queryClient, userId).notes.find(item => item.id === id);
         if (!latest) return;
-        let savedUpdatedAt: number | undefined;
+        let saved: knowledgeService.SavedNoteVersion | undefined;
         let savedSortOrder: number | undefined;
         if (updates.content !== undefined) {
-          const saved = await knowledgeService.upsertNote(noteToSave);
-          savedUpdatedAt = saved?.updatedAt;
-          savedSortOrder = saved?.sortOrder;
+          const savedNote = await knowledgeService.upsertNote(latest);
+          saved = savedNote;
+          savedSortOrder = savedNote?.sortOrder;
         } else if (latest.contentLoaded) {
-          const saved = await knowledgeService.upsertNote(latest);
-          savedUpdatedAt = saved?.updatedAt;
-          savedSortOrder = saved?.sortOrder;
+          const savedNote = await knowledgeService.upsertNote(latest);
+          saved = savedNote;
+          savedSortOrder = savedNote?.sortOrder;
         } else {
-          savedUpdatedAt = await knowledgeService.patchNote({
+          saved = await knowledgeService.patchNote({
             id,
             folderId: updates.folderId,
             groupId: updates.groupId,
             title: updates.title,
             sortOrder: updates.sortOrder,
-            baseUpdatedAt: latest.baseUpdatedAt,
+            lockVersion: latest.lockVersion,
           });
         }
-        if (savedUpdatedAt === undefined) return;
+        if (saved === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
           notes: current.notes.map((item) =>
-            item.id === id && item.updatedAt === latest.updatedAt
+            item.id === id && item.lockVersion === latest.lockVersion
               ? {
                   ...item,
-                  updatedAt: savedUpdatedAt,
-                  baseUpdatedAt: savedUpdatedAt,
+                  updatedAt: item.updatedAt === latest.updatedAt ? saved.updatedAt : item.updatedAt,
+                  lockVersion: saved.lockVersion,
+                  isNew: false,
                   sortOrder: savedSortOrder ?? item.sortOrder,
                 }
               : item,
@@ -460,7 +401,6 @@ export function useKnowledgeActions(): KnowledgeActions {
       }));
       debouncedSync.cancel(`note:${id}`);
       knowledgeService.deleteNote(id).catch(() => {});
-      broadcastNoteDelete(id);
     };
 
     const moveNoteAndReorder: KnowledgeActions['moveNoteAndReorder'] = (noteId, groupId, targetIndex) => {
@@ -469,7 +409,7 @@ export function useKnowledgeActions(): KnowledgeActions {
       if (noteIndex === -1) return;
 
       let newNotes = [...data.notes];
-      const note = { ...newNotes[noteIndex], groupId };
+      const note = { ...newNotes[noteIndex], groupId, updatedAt: Date.now() };
       newNotes[noteIndex] = note;
 
       const siblingNotes = newNotes
@@ -491,28 +431,29 @@ export function useKnowledgeActions(): KnowledgeActions {
       newNotes = newNotes.map(n => (orderMap.has(n.id) ? { ...n, sortOrder: orderMap.get(n.id)! } : n));
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
       const updatedNote = newNotes.find(n => n.id === noteId);
-      // Sync the group change and affected same-group ordering so a stale copy in
-      // a child window does not write back the whole note and undo the move.
-      broadcastNoteUpdate(noteId, { groupId });
-      broadcastNotesReorder(Array.from(orderMap.entries()));
       debouncedSync.schedule(
         `note:${noteId}`,
         async () => {
-          const savedUpdatedAt = await knowledgeService.moveNote(
-            noteId,
-            note.folderId,
-            groupId,
-            updatedNote?.sortOrder || 0,
-            note.baseUpdatedAt,
-          );
-          if (savedUpdatedAt === undefined) return;
+          const latest = getData(queryClient, userId).notes.find(item => item.id === noteId);
+          if (!latest) return;
+          const saved = latest.isNew
+            ? await knowledgeService.upsertNote(latest)
+            : await knowledgeService.moveNote(
+              noteId,
+              latest.folderId,
+              latest.groupId ?? null,
+              latest.sortOrder ?? updatedNote?.sortOrder ?? 0,
+              latest.lockVersion,
+            );
+          if (saved === undefined) return;
           setData(queryClient, userId, (current) => ({
             ...current,
             notes: current.notes.map((item) => item.id === noteId
               ? {
                   ...item,
-                  updatedAt: savedUpdatedAt,
-                  baseUpdatedAt: savedUpdatedAt,
+                  updatedAt: saved.updatedAt,
+                  lockVersion: saved.lockVersion,
+                  isNew: false,
                   sortOrder: item.sortOrder,
                 }
               : item),
@@ -544,25 +485,29 @@ export function useKnowledgeActions(): KnowledgeActions {
       };
 
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
-      broadcastNoteUpdate(noteId, { folderId: targetListId, groupId: targetGroupId, sortOrder: newSortOrder });
       debouncedSync.schedule(
         `note:${noteId}`,
         async () => {
-          const savedUpdatedAt = await knowledgeService.moveNote(
-            noteId,
-            targetListId,
-            targetGroupId,
-            newSortOrder,
-            oldNote.baseUpdatedAt,
-          );
-          if (savedUpdatedAt === undefined) return;
+          const latest = getData(queryClient, userId).notes.find(item => item.id === noteId);
+          if (!latest) return;
+          const saved = latest.isNew
+            ? await knowledgeService.upsertNote(latest)
+            : await knowledgeService.moveNote(
+              noteId,
+              latest.folderId,
+              latest.groupId ?? null,
+              latest.sortOrder ?? newSortOrder,
+              latest.lockVersion,
+            );
+          if (saved === undefined) return;
           setData(queryClient, userId, (current) => ({
             ...current,
             notes: current.notes.map((item) => item.id === noteId
               ? {
                   ...item,
-                  updatedAt: savedUpdatedAt,
-                  baseUpdatedAt: savedUpdatedAt,
+                  updatedAt: saved.updatedAt,
+                  lockVersion: saved.lockVersion,
+                  isNew: false,
                   sortOrder: item.sortOrder,
                 }
               : item),
@@ -585,18 +530,17 @@ export function useKnowledgeActions(): KnowledgeActions {
         return n;
       });
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
-      broadcastNotesReorder(items);
       debouncedSync.schedule('reorder:notes', async () => {
         const savedVersions = await knowledgeService.reorderNotes(items);
         if (savedVersions === undefined) return;
-        const versions = new Map(savedVersions);
+        const versions = new Map(savedVersions.map((version) => [version.id, version]));
         setData(queryClient, userId, (current) => ({
           ...current,
           notes: current.notes.map((note) => {
-            const savedUpdatedAt = versions.get(note.id);
-            return savedUpdatedAt === undefined
+            const saved = versions.get(note.id);
+            return saved === undefined
               ? note
-              : { ...note, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt };
+              : { ...note, updatedAt: saved.updatedAt, lockVersion: saved.lockVersion };
           }),
         }));
       }, LOW_FREQ_DELAY);

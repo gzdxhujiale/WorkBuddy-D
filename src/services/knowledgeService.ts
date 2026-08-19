@@ -12,7 +12,6 @@
 import { supabase } from "@/lib/supabase";
 import { throwOnPostgrestError } from "@/lib/sync";
 import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
-import { ListNoteRow } from "@/types/database";
 import type { KnowledgeFolder, KnowledgeBase, Note, NoteGroup, KnowledgeTemplate } from "@/types/knowledge";
 
 // ---------------------------------------------------------------------------
@@ -33,10 +32,11 @@ export type ListNotePatch = {
   title?: string;
   content?: string;
   sortOrder?: number;
-  baseUpdatedAt?: number;
+  lockVersion?: number;
 };
 
-export type SavedNote = { updatedAt: number; sortOrder: number };
+export type SavedNote = { updatedAt: number; lockVersion: number; sortOrder: number };
+export type SavedNoteVersion = { updatedAt: number; lockVersion: number };
 
 // ---------------------------------------------------------------------------
 // Remote helpers (private)
@@ -105,51 +105,58 @@ async function remoteDeleteGroup(id: string): Promise<void> {
   throwOnPostgrestError(error, "\u5220\u9664\u5206\u7ec4");
 }
 
-async function remoteReorderNotes(items: Array<[string, number]>): Promise<Array<[string, number]>> {
-  const { data, error } = await supabase.rpc("reorder_notes", {
+async function remoteReorderNotes(items: Array<[string, number]>): Promise<Array<{ id: string; updatedAt: number; lockVersion: number }>> {
+  const { data, error } = await supabase.rpc("reorder_notes_v2", {
     p_items: items.map(([id, sort_order]) => ({ id, sort_order })),
   });
   throwOnPostgrestError(error, "\u6392\u5e8f\u7b14\u8bb0");
-  return ((data ?? []) as Array<{ id: string; updated_at: string }>).map((item) => [
-    item.id,
-    new Date(item.updated_at).getTime(),
-  ]);
+  return ((data ?? []) as Array<{ id: string; updated_at: string; lock_version: number }>).map((item) => ({
+    id: item.id,
+    updatedAt: new Date(item.updated_at).getTime(),
+    lockVersion: Number(item.lock_version),
+  }));
 }
 
-async function remoteMoveNote(noteId: string, folderId: string, groupId: string | null, sortOrder: number, baseUpdatedAt: number | undefined): Promise<number> {
-  const { data, error } = await supabase.rpc("move_note", {
+async function remoteMoveNote(noteId: string, folderId: string, groupId: string | null, sortOrder: number, lockVersion: number | undefined): Promise<SavedNoteVersion> {
+  const { data, error } = await supabase.rpc("move_note_v2", {
     p_id: noteId, p_folder_id: folderId, p_group_id: groupId, p_sort_order: sortOrder,
-    p_expected_updated_at: baseUpdatedAt ? new Date(baseUpdatedAt).toISOString() : null,
+    p_expected_lock_version: lockVersion ?? null,
   });
   throwOnPostgrestError(error, "\u79fb\u52a8\u7b14\u8bb0");
-  return new Date(data as string).getTime();
+  const saved = (data as Array<{ updated_at: string; lock_version: number }>)[0];
+  return { updatedAt: new Date(saved.updated_at).getTime(), lockVersion: Number(saved.lock_version) };
 }
 
 async function remoteSaveNote(note: Note): Promise<SavedNote> {
-  if (note.baseUpdatedAt && note.contentLoaded !== true) {
+  if (note.lockVersion !== undefined && note.contentLoaded !== true) {
     throw new Error("笔记正文尚未加载，已阻止空内容覆盖");
   }
-  const { data, error } = await supabase.rpc("save_note", {
+  if (note.lockVersion === undefined && !note.isNew) {
+    throw new Error("笔记版本尚未加载，已阻止非条件更新");
+  }
+  const { data, error } = await supabase.rpc("save_note_v2", {
     p_id: note.id, p_folder_id: note.folderId, p_group_id: note.groupId ?? null,
     p_title: note.title, p_content: note.content,
     p_sort_order: note.sortOrder ?? 0,
-    p_expected_updated_at: note.baseUpdatedAt ? new Date(note.baseUpdatedAt).toISOString() : null,
+    p_expected_lock_version: note.isNew ? null : note.lockVersion,
   });
   throwOnPostgrestError(error, "\u4fdd\u5b58\u7b14\u8bb0");
-  const saved = (data as Array<{ updated_at: string; sort_order: number }>)[0];
-  return { updatedAt: new Date(saved.updated_at).getTime(), sortOrder: saved.sort_order };
+  const saved = (data as Array<{ updated_at: string; lock_version: number; sort_order: number }>)[0];
+  return { updatedAt: new Date(saved.updated_at).getTime(), lockVersion: Number(saved.lock_version), sortOrder: saved.sort_order };
 }
 
-async function remotePatchNote(patch: ListNotePatch): Promise<number> {
-  const { data, error } = await supabase.rpc("patch_note", {
+async function remotePatchNote(patch: ListNotePatch): Promise<SavedNoteVersion> {
+  if (patch.lockVersion === undefined) throw new Error("缺少笔记版本，已阻止非条件更新");
+  const { data, error } = await supabase.rpc("patch_note_v2", {
     p_id: patch.id,
-    p_expected_updated_at: patch.baseUpdatedAt ? new Date(patch.baseUpdatedAt).toISOString() : null,
+    p_expected_lock_version: patch.lockVersion,
     p_title: patch.title, p_content: patch.content,
     p_sort_order: patch.sortOrder, p_folder_id: patch.folderId, p_group_id: patch.groupId,
     p_set_group: patch.groupId !== undefined,
   });
   throwOnPostgrestError(error, "\u66f4\u65b0\u7b14\u8bb0");
-  return new Date(data as string).getTime();
+  const saved = (data as Array<{ updated_at: string; lock_version: number }>)[0];
+  return { updatedAt: new Date(saved.updated_at).getTime(), lockVersion: Number(saved.lock_version) };
 }
 
 async function remoteDeleteNote(id: string): Promise<void> {
@@ -194,10 +201,10 @@ registerOfflineExecutor("note:patch", async (p) => { await remotePatchNote(p as 
 registerOfflineExecutor("note:delete", async (p) => remoteDeleteNote(p as string));
 registerOfflineExecutor("note:reorder", async (p) => { await remoteReorderNotes(p as Array<[string, number]>); });
 registerOfflineExecutor("note:move", async (p) => {
-  const { noteId, folderId, groupId, sortOrder, baseUpdatedAt } = p as {
-    noteId: string; folderId: string; groupId: string | null; sortOrder: number; baseUpdatedAt?: number;
+  const { noteId, folderId, groupId, sortOrder, lockVersion } = p as {
+    noteId: string; folderId: string; groupId: string | null; sortOrder: number; lockVersion?: number;
   };
-  await remoteMoveNote(noteId, folderId, groupId, sortOrder, baseUpdatedAt);
+  await remoteMoveNote(noteId, folderId, groupId, sortOrder, lockVersion);
 });
 
 registerOfflineExecutor("template:save", async (p) => remoteUpsertTemplate(p as KnowledgeTemplate));
@@ -247,7 +254,7 @@ export async function loadKnowledgeFolderContents(folderId: string): Promise<Pic
       .eq("folder_id", folderId).is("deleted_at", null)
       .order("sort_order", { ascending: true }).order("created_at", { ascending: true }),
     supabase.from("notes")
-      .select("id,folder_id,group_id,title,sort_order,created_at,updated_at")
+      .select("id,folder_id,group_id,title,sort_order,created_at,updated_at,lock_version")
       .eq("folder_id", folderId).is("deleted_at", null)
       .order("sort_order", { ascending: true }).order("created_at", { ascending: true }),
   ]);
@@ -266,7 +273,7 @@ export async function loadKnowledgeFolderContents(folderId: string): Promise<Pic
     sortOrder: n.sort_order,
     createdAt: n.created_at ? new Date(n.created_at).getTime() : Date.now(),
     updatedAt: n.updated_at ? new Date(n.updated_at).getTime() : Date.now(),
-    baseUpdatedAt: n.updated_at ? new Date(n.updated_at).getTime() : undefined,
+    lockVersion: Number(n.lock_version),
   }));
 
   return { noteGroups, notes };
@@ -275,18 +282,18 @@ export async function loadKnowledgeFolderContents(folderId: string): Promise<Pic
 /** Full note body - fetched on demand before editing or exporting. */
 export async function loadNote(id: string): Promise<Note | null> {
   const { data, error } = await supabase.from("notes")
-    .select("id,folder_id,group_id,title,content,sort_order,created_at,updated_at")
+    .select("id,folder_id,group_id,title,content,sort_order,created_at,updated_at,lock_version")
     .eq("id", id).is("deleted_at", null).maybeSingle();
   throwOnPostgrestError(error, "\u52a0\u8f7d\u7b14\u8bb0\u6b63\u6587");
   if (!data) return null;
-  const n = data as ListNoteRow;
+  const n = data;
   return {
     id: n.id, folderId: n.folder_id, groupId: n.group_id ?? null,
     title: n.title ?? "", content: n.content ?? "", contentLoaded: true,
     sortOrder: n.sort_order,
     createdAt: n.created_at ? new Date(n.created_at).getTime() : Date.now(),
     updatedAt: n.updated_at ? new Date(n.updated_at).getTime() : Date.now(),
-    baseUpdatedAt: n.updated_at ? new Date(n.updated_at).getTime() : undefined,
+    lockVersion: Number(n.lock_version),
   };
 }
 
@@ -380,7 +387,7 @@ export function upsertNote(note: Note): Promise<SavedNote | undefined> {
   );
 }
 
-export function patchNote(patch: ListNotePatch): Promise<number | undefined> {
+export function patchNote(patch: ListNotePatch): Promise<SavedNoteVersion | undefined> {
   return runOrQueue(
     { kind: "note:patch", key: "note:" + patch.id, payload: patch },
     () => remotePatchNote(patch),
@@ -394,17 +401,17 @@ export async function deleteNote(id: string): Promise<void> {
   );
 }
 
-export function reorderNotes(items: Array<[string, number]>): Promise<Array<[string, number]> | undefined> {
+export function reorderNotes(items: Array<[string, number]>): Promise<Array<{ id: string; updatedAt: number; lockVersion: number }> | undefined> {
   return runOrQueue(
     { kind: "note:reorder", key: "note:reorder", payload: items },
     () => remoteReorderNotes(items),
   );
 }
 
-export function moveNote(noteId: string, folderId: string, groupId: string | null, sortOrder: number, baseUpdatedAt: number | undefined): Promise<number | undefined> {
+export function moveNote(noteId: string, folderId: string, groupId: string | null, sortOrder: number, lockVersion: number | undefined): Promise<SavedNoteVersion | undefined> {
   return runOrQueue(
-    { kind: "note:move", key: "note:move:" + noteId, payload: { noteId, folderId, groupId, sortOrder, baseUpdatedAt } },
-    () => remoteMoveNote(noteId, folderId, groupId, sortOrder, baseUpdatedAt),
+    { kind: "note:move", key: "note:move:" + noteId, payload: { noteId, folderId, groupId, sortOrder, lockVersion } },
+    () => remoteMoveNote(noteId, folderId, groupId, sortOrder, lockVersion),
   );
 }
 

@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { logSilent } from "@/lib/syncEngine";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
-import { isQueryPending } from "@/lib/queryPending";
+import { isPendingScope, isQueryPending } from "@/lib/queryPending";
 
 type Subscription = ReturnType<typeof supabase.channel>;
 
@@ -163,7 +163,9 @@ class RealtimeManager {
     for (const target of targets) {
       const keyId = JSON.stringify(target);
       if (now - (this.lastInvalidatedAt.get(keyId) ?? 0) < RealtimeManager.INVALIDATION_COOLDOWN_MS) continue;
-      if (isQueryPending(target.queryKey)) {
+      const isKnowledgeTarget = target.queryKey[0] === "lists";
+      if (isQueryPending(target.queryKey)
+        || (isKnowledgeTarget && isPendingScope(`knowledge:${this.userId}`))) {
         // Re-queue only this target; other targets in the batch continue below.
         this.dirtyTargets.set(keyId, target);
         hasDeferred = true;

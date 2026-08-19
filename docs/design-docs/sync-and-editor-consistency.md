@@ -26,17 +26,11 @@ Broadcast 不保证作为持久化队列：断线、重连或错过消息必须�
 
 数据库触发器应只在事务提交后的行变化时发送提示。客户端写成功后仍以 RPC 返回的版本和后续 RLS 查询为准。
 
-### 当前实现差异：列表 Tauri 事件
+### 列表跨窗口同步
 
-`src/hooks/useKnowledgeQuery.ts` 当前通过 `lists:note-updated`、`lists:note-deleted` 与 `lists:notes-reordered` Tauri 事件，把部分笔记字段直接补丁到其他窗口的 Query cache。事件名为兼容旧窗口而保留；这个快速路径与本决策“不要把 Tauri 窗口事件当作行数据复制协议”的边界不一致。
+笔记不再通过 Tauri 事件把标题、正文或排序补丁复制到其他窗口的 Query cache。所有窗口都将私有 Broadcast 作为精确失效提示，并通过普通 RLS 查询收敛。写入窗口在同一笔记的防抖任务和 RPC 链完全结算前延迟处理该知识域的 Broadcast，避免保存中的乐观正文被仅含元数据的查询替换。
 
-在该差异被解决前：
-
-1. 不要为更多实体或字段扩展这套 Tauri 行补丁协议。
-2. 不要把它作为数据库真相、冲突版本或权限判断的来源。
-3. 任何涉及它的变更都应同时评估两种收敛方向：移除补丁并使用精确失效/重取，或用证据更新本决策、权限模型和验证覆盖。
-
-该差异已在 [Architecture](/architecture)、[Reliability](/RELIABILITY) 和 [Quality score](/QUALITY_SCORE) 中登记。
+不得为其他实体重新引入 Tauri 行补丁协议，也不得将 Broadcast payload 用作数据库真相、冲突版本或权限判断的来源。
 
 ## 数据库负责的事实
 
@@ -45,13 +39,13 @@ Broadcast 不保证作为持久化队列：断线、重连或错过消息必须�
 | 事实 | 责任方 | 写入方式 |
 | --- | --- | --- |
 | `created_at`、`updated_at` | 数据库 | 默认值和 `BEFORE UPDATE` 触发器 |
-| 乐观锁版本 | 数据库 | 客户端传 `p_expected_updated_at`；成功后采用 RPC 返回的新值 |
+| 笔记乐观锁版本 `lock_version` | 数据库 | 单调递增触发器；客户端传 `p_expected_lock_version`，成功后采用 RPC 返回的新值 |
 | `deleted_at` | 数据库 | 专用软删除 RPC 内部 `now()` |
 | 任务 `completed_at` | 数据库 | 任务完成状态的转换逻辑 |
 | 专注 `started_at`、`ended_at` | 数据库 | 创建、完成和中断 RPC |
 | 新列表/分组/笔记 `sort_order` | 数据库 | 保存 RPC + 父级范围 advisory lock |
 
-客户端可以做乐观显示，但必须在 RPC 成功后用数据库返回的 `updated_at`、`sort_order` 替换缓存值。遇到 `VERSION_CONFLICT` 时保留冲突，不得用本地时钟伪造一个新版本后重试覆盖。
+客户端可以做乐观显示，但必须在 RPC 成功后用数据库返回的 `updated_at`、`lock_version`、`sort_order` 替换缓存值。遇到 `VERSION_CONFLICT` 时保留冲突，不得用本地时钟伪造一个新版本后重试覆盖。
 
 ## 笔记编辑器与缓存写入
 
@@ -59,8 +53,8 @@ Broadcast 不保证作为持久化队列：断线、重连或错过消息必须�
 
 ```text
 用户编辑 -> 编辑器 onUpdate -> 本地 title/content state
-          -> 3 秒防抖 -> 去重后的 optimistic cache update
-          -> RPC / Broadcast hint -> 权威查询或返回版本
+          -> 3 秒防抖 -> 按 note id 串行的 optimistic cache write
+          -> versioned RPC / Broadcast hint -> 权威查询或返回版本
 ```
 
 实现约束：
@@ -69,7 +63,7 @@ Broadcast 不保证作为持久化队列：断线、重连或错过消息必须�
 2. 编辑器 `onUpdate` 先与最近内容比较，重复 JSON 不上报。
 3. 自动保存回调用 ref 保存最新函数。卸载保存的 effect 只能在真实卸载时 cleanup，不能依赖一个会随 Query cache 刷新而改变的回调引用。
 4. 防抖 timer 触发保存前先清除 dirty 标记，避免同步缓存更新引起重入时再次触发卸载保存。
-5. `updateNote` 在更新缓存、发跨窗口事件或调度 RPC 之前，先比较 `Partial<Note>` 与当前缓存；所有字段相同即为 no-op。
+5. `updateNote` 在更新缓存或调度 RPC 前，先比较 `Partial<Note>` 与当前缓存；所有字段相同即为 no-op。
 
 这些规则避免 `编辑器 -> setState -> 缓存更新 -> 父组件重渲染 -> effect cleanup 保存 -> 编辑器` 的闭环；这类闭环会表现为 React 的 `Maximum update depth exceeded`，而不是 Supabase 的 RPC 或字段错误。
 

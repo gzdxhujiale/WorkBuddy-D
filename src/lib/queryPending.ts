@@ -1,6 +1,7 @@
 import type { QueryKey } from "@tanstack/react-query";
 
 const pending = new Map<string, number>();
+const pendingScopes = new Map<string, number>();
 
 function keyOf(queryKey: QueryKey) {
   return JSON.stringify(queryKey);
@@ -26,4 +27,23 @@ export function isQueryPending(queryKey: QueryKey) {
     if (target.every((part, index) => String(pendingKey[index]) === part)) return true;
   }
   return false;
+}
+
+/**
+ * Marks a domain-wide synchronization operation. Use this when one mutation
+ * affects several query keys and incoming Broadcast hints must wait until the
+ * local optimistic write has settled.
+ */
+export function markPendingScope(scope: string) {
+  pendingScopes.set(scope, (pendingScopes.get(scope) ?? 0) + 1);
+}
+
+export function clearPendingScope(scope: string) {
+  const count = pendingScopes.get(scope) ?? 0;
+  if (count <= 1) pendingScopes.delete(scope);
+  else pendingScopes.set(scope, count - 1);
+}
+
+export function isPendingScope(scope: string) {
+  return (pendingScopes.get(scope) ?? 0) > 0;
 }
