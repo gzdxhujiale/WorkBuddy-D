@@ -22,7 +22,7 @@ export interface TemplateEditorModalProps {
   open: boolean;
   template?: ProjectTemplate;
   onOpenChange: (open: boolean) => void;
-  onSave: (template: ProjectTemplate) => Promise<void>;
+  onSave: (template: ProjectTemplate) => void | Promise<void>;
 }
 
 const PRIORITIES: Array<{ key: Priority; label: string; pixelLabel: string }> = [

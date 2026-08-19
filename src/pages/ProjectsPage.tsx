@@ -524,7 +524,7 @@ export function ProjectsPage() {
   const selectedStages = useMemo(() => allStages.filter((stage) => stage.projectId === selected?.id), [allStages, selected?.id]);
   const selectedTasks = useMemo(() => allTasks.filter((task) => task.projectId === selected?.id), [allTasks, selected?.id]);
 
-  const run = async <T,>(action: () => Promise<T>): Promise<T | undefined> => {
+  const run = async <T,>(action: () => Promise<T> | T): Promise<T | undefined> => {
     setBusy(true);
     setActionError("");
     try {

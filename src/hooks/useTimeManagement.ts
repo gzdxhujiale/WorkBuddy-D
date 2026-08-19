@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { timeManagementApi } from "@/services/timeManagementService";
 import { Task, QuadrantType, TimeManagementData } from "@/types/timeManagement";
+import { ProjectCenterData, ProjectTask } from "@/types/projects";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
 import { supabase } from "@/lib/supabase";
 import { throwOnPostgrestError } from "@/lib/sync";
@@ -51,6 +52,38 @@ export function useTaskActions() {
   const queryClient = useQueryClient();
   const { userId } = useAuth();
   const QUERY_KEY = queryKeys.timeManagement(userId);
+  const PROJECTS_KEY = queryKeys.projects(userId);
+
+  // Helper: conditionally sync a task to the ProjectCenter cache if it has a projectId
+  const syncTaskToProjects = useCallback(
+    (task: Task) => {
+      if (!task.projectId) return;
+      queryClient.setQueryData<ProjectCenterData>(PROJECTS_KEY, (old) => {
+        if (!old) return old;
+        const pTask = task as ProjectTask;
+        const idx = old.tasks.findIndex((t) => t.id === task.id);
+        const nextTasks =
+          idx >= 0
+            ? old.tasks.map((t) => (t.id === task.id ? { ...t, ...pTask, updatedAt: Date.now() } : t))
+            : [
+                { ...pTask, createdAt: pTask.createdAt || Date.now(), updatedAt: Date.now() },
+                ...old.tasks,
+              ];
+        return { ...old, tasks: nextTasks };
+      });
+    },
+    [queryClient, PROJECTS_KEY]
+  );
+
+  const syncDeleteToProjects = useCallback(
+    (taskId: string) => {
+      queryClient.setQueryData<ProjectCenterData>(PROJECTS_KEY, (old) => {
+        if (!old) return old;
+        return { ...old, tasks: old.tasks.filter((t) => t.id !== taskId) };
+      });
+    },
+    [queryClient, PROJECTS_KEY]
+  );
 
   // Upsert Sync (optimistic cache update + debounced persistence)
   const { trigger: triggerUpsert } = useOptimisticSync<TimeManagementData, Task>({
@@ -71,11 +104,32 @@ export function useTaskActions() {
     syncFn: async (task) => {
       const savedUpdatedAt = await timeManagementApi.upsertTask(task);
       if (savedUpdatedAt === undefined) return;
-      queryClient.setQueryData<TimeManagementData>(QUERY_KEY, (old) => old ? {
-        ...old,
-        tasks: old.tasks.map((item) => item.id === task.id && item.updatedAt === task.updatedAt
-          ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt } : item),
-      } : old);
+      queryClient.setQueryData<TimeManagementData>(QUERY_KEY, (old) =>
+        old
+          ? {
+              ...old,
+              tasks: old.tasks.map((item) =>
+                item.id === task.id && item.updatedAt === task.updatedAt
+                  ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+                  : item
+              ),
+            }
+          : old
+      );
+      if (task.projectId) {
+        queryClient.setQueryData<ProjectCenterData>(PROJECTS_KEY, (old) =>
+          old
+            ? {
+                ...old,
+                tasks: old.tasks.map((item) =>
+                  item.id === task.id && item.updatedAt === task.updatedAt
+                    ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+                    : item
+                ),
+              }
+            : old
+        );
+      }
     },
     getSyncKey: (task) => task.id,
   });
@@ -101,7 +155,18 @@ export function useTaskActions() {
     (
       title: string,
       quadrant: QuadrantType = "Q2",
-      draft: Partial<Pick<Task, "description" | "scheduleMode" | "scheduledStartAt" | "scheduledEndAt" | "reminder">> = {},
+      draft: Partial<
+        Pick<
+          Task,
+          | "description"
+          | "scheduleMode"
+          | "scheduledStartAt"
+          | "scheduledEndAt"
+          | "reminder"
+          | "projectId"
+          | "projectStageId"
+        >
+      > = {}
     ): Task => {
       const newTask: Task = {
         id: createTaskId(),
@@ -114,9 +179,10 @@ export function useTaskActions() {
       };
 
       triggerUpsert(newTask);
+      syncTaskToProjects(newTask);
       return newTask;
     },
-    [triggerUpsert]
+    [triggerUpsert, syncTaskToProjects]
   );
 
   // Partial Task Update Sync
@@ -143,21 +209,47 @@ export function useTaskActions() {
         const savedUpdatedAt = await timeManagementApi.upsertTask(target);
         if (savedUpdatedAt === undefined) return;
 
-        // The database is the source of truth for the version. Keeping the
-        // old baseUpdatedAt here makes the next edit fail with VERSION_CONFLICT.
-        queryClient.setQueryData<TimeManagementData>(QUERY_KEY, (old) => old ? {
-          ...old,
-          tasks: old.tasks.map((item) => item.id === taskId ? {
-            ...item,
-            updatedAt: savedUpdatedAt,
-            baseUpdatedAt: savedUpdatedAt,
-          } : item),
-        } : old);
+        // Update timeManagement cache with authoritative timestamp
+        queryClient.setQueryData<TimeManagementData>(QUERY_KEY, (old) =>
+          old
+            ? {
+                ...old,
+                tasks: old.tasks.map((item) =>
+                  item.id === taskId
+                    ? {
+                        ...item,
+                        updatedAt: savedUpdatedAt,
+                        baseUpdatedAt: savedUpdatedAt,
+                      }
+                    : item
+                ),
+              }
+            : old
+        );
+
+        // Also update projects cache with authoritative timestamp if it's a project task
+        if (target.projectId) {
+          queryClient.setQueryData<ProjectCenterData>(PROJECTS_KEY, (old) =>
+            old
+              ? {
+                  ...old,
+                  tasks: old.tasks.map((item) =>
+                    item.id === taskId
+                      ? {
+                          ...item,
+                          updatedAt: savedUpdatedAt,
+                          baseUpdatedAt: savedUpdatedAt,
+                        }
+                      : item
+                  ),
+                }
+              : old
+          );
+        }
       } catch (error) {
         if (hasVersionConflict(error)) {
-          // Do not retry an old optimistic version. Fetch the server version
-          // once so the next user edit starts from a current baseUpdatedAt.
           void queryClient.invalidateQueries({ queryKey: QUERY_KEY, refetchType: "active" });
+          void queryClient.invalidateQueries({ queryKey: PROJECTS_KEY, refetchType: "active" });
         }
         throw error;
       }
@@ -172,21 +264,45 @@ export function useTaskActions() {
         ?.tasks.find((task) => task.id === taskId);
 
       // A commit containing no effective change should never create a write.
-      if (current && (Object.keys(updates) as Array<keyof Task>).every(
-        (key) => Object.is(current[key], updates[key])
-      )) {
+      if (
+        current &&
+        (Object.keys(updates) as Array<keyof Task>).every((key) =>
+          Object.is(current[key], updates[key])
+        )
+      ) {
         return;
       }
       triggerUpdate({ taskId, updates });
+
+      // Conditional optimistic sync to projects cache (0ms instant UI response for project tasks)
+      const targetProjectId =
+        updates.projectId !== undefined ? updates.projectId : current?.projectId;
+      if (targetProjectId) {
+        queryClient.setQueryData<ProjectCenterData>(PROJECTS_KEY, (old) => {
+          if (!old) return old;
+          const idx = old.tasks.findIndex((t) => t.id === taskId);
+          if (idx < 0 && !updates.projectId) return old;
+          const updatedTasks =
+            idx >= 0
+              ? old.tasks.map((t) =>
+                  t.id === taskId ? { ...t, ...updates, updatedAt: Date.now() } : t
+                )
+              : current
+              ? [{ ...(current as ProjectTask), ...updates, updatedAt: Date.now() }, ...old.tasks]
+              : old.tasks;
+          return { ...old, tasks: updatedTasks };
+        });
+      }
     },
-    [QUERY_KEY, queryClient, triggerUpdate]
+    [QUERY_KEY, PROJECTS_KEY, queryClient, triggerUpdate]
   );
 
   const deleteTask = useCallback(
     (taskId: string) => {
       triggerDelete(taskId);
+      syncDeleteToProjects(taskId);
     },
-    [triggerDelete]
+    [triggerDelete, syncDeleteToProjects]
   );
 
   return {
