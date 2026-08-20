@@ -20,10 +20,10 @@ function asTimestamp(value: string | null | undefined): number {
 export const projectApi = {
   async loadAll(userId: string): Promise<ProjectCenterData> {
     const [projectResult, stageResult, taskResult, templateResult] = await Promise.all([
-      supabase.from("projects").select("id,name,description,status,start_date,end_date,priority,tags,owner_name,created_at,updated_at").eq("user_id", userId).is("deleted_at", null).order("updated_at", { ascending: false }),
-      supabase.from("project_stages").select("id,project_id,name,default_assignee_name,sort_order,template_key,start_date,end_date").eq("user_id", userId).is("deleted_at", null).order("sort_order"),
-      supabase.from("time_management_tasks").select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,project_id,project_stage_id,priority,assignee_name,created_at,updated_at").eq("user_id", userId).is("deleted_at", null).not("project_id", "is", null).order("created_at", { ascending: false }),
-      supabase.from("project_templates").select("id,name,description,definition,updated_at").eq("user_id", userId).is("deleted_at", null).order("updated_at", { ascending: false }),
+      supabase.from("projects").select("id,name,description,status,start_date,end_date,priority,tags,owner_name,created_at,updated_at,lock_version").eq("user_id", userId).is("deleted_at", null).order("updated_at", { ascending: false }),
+      supabase.from("project_stages").select("id,project_id,name,default_assignee_name,sort_order,template_key,start_date,end_date,updated_at,lock_version").eq("user_id", userId).is("deleted_at", null).order("sort_order"),
+      supabase.from("time_management_tasks").select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,project_id,project_stage_id,priority,assignee_name,created_at,updated_at,lock_version").eq("user_id", userId).is("deleted_at", null).not("project_id", "is", null).order("created_at", { ascending: false }),
+      supabase.from("project_templates").select("id,name,description,definition,updated_at,lock_version").eq("user_id", userId).is("deleted_at", null).order("updated_at", { ascending: false }),
     ]);
     throwOnPostgrestError(projectResult.error, "加载项目");
     throwOnPostgrestError(stageResult.error, "加载项目阶段");
@@ -43,6 +43,7 @@ export const projectApi = {
         ownerName: row.owner_name || undefined,
         createdAt: asTimestamp(row.created_at),
         updatedAt: asTimestamp(row.updated_at),
+        lockVersion: Number(row.lock_version),
       })) as Project[],
       stages: (stageResult.data ?? []).map((row) => ({
         id: row.id,
@@ -53,6 +54,8 @@ export const projectApi = {
         templateKey: row.template_key || undefined,
         startDate: row.start_date || undefined,
         endDate: row.end_date || undefined,
+        updatedAt: asTimestamp(row.updated_at),
+        lockVersion: Number(row.lock_version),
       })) as ProjectStage[],
       tasks: (taskResult.data ?? []).map((row) => ({
         id: row.id,
@@ -72,6 +75,7 @@ export const projectApi = {
         createdAt: asTimestamp(row.created_at),
         updatedAt: asTimestamp(row.updated_at),
         baseUpdatedAt: asTimestamp(row.updated_at),
+        lockVersion: Number(row.lock_version),
       })) as ProjectTask[],
       templates: (templateResult.data ?? []).map((row) => ({
         id: row.id,
@@ -79,12 +83,13 @@ export const projectApi = {
         description: row.description || undefined,
         definition: (row.definition ?? emptyDefinition) as ProjectTemplateDefinition,
         updatedAt: asTimestamp(row.updated_at),
+        lockVersion: Number(row.lock_version),
       })) as ProjectTemplate[],
     };
   },
 
-  async saveProject(project: Project): Promise<void> {
-    const { error } = await supabase.rpc("save_project", {
+  async saveProject(project: Project): Promise<{ updatedAt: number; lockVersion: number }> {
+    const { data, error } = await supabase.rpc("save_project_v2", {
       p_id: project.id,
       p_name: project.name,
       p_description: project.description || null,
@@ -94,13 +99,15 @@ export const projectApi = {
       p_priority: project.priority,
       p_tags: project.tags,
       p_owner_name: project.ownerName || null,
-      p_expected_updated_at: project.updatedAt ? new Date(project.updatedAt).toISOString() : null,
+      p_expected_lock_version: project.lockVersion ?? null,
     });
     throwOnPostgrestError(error, "保存项目");
+    const saved = (data as Array<{ updated_at: string; lock_version: number }>)[0];
+    return { updatedAt: asTimestamp(saved.updated_at), lockVersion: Number(saved.lock_version) };
   },
 
-  async saveStage(stage: ProjectStage): Promise<void> {
-    const { error } = await supabase.rpc("save_project_stage", {
+  async saveStage(stage: ProjectStage): Promise<{ updatedAt: number; lockVersion: number; sortOrder: number }> {
+    const { data, error } = await supabase.rpc("save_project_stage_v2", {
       p_id: stage.id,
       p_project_id: stage.projectId,
       p_name: stage.name,
@@ -109,58 +116,41 @@ export const projectApi = {
       p_template_key: stage.templateKey || null,
       p_start_date: stage.startDate || null,
       p_end_date: stage.endDate || null,
+      p_expected_lock_version: stage.lockVersion ?? null,
     });
     throwOnPostgrestError(error, "保存项目阶段");
+    const saved = (data as Array<{ updated_at: string; lock_version: number; sort_order: number }>)[0];
+    return { updatedAt: asTimestamp(saved.updated_at), lockVersion: Number(saved.lock_version), sortOrder: saved.sort_order };
   },
 
-  async reorderStages(projectId: string, stageIds: string[]): Promise<void> {
-    // 1. Try RPC first (if migration is deployed on remote DB)
-    const rpcResult = await supabase.rpc("reorder_project_stages", {
+  async reorderStages(projectId: string, stages: Array<Pick<ProjectStage, "id" | "sortOrder" | "lockVersion">>): Promise<Array<{ id: string; updatedAt: number; lockVersion: number; sortOrder: number }>> {
+    if (stages.some((stage) => stage.lockVersion === undefined)) {
+      throw new Error("项目阶段版本尚未加载，已阻止非条件排序");
+    }
+    const { data, error } = await supabase.rpc("reorder_project_stages_v3", {
       p_project_id: projectId,
-      p_stage_ids: stageIds,
+      p_items: stages.map((stage) => ({ id: stage.id, sort_order: stage.sortOrder, lock_version: stage.lockVersion })),
     });
-
-    if (!rpcResult.error) {
-      return;
-    }
-
-    // 2. Resilient fallback: direct 2-phase update on project_stages table
-    // Phase 1: Assign high positive sort_orders (>= 100000) to clear 0..9999 slots
-    // (Note: project_stages table has check (sort_order >= 0), so offsets must be positive)
-    for (let i = 0; i < stageIds.length; i++) {
-      const stageId = stageIds[i];
-      const { error } = await supabase
-        .from("project_stages")
-        .update({ sort_order: 100000 + i })
-        .eq("id", stageId)
-        .eq("project_id", projectId);
-      if (error) {
-        throwOnPostgrestError(error, "调整项目阶段顺序");
-      }
-    }
-
-    // Phase 2: Assign final 0-indexed sort_orders
-    for (let i = 0; i < stageIds.length; i++) {
-      const stageId = stageIds[i];
-      const { error } = await supabase
-        .from("project_stages")
-        .update({ sort_order: i })
-        .eq("id", stageId)
-        .eq("project_id", projectId);
-      if (error) {
-        throwOnPostgrestError(error, "调整项目阶段顺序");
-      }
-    }
+    throwOnPostgrestError(error, "调整项目阶段顺序");
+    return ((data ?? []) as Array<{ id: string; updated_at: string; lock_version: number; sort_order: number }>).map((stage) => ({
+      id: stage.id,
+      updatedAt: asTimestamp(stage.updated_at),
+      lockVersion: Number(stage.lock_version),
+      sortOrder: stage.sort_order,
+    }));
   },
 
-  async saveTemplate(template: ProjectTemplate): Promise<void> {
-    const { error } = await supabase.rpc("save_project_template", {
+  async saveTemplate(template: ProjectTemplate): Promise<{ updatedAt: number; lockVersion: number }> {
+    const { data, error } = await supabase.rpc("save_project_template_v2", {
       p_id: template.id,
       p_name: template.name,
       p_description: template.description || null,
       p_definition: template.definition,
+      p_expected_lock_version: template.lockVersion ?? null,
     });
     throwOnPostgrestError(error, "保存项目模板");
+    const saved = (data as Array<{ updated_at: string; lock_version: number }>)[0];
+    return { updatedAt: asTimestamp(saved.updated_at), lockVersion: Number(saved.lock_version) };
   },
 
   async createFromTemplate(project: Project, templateId: string): Promise<void> {
@@ -178,26 +168,29 @@ export const projectApi = {
     throwOnPostgrestError(error, "从模板创建项目");
   },
 
-  async deleteTemplate(id: string): Promise<void> {
-    const { error } = await supabase.rpc("soft_delete_project_template", { p_id: id });
+  async deleteTemplate(template: Pick<ProjectTemplate, "id" | "lockVersion">): Promise<void> {
+    if (template.lockVersion === undefined) throw new Error("项目模板版本尚未加载，已阻止非条件删除");
+    const { error } = await supabase.rpc("soft_delete_project_template_v3", { p_id: template.id, p_expected_lock_version: template.lockVersion });
     throwOnPostgrestError(error, "删除项目模板");
   },
 
-  async deleteProject(id: string): Promise<void> {
-    const { error } = await supabase.rpc("soft_delete_project", { p_id: id });
+  async deleteProject(project: Pick<Project, "id" | "lockVersion">): Promise<void> {
+    if (project.lockVersion === undefined) throw new Error("项目版本尚未加载，已阻止非条件删除");
+    const { error } = await supabase.rpc("soft_delete_project_v3", { p_id: project.id, p_expected_lock_version: project.lockVersion });
     throwOnPostgrestError(error, "删除项目");
   },
 
-  async deleteStage(id: string): Promise<void> {
-    const { error } = await supabase.rpc("soft_delete_project_stage", { p_id: id });
+  async deleteStage(stage: Pick<ProjectStage, "id" | "lockVersion">): Promise<void> {
+    if (stage.lockVersion === undefined) throw new Error("项目阶段版本尚未加载，已阻止非条件删除");
+    const { error } = await supabase.rpc("soft_delete_project_stage_v3", { p_id: stage.id, p_expected_lock_version: stage.lockVersion });
     throwOnPostgrestError(error, "删除项目阶段");
   },
 
-  saveTask(task: Task): Promise<number | undefined> {
+  saveTask(task: Task): Promise<import("@/services/timeManagementService").SavedTaskVersion | undefined> {
     return timeManagementApi.upsertTask(task);
   },
 
-  deleteTask(id: string): Promise<void> {
-    return timeManagementApi.deleteTask(id);
+  deleteTask(task: Pick<Task, "id" | "lockVersion">): Promise<void> {
+    return timeManagementApi.deleteTask(task);
   },
 };

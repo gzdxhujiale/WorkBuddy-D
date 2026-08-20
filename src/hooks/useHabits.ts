@@ -37,7 +37,7 @@ export function useHabitActions() {
       if (savedUpdatedAt === undefined) return;
       queryClient.setQueryData<HabitData>(HABITS_QUERY_KEY, (old) => old ? {
         ...old, habits: old.habits.map((item) => item.id === newHabit.id && item.updatedAt === newHabit.updatedAt
-          ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt } : item),
+          ? { ...item, updatedAt: savedUpdatedAt.updatedAt, baseUpdatedAt: savedUpdatedAt.updatedAt, lockVersion: savedUpdatedAt.lockVersion, isNew: false } : item),
       } : old);
     },
     getSyncKey: (habit) => habit.id,
@@ -63,27 +63,27 @@ export function useHabitActions() {
       if (savedUpdatedAt === undefined) return;
       queryClient.setQueryData<HabitData>(HABITS_QUERY_KEY, (old) => old ? {
         ...old, habits: old.habits.map((item) => item.id === habit.id && item.updatedAt === habit.updatedAt
-          ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt } : item),
+          ? { ...item, updatedAt: savedUpdatedAt.updatedAt, baseUpdatedAt: savedUpdatedAt.updatedAt, lockVersion: savedUpdatedAt.lockVersion, isNew: false } : item),
       } : old);
     },
     getSyncKey: ({ id }) => id,
   });
 
   // Delete Habit Sync
-  const { trigger: triggerDelete } = useOptimisticSync<HabitData, string>({
+  const { trigger: triggerDelete } = useOptimisticSync<HabitData, Pick<Habit, "id" | "lockVersion">>({
     queryKey: HABITS_QUERY_KEY,
     debounceMs: 0,
-    updateCache: (old, id) => {
+    updateCache: (old, { id }) => {
       const current = old ?? { habits: [], checkIns: [] };
       return {
         habits: current.habits.filter((h) => h.id !== id),
         checkIns: current.checkIns.filter((c) => c.habitId !== id),
       };
     },
-    syncFn: async (id) => {
-      await habitApi.deleteHabit(id);
+    syncFn: async (habit) => {
+      await habitApi.deleteHabit(habit);
     },
-    getSyncKey: (id) => id,
+    getSyncKey: ({ id }) => id,
   });
 
   // Toggle CheckIn Sync (0ms instant toggle)
@@ -151,9 +151,10 @@ export function useHabitActions() {
 
   const deleteHabit = useCallback(
     (id: string) => {
-      triggerDelete(id);
+      const habit = queryClient.getQueryData<HabitData>(HABITS_QUERY_KEY)?.habits.find((item) => item.id === id);
+      if (habit) triggerDelete(habit);
     },
-    [triggerDelete]
+    [HABITS_QUERY_KEY, queryClient, triggerDelete]
   );
 
   const toggleCheckIn = useCallback(

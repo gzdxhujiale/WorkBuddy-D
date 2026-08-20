@@ -20,8 +20,25 @@ const LEGACY_STORAGE_KEY = "fishbuddy_offline_operations_v1";
 function readQueue(): OfflineOperation[] {
   try {
     const raw = localStorage.getItem(userStorageKey(STORAGE_KEY)) ?? localStorage.getItem(userStorageKey(LEGACY_STORAGE_KEY));
-    return JSON.parse(raw ?? "[]");
-  } catch { return []; }
+    const parsed = JSON.parse(raw ?? "[]");
+    if (!Array.isArray(parsed)) throw new Error("离线队列格式无效");
+    return parsed.filter((item): item is OfflineOperation => (
+      item && typeof item.id === "string" && typeof item.kind === "string" && typeof item.key === "string"
+      && typeof item.createdAt === "number" && (item.state === "pending" || item.state === "conflict")
+    ));
+  } catch (error) {
+    // Keep the corrupt value for recovery instead of silently discarding it.
+    try {
+      const key = userStorageKey(STORAGE_KEY);
+      const raw = localStorage.getItem(key);
+      if (raw) localStorage.setItem(`${key}_corrupt_${Date.now()}`, raw);
+      localStorage.removeItem(key);
+    } catch {
+      // Storage itself may be unavailable; report the original failure below.
+    }
+    console.error("[offlineSyncQueue] Failed to read persisted queue", error);
+    return [];
+  }
 }
 function writeQueue(items: OfflineOperation[]) {
   localStorage.setItem(userStorageKey(STORAGE_KEY), JSON.stringify(items));
@@ -36,9 +53,7 @@ export async function runOrQueue<T>(operation: Omit<OfflineOperation, "id" | "cr
     return await remote();
   } catch (error) {
     const syncError = toDataSyncError(error, "同步失败");
-    const networkFailure = syncError.state === "offline" ||
-      syncError.originalError instanceof TypeError ||
-      /network|fetch|connection|timeout/i.test(syncError.message);
+    const networkFailure = syncError.state === "offline" || syncError.originalError instanceof TypeError;
     if (!networkFailure) throw syncError;
     const queue = readQueue().filter((item) => item.key !== operation.key);
     queue.push({ ...operation, id: crypto.randomUUID(), createdAt: Date.now(), state: "pending" });
@@ -53,7 +68,12 @@ export async function flushOfflineQueue(): Promise<void> {
   for (const item of readQueue()) {
     if (item.state === "conflict") continue;
     const executor = executors.get(item.kind);
-    if (!executor) continue;
+    if (!executor) {
+      writeQueue(readQueue().map((candidate) => candidate.id === item.id
+        ? { ...candidate, state: "conflict" as const, error: `未注册离线操作执行器: ${item.kind}` }
+        : candidate));
+      continue;
+    }
     try {
       await executor(item.payload);
       writeQueue(readQueue().filter((candidate) => candidate.id !== item.id));

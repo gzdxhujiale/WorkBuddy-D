@@ -62,7 +62,7 @@ export function useReviewActions() {
       queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
         old?.map((item) =>
           item.id === review.id && item.updatedAt === review.updatedAt
-            ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+            ? { ...item, updatedAt: savedUpdatedAt.updatedAt, baseUpdatedAt: savedUpdatedAt.updatedAt, lockVersion: savedUpdatedAt.lockVersion, isNew: false }
             : item,
         ) ?? old,
       );

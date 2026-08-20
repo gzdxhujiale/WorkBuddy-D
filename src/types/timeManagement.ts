@@ -26,6 +26,8 @@ export interface Task {
   assigneeName?: string;
   createdAt: number;
   updatedAt?: number;
+  lockVersion?: number;
+  isNew?: boolean;
   baseUpdatedAt?: number;
 }
 

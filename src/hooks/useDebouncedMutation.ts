@@ -3,6 +3,8 @@ import { useRef, useEffect, useCallback } from "react";
 type DebouncedMutationOptions = {
   /** Called once while a key has either a queued or an in-flight task. */
   onTaskStateChange?: (key: string, pending: boolean) => void;
+  /** Called for every persistence failure so callers can reconcile optimistic state. */
+  onTaskError?: (key: string, error: unknown) => void;
 };
 
 export function useDebouncedMutation(options: DebouncedMutationOptions = {}) {
@@ -11,9 +13,11 @@ export function useDebouncedMutation(options: DebouncedMutationOptions = {}) {
   const inFlightRef = useRef<Set<string>>(new Set());
   const drainWaitersRef = useRef<Map<string, Array<() => void>>>(new Map());
   const onTaskStateChangeRef = useRef(options.onTaskStateChange);
+  const onTaskErrorRef = useRef(options.onTaskError);
   const runRef = useRef<(key: string) => Promise<void>>(async () => {});
 
   onTaskStateChangeRef.current = options.onTaskStateChange;
+  onTaskErrorRef.current = options.onTaskError;
 
   const setPendingState = useCallback((key: string, pending: boolean) => {
     onTaskStateChangeRef.current?.(key, pending);
@@ -36,9 +40,8 @@ export function useDebouncedMutation(options: DebouncedMutationOptions = {}) {
     try {
       await task();
     } catch (err) {
-      if (process.env.NODE_ENV !== "production") {
-        console.warn(`[DebouncedMutation] Task execution failed for ${key}`, err);
-      }
+      console.error(`[DebouncedMutation] Task execution failed for ${key}`, err);
+      onTaskErrorRef.current?.(key, err);
     } finally {
       inFlightRef.current.delete(key);
 

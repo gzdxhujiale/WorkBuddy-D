@@ -15,6 +15,8 @@ export interface Project {
   ownerName?: string;
   createdAt: number;
   updatedAt: number;
+  lockVersion?: number;
+  isNew?: boolean;
 }
 
 export interface ProjectStage {
@@ -26,6 +28,9 @@ export interface ProjectStage {
   templateKey?: string;
   startDate?: string;
   endDate?: string;
+  updatedAt?: number;
+  lockVersion?: number;
+  isNew?: boolean;
 }
 
 export interface ProjectTask extends Task {
@@ -62,6 +67,8 @@ export interface ProjectTemplate {
   description?: string;
   definition: ProjectTemplateDefinition;
   updatedAt: number;
+  lockVersion?: number;
+  isNew?: boolean;
 }
 
 export interface ProjectCenterData {

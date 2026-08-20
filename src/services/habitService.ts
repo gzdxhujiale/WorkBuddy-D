@@ -11,8 +11,10 @@ function checkInHistoryStartDate(): string {
   return date.toISOString().slice(0, 10);
 }
 
-function saveHabit(habit: Habit) {
-  return supabase.rpc("save_habit", {
+export type SavedHabitVersion = { updatedAt: number; lockVersion: number };
+
+async function saveHabit(habit: Habit): Promise<SavedHabitVersion> {
+  const { data, error } = await supabase.rpc("save_habit_v2", {
     p_id: habit.id,
     p_name: habit.name,
     p_frequency_type: habit.frequencyType,
@@ -23,16 +25,19 @@ function saveHabit(habit: Habit) {
     p_reminder: habit.checkInTime || habit.reminder || null,
     p_auto_popup_log: habit.autoPopupLog,
     p_sort_order: habit.sortOrder,
-    p_expected_updated_at: habit.baseUpdatedAt ? new Date(habit.baseUpdatedAt).toISOString() : null,
+    p_expected_lock_version: habit.lockVersion ?? null,
   });
+  throwOnPostgrestError(error, "保存习惯");
+  const saved = (data as Array<{ updated_at: string; lock_version: number }>)[0];
+  return { updatedAt: new Date(saved.updated_at).getTime(), lockVersion: Number(saved.lock_version) };
 }
 registerOfflineExecutor("habit:save", async (payload) => {
-  const { error } = await saveHabit(payload as Habit);
-  throwOnPostgrestError(error, "保存习惯");
+  await saveHabit(payload as Habit);
 });
 registerOfflineExecutor("habit:delete", async (payload) => {
-  const id = payload as string;
-  const { error } = await supabase.rpc("soft_delete_habit", { p_id: id });
+  const habit = payload as Pick<Habit, "id" | "lockVersion">;
+  if (habit.lockVersion === undefined) throw new Error("习惯版本尚未加载，已阻止非条件删除");
+  const { error } = await supabase.rpc("soft_delete_habit_v3", { p_id: habit.id, p_expected_lock_version: habit.lockVersion });
   throwOnPostgrestError(error, "删除习惯");
 });
 
@@ -42,7 +47,7 @@ export const habitApi = {
       const [habitsRes, checkInsRes] = await Promise.all([
         supabase
           .from("habits")
-          .select("id,name,frequency_type,goal,start_date,duration,category,reminder,auto_popup_log,sort_order,created_at,updated_at")
+          .select("id,name,frequency_type,goal,start_date,duration,category,reminder,auto_popup_log,sort_order,created_at,updated_at,lock_version")
           .is("deleted_at", null)
           .order("sort_order", { ascending: true })
           .order("created_at", { ascending: true }),
@@ -72,6 +77,7 @@ export const habitApi = {
         sortOrder: r.sort_order,
         createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
         updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : Date.now(),
+        lockVersion: Number(r.lock_version),
         baseUpdatedAt: r.updated_at ? new Date(r.updated_at).getTime() : undefined,
       }));
 
@@ -93,25 +99,22 @@ export const habitApi = {
     return { habits: [], checkIns: [] };
   },
 
-  createHabit: async (habit: Habit): Promise<number | undefined> => {
+  createHabit: async (habit: Habit): Promise<SavedHabitVersion | undefined> => {
     return runOrQueue({ kind: "habit:save", key: `habit:${habit.id}`, payload: habit }, async () => {
-      const { data, error } = await saveHabit(habit);
-      throwOnPostgrestError(error, "创建习惯");
-      return new Date(data as string).getTime();
+      return saveHabit(habit);
     });
   },
 
-  updateHabit: async (habit: Habit): Promise<number | undefined> => {
+  updateHabit: async (habit: Habit): Promise<SavedHabitVersion | undefined> => {
     return runOrQueue({ kind: "habit:save", key: `habit:${habit.id}`, payload: habit }, async () => {
-      const { data, error } = await saveHabit(habit);
-      throwOnPostgrestError(error, "更新习惯");
-      return new Date(data as string).getTime();
+      return saveHabit(habit);
     });
   },
 
-  deleteHabit: async (id: string): Promise<void> => {
-    await runOrQueue({ kind: "habit:delete", key: `habit:${id}`, payload: id }, async () => {
-      const { error } = await supabase.rpc("soft_delete_habit", { p_id: id });
+  deleteHabit: async (habit: Pick<Habit, "id" | "lockVersion">): Promise<void> => {
+    if (habit.lockVersion === undefined) throw new Error("习惯版本尚未加载，已阻止非条件删除");
+    await runOrQueue({ kind: "habit:delete", key: `habit:${habit.id}`, payload: habit }, async () => {
+      const { error } = await supabase.rpc("soft_delete_habit_v3", { p_id: habit.id, p_expected_lock_version: habit.lockVersion });
       throwOnPostgrestError(error, "删除习惯");
     });
   },

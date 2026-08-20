@@ -8,6 +8,7 @@ import {
   DB_QUADRANT_MAP,
   QuadrantType,
   ScheduleMode,
+  parseReminder,
 } from "@/types/timeManagement";
 
 
@@ -39,27 +40,32 @@ function resolveSchedule(task: Task): {
   return { scheduleMode, scheduledStartAt, scheduledEndAt };
 }
 
-async function saveRemoteTask(task: Task): Promise<number> {
+export type SavedTaskVersion = { updatedAt: number; lockVersion: number };
+
+async function saveRemoteTask(task: Task): Promise<SavedTaskVersion> {
   const schedule = resolveSchedule(task);
-  const { data, error } = await supabase.rpc("save_time_management_task", {
+  const { data, error } = await supabase.rpc("save_time_management_task_v2", {
     p_id: task.id, p_title: task.title, p_quadrant: QUADRANT_DB_MAP[task.quadrant] || task.quadrant,
     p_schedule_mode: schedule.scheduleMode || null,
     p_scheduled_start_at: schedule.scheduledStartAt ? new Date(schedule.scheduledStartAt).toISOString() : null,
     p_scheduled_end_at: schedule.scheduledEndAt ? new Date(schedule.scheduledEndAt).toISOString() : null,
     p_completed: task.completed,
-    p_description: task.description || null, p_reminder: task.reminder ? JSON.parse(task.reminder) : null,
+    p_description: task.description || null, p_reminder: parseReminder(task.reminder),
     p_project_id: task.projectId || null,
     p_project_stage_id: task.projectStageId || null,
     p_priority: task.priority || "medium",
     p_assignee_name: task.assigneeName || null,
-    p_expected_updated_at: task.baseUpdatedAt ? new Date(task.baseUpdatedAt).toISOString() : null,
+    p_expected_lock_version: task.lockVersion ?? null,
   });
   throwOnPostgrestError(error, "保存任务");
-  return new Date(data as string).getTime();
+  const saved = (data as Array<{ updated_at: string; lock_version: number }>)[0];
+  return { updatedAt: new Date(saved.updated_at).getTime(), lockVersion: Number(saved.lock_version) };
 }
 registerOfflineExecutor("task:save", async (payload) => { await saveRemoteTask(payload as Task); });
 registerOfflineExecutor("task:delete", async (payload) => {
-  const { error } = await supabase.rpc("soft_delete_time_management_task", { p_id: payload as string });
+  const task = payload as Pick<Task, "id" | "lockVersion">;
+  if (task.lockVersion === undefined) throw new Error("任务版本尚未加载，已阻止非条件删除");
+  const { error } = await supabase.rpc("soft_delete_time_management_task_v3", { p_id: task.id, p_expected_lock_version: task.lockVersion });
   throwOnPostgrestError(error, "删除任务");
 });
 
@@ -68,7 +74,7 @@ export const timeManagementApi = {
     try {
       const { data: dbTasks, error: tasksErr } = await supabase
         .from("time_management_tasks")
-        .select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,project_id,project_stage_id,priority,assignee_name,created_at,updated_at")
+        .select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,project_id,project_stage_id,priority,assignee_name,created_at,updated_at,lock_version")
         .eq("user_id", userId)
         .is("deleted_at", null)
         .order("created_at", { ascending: false });
@@ -96,6 +102,7 @@ export const timeManagementApi = {
           assigneeName: t.assignee_name || undefined,
           createdAt: t.created_at ? new Date(t.created_at).getTime() : Date.now(),
           updatedAt: t.updated_at ? new Date(t.updated_at).getTime() : undefined,
+          lockVersion: Number(t.lock_version),
           baseUpdatedAt: t.updated_at ? new Date(t.updated_at).getTime() : undefined,
         }));
 
@@ -108,13 +115,14 @@ export const timeManagementApi = {
     return { tasks: [] };
   },
 
-  upsertTask: async (task: Task): Promise<number | undefined> => {
+  upsertTask: async (task: Task): Promise<SavedTaskVersion | undefined> => {
     return runOrQueue({ kind: "task:save", key: `task:${task.id}`, payload: task }, () => saveRemoteTask(task));
   },
 
-  deleteTask: async (id: string): Promise<void> => {
-    await runOrQueue({ kind: "task:delete", key: `task:${id}`, payload: id }, async () => {
-      const { error } = await supabase.rpc("soft_delete_time_management_task", { p_id: id });
+  deleteTask: async (task: Pick<Task, "id" | "lockVersion">): Promise<void> => {
+    if (task.lockVersion === undefined) throw new Error("任务版本尚未加载，已阻止非条件删除");
+    await runOrQueue({ kind: "task:delete", key: `task:${task.id}`, payload: task }, async () => {
+      const { error } = await supabase.rpc("soft_delete_time_management_task_v3", { p_id: task.id, p_expected_lock_version: task.lockVersion });
       throwOnPostgrestError(error, "删除任务");
     });
   },

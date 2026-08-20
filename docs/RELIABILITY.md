@@ -8,6 +8,8 @@ This document defines how WorkBuddy-D should behave when its client, network, da
 
 The application depends on a local Tauri runtime and Supabase Auth/PostgREST/RPC/Realtime. Relevant failures include missing or expired sessions, offline or transient network failures, Supabase outages, stale concurrent edits, missed Broadcast messages, secondary-window lifecycle changes, and process/window closure during focus work.
 
+Failure handling must preserve the primary data contract. An error is not resolved by silently retrying through a weaker path, manufacturing a default business value, or bypassing a failed versioned RPC with a direct update. Supported resilience has an explicit durable/recovery design; all other failures remain visible to the caller or become a documented conflict.
+
 ## Reliability invariants
 
 | Invariant | Current mechanism | Evidence |
@@ -27,7 +29,7 @@ This behavior is not universal: only domains that call `runOrQueue` receive it. 
 
 ## Concurrency, data recovery, and loading
 
-The database owns versions, timestamps, state-transition facts, and initial order. Clients may render optimistic state but must replace it with returned database values and preserve a conflict rather than generating a new client version. New list/group/note ordering is serialized by database-side advisory locks.
+The database owns versions, timestamps, state-transition facts, and initial order. Clients may render optimistic state but must replace it with returned database values and preserve a conflict rather than generating a new client version. Structural changes (move, reorder, soft delete) are version-checked database RPCs; a failed optimistic operation invalidates its active query rather than restoring a potentially stale whole-query snapshot.
 
 Private Broadcast is deliberately lossy as a data channel. The client batches invalidations for 500 ms and rate-limits a repeated target for 2 seconds; active queries refetch through RLS. A missed event is recovered by normal loading rather than a replay queue.
 

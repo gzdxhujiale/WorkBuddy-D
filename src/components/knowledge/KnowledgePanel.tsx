@@ -588,6 +588,7 @@ interface NoteDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (id: string, title: string, content: string) => void;
+  onFlush: (id: string) => Promise<void>;
   onDuplicate: (note: Note) => void;
   onSaveAsTemplate: (note: Note) => void;
   onDelete: (note: Note) => void;
@@ -600,6 +601,7 @@ function NoteDrawerContent({
   isOpen,
   onClose,
   onUpdate,
+  onFlush,
   onDuplicate,
   onSaveAsTemplate,
   onDelete,
@@ -609,6 +611,7 @@ function NoteDrawerContent({
   isOpen: boolean;
   onClose: () => void;
   onUpdate: (id: string, title: string, content: string) => void;
+  onFlush: (id: string) => Promise<void>;
   onDuplicate: (note: Note) => void;
   onSaveAsTemplate: (note: Note) => void;
   onDelete: (note: Note) => void;
@@ -619,6 +622,7 @@ function NoteDrawerContent({
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
 
   const isDirtyRef = useRef(false);
+  const wasOpenRef = useRef(isOpen);
   const latestDataRef = useRef({ title: note.title, content: note.content || '', note, contentLoaded: note.contentLoaded === true });
   const onUpdateRef = useRef(onUpdate);
 
@@ -643,11 +647,28 @@ function NoteDrawerContent({
       if (isDirtyRef.current) {
         const { note: currentNote, title: currentTitle, content: currentContent, contentLoaded } = latestDataRef.current;
         if (currentNote && contentLoaded) {
+          isDirtyRef.current = false;
           onUpdateRef.current(currentNote.id, currentTitle, currentContent);
+          void onFlush(currentNote.id);
         }
       }
     };
   }, []);
+
+  // The drawer stays mounted while it animates off-screen. Closing therefore
+  // clears the UI debounce without unmounting the component; explicitly
+  // commit and drain the final draft before the parent can tear down.
+  useEffect(() => {
+    if (wasOpenRef.current && !isOpen && isDirtyRef.current) {
+      const { note: currentNote, title: currentTitle, content: currentContent, contentLoaded } = latestDataRef.current;
+      if (contentLoaded) {
+        isDirtyRef.current = false;
+        onUpdateRef.current(currentNote.id, currentTitle, currentContent);
+        void onFlush(currentNote.id);
+      }
+    }
+    wasOpenRef.current = isOpen;
+  }, [isOpen, onFlush]);
 
   useEffect(() => {
     if (!isOpen || note.contentLoaded !== true) return;
@@ -789,6 +810,7 @@ function NoteDrawer({
   isLoading,
   onClose,
   onUpdate,
+  onFlush,
   onDuplicate,
   onSaveAsTemplate,
   onDelete,
@@ -848,6 +870,7 @@ function NoteDrawer({
             isOpen={isOpen}
             onClose={onClose}
             onUpdate={onUpdate}
+            onFlush={onFlush}
             onDuplicate={onDuplicate}
             onSaveAsTemplate={onSaveAsTemplate}
             onDelete={onDelete}
@@ -1160,6 +1183,7 @@ export function KnowledgePanel() {
     deleteKnowledgeFolder,
     addNote,
     updateNote,
+    flushNote,
     deleteNote,
     addGroup,
     updateGroup,
@@ -1826,6 +1850,7 @@ export function KnowledgePanel() {
                 isPixelTheme={isPixelTheme}
                 onClose={() => setIsDrawerOpen(false)}
                 onUpdate={handleNoteUpdate}
+                onFlush={flushNote}
                 onDuplicate={handleDuplicateNote}
                 onSaveAsTemplate={handleSaveAsTemplate}
                 onDelete={handleDeleteNote}

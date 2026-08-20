@@ -24,7 +24,6 @@ export function useOptimisticSync<TData, TVariables>({
 }: OptimisticSyncOptions<TData, TVariables>) {
   const queryClient = useQueryClient();
   const pendingVarsRef = useRef(new Map<string, TVariables>());
-  const previousDataRef = useRef(new Map<string, TData | undefined>());
   const timerRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const versionRef = useRef(new Map<string, number>());
   const inFlightKeysRef = useRef(new Set<string>());
@@ -59,10 +58,12 @@ export function useOptimisticSync<TData, TVariables>({
         clearQueryPending(queryKey);
       } catch (err) {
         console.error("[useOptimisticSync] Sync persistence error:", err);
-        // Do not overwrite a newer local edit made while this request was in flight.
+        // Never restore a whole-query snapshot here: a failure for entity A
+        // must not erase a newer optimistic edit for entity B. Refetch only
+        // when this is still the newest operation for the entity.
         if ((versionRef.current.get(key) ?? 0) === version) {
-          queryClient.setQueryData(queryKey, previousDataRef.current.get(key));
           clearQueryPending(queryKey);
+          void queryClient.invalidateQueries({ queryKey, refetchType: "active" });
         }
       } finally {
         inFlightKeysRef.current.delete(key);
@@ -79,9 +80,7 @@ export function useOptimisticSync<TData, TVariables>({
     (vars: TVariables) => {
       const key = getSyncKey(vars);
       // 1. Immediate optimistic UI update
-      const before = queryClient.getQueryData<TData>(queryKey);
       queryClient.setQueryData<TData>(queryKey, (old) => updateCache(old, vars));
-      previousDataRef.current.set(key, before);
       pendingVarsRef.current.set(key, vars);
       markQueryPending(queryKey);
       versionRef.current.set(key, (versionRef.current.get(key) ?? 0) + 1);

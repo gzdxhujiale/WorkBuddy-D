@@ -15,13 +15,16 @@ function readReviewContent(content: unknown): string {
   return JSON.stringify(content);
 }
 
-async function saveRemote(review: DailyReviewItem): Promise<number> {
-  const { data, error } = await supabase.rpc("save_daily_review", {
+export type SavedDailyReviewVersion = { updatedAt: number; lockVersion: number };
+
+async function saveRemote(review: DailyReviewItem): Promise<SavedDailyReviewVersion> {
+  const { data, error } = await supabase.rpc("save_daily_review_v2", {
     p_id: review.id, p_date: review.date, p_content: { text: review.content },
-    p_expected_updated_at: review.baseUpdatedAt ? new Date(review.baseUpdatedAt).toISOString() : null,
+    p_expected_lock_version: review.lockVersion ?? null,
   });
   throwOnPostgrestError(error, "保存每日复盘");
-  return new Date(data as string).getTime();
+  const saved = (data as Array<{ updated_at: string; lock_version: number }>)[0];
+  return { updatedAt: new Date(saved.updated_at).getTime(), lockVersion: Number(saved.lock_version) };
 }
 
 registerOfflineExecutor("daily-review:save", async (payload) => { await saveRemote(payload as DailyReviewItem); });
@@ -31,7 +34,7 @@ export const dailyReviewApi = {
     try {
       const { data: dbReviews, error } = await supabase
         .from("daily_reviews")
-        .select("id,date,content,created_at,updated_at")
+        .select("id,date,content,created_at,updated_at,lock_version")
         .gte("date", "2026-01-01")
         .order("date", { ascending: false });
 
@@ -49,6 +52,7 @@ export const dailyReviewApi = {
             content: contentStr,
             createdAt: r.created_at ? new Date(r.created_at).getTime() : Date.now(),
             updatedAt: r.updated_at ? new Date(r.updated_at).getTime() : Date.now(),
+            lockVersion: Number(r.lock_version),
             baseUpdatedAt: r.updated_at ? new Date(r.updated_at).getTime() : undefined,
           };
         });
@@ -66,7 +70,7 @@ export const dailyReviewApi = {
     try {
       const { data, error } = await supabase
         .from("daily_reviews")
-        .select("id,date,content,created_at,updated_at")
+        .select("id,date,content,created_at,updated_at,lock_version")
         .eq("date", date)
         .maybeSingle();
 
@@ -79,6 +83,7 @@ export const dailyReviewApi = {
           content: contentStr,
           createdAt: data.created_at ? new Date(data.created_at).getTime() : Date.now(),
           updatedAt: data.updated_at ? new Date(data.updated_at).getTime() : Date.now(),
+          lockVersion: Number(data.lock_version),
           baseUpdatedAt: data.updated_at ? new Date(data.updated_at).getTime() : undefined,
         };
         return review;
@@ -87,7 +92,7 @@ export const dailyReviewApi = {
     return null;
   },
 
-  upsertReview: async (review: DailyReviewItem): Promise<number | undefined> => {
+  upsertReview: async (review: DailyReviewItem): Promise<SavedDailyReviewVersion | undefined> => {
     return runOrQueue({ kind: "daily-review:save", key: `daily-review:${review.date}`, payload: review }, () => saveRemote(review));
   },
 

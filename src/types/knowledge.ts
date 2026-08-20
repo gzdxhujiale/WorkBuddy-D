@@ -4,6 +4,8 @@ export interface KnowledgeFolder {
   name: string;
   knowledgeBaseId: string | null;
   sortOrder?: number;
+  lockVersion?: number;
+  isNew?: boolean;
 }
 
 /** The top-level container in the knowledge hierarchy. */
@@ -11,6 +13,8 @@ export interface KnowledgeBase {
   id: string;
   name: string;
   sortOrder?: number;
+  lockVersion?: number;
+  isNew?: boolean;
 }
 
 export interface NoteGroup {
@@ -18,6 +22,8 @@ export interface NoteGroup {
   folderId: string;
   name: string;
   sortOrder?: number;
+  lockVersion?: number;
+  isNew?: boolean;
 }
 
 export interface Note {
@@ -41,6 +47,8 @@ export interface KnowledgeTemplate {
   id: string;
   name: string;
   content: string;
+  lockVersion?: number;
+  isNew?: boolean;
 }
 
 export interface KnowledgeData {

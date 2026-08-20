@@ -14,6 +14,8 @@ export interface Habit {
   sortOrder: number;
   createdAt: number;
   updatedAt: number;
+  lockVersion?: number;
+  isNew?: boolean;
   baseUpdatedAt?: number;
 }
 

@@ -110,7 +110,7 @@ export function useTaskActions() {
               ...old,
               tasks: old.tasks.map((item) =>
                 item.id === task.id && item.updatedAt === task.updatedAt
-                  ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+                  ? { ...item, updatedAt: savedUpdatedAt.updatedAt, baseUpdatedAt: savedUpdatedAt.updatedAt, lockVersion: savedUpdatedAt.lockVersion, isNew: false }
                   : item
               ),
             }
@@ -123,7 +123,7 @@ export function useTaskActions() {
                 ...old,
                 tasks: old.tasks.map((item) =>
                   item.id === task.id && item.updatedAt === task.updatedAt
-                    ? { ...item, updatedAt: savedUpdatedAt, baseUpdatedAt: savedUpdatedAt }
+                    ? { ...item, updatedAt: savedUpdatedAt.updatedAt, baseUpdatedAt: savedUpdatedAt.updatedAt, lockVersion: savedUpdatedAt.lockVersion, isNew: false }
                     : item
                 ),
               }
@@ -135,20 +135,20 @@ export function useTaskActions() {
   });
 
   // Delete Sync
-  const { trigger: triggerDelete } = useOptimisticSync<TimeManagementData, string>({
+  const { trigger: triggerDelete } = useOptimisticSync<TimeManagementData, Pick<Task, "id" | "lockVersion">>({
     queryKey: QUERY_KEY,
     debounceMs: 0, // Delete immediately
-    updateCache: (old, taskId) => {
+    updateCache: (old, { id: taskId }) => {
       const current = old ?? { tasks: [] };
       return {
         ...current,
         tasks: current.tasks.filter((t) => t.id !== taskId),
       };
     },
-    syncFn: async (taskId) => {
-      await timeManagementApi.deleteTask(taskId);
+    syncFn: async (task) => {
+      await timeManagementApi.deleteTask(task);
     },
-    getSyncKey: (taskId) => taskId,
+    getSyncKey: ({ id }) => id,
   });
 
   const addTask = useCallback(
@@ -218,8 +218,10 @@ export function useTaskActions() {
                   item.id === taskId
                     ? {
                         ...item,
-                        updatedAt: savedUpdatedAt,
-                        baseUpdatedAt: savedUpdatedAt,
+                        updatedAt: savedUpdatedAt.updatedAt,
+                        baseUpdatedAt: savedUpdatedAt.updatedAt,
+                        lockVersion: savedUpdatedAt.lockVersion,
+                        isNew: false,
                       }
                     : item
                 ),
@@ -237,8 +239,10 @@ export function useTaskActions() {
                     item.id === taskId
                       ? {
                           ...item,
-                          updatedAt: savedUpdatedAt,
-                          baseUpdatedAt: savedUpdatedAt,
+                          updatedAt: savedUpdatedAt.updatedAt,
+                          baseUpdatedAt: savedUpdatedAt.updatedAt,
+                          lockVersion: savedUpdatedAt.lockVersion,
+                          isNew: false,
                         }
                       : item
                   ),
@@ -299,10 +303,12 @@ export function useTaskActions() {
 
   const deleteTask = useCallback(
     (taskId: string) => {
-      triggerDelete(taskId);
+      const task = queryClient.getQueryData<TimeManagementData>(QUERY_KEY)?.tasks.find((item) => item.id === taskId);
+      if (!task) return;
+      triggerDelete(task);
       syncDeleteToProjects(taskId);
     },
-    [triggerDelete, syncDeleteToProjects]
+    [QUERY_KEY, queryClient, triggerDelete, syncDeleteToProjects]
   );
 
   return {

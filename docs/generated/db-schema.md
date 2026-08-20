@@ -80,7 +80,7 @@ These rows are the lists/containers displayed inside a knowledge base; older cod
 | `title` | `text` | Note title. |
 | `content` | `text` | Tiptap JSON content. The application deliberately fetches it on demand. |
 | `sort_order` | `integer` | Display order within the group/root scope. |
-| `lock_version` | `bigint` | Monotonic optimistic-concurrency token for versioned note RPCs. |
+| `lock_version` | `bigint` | Monotonic optimistic-concurrency token on notes and every independently editable user entity. |
 
 #### `knowledge_base_templates`
 
@@ -218,7 +218,7 @@ It deliberately excludes note bodies and complete row values. The main client co
 
 ## Timestamp ownership, locking, and ordering
 
-`created_at` defaults to `now()` and `updated_at` is maintained by a database `BEFORE UPDATE` trigger. Client write payloads never set either field. Notes additionally maintain a monotonic `lock_version` in a `BEFORE UPDATE` trigger; their V2 RPCs pass it as `p_expected_lock_version`, return the new value, and raise `VERSION_CONFLICT` for stale writes. Other versioned domains continue to use their own documented contracts.
+`created_at` defaults to `now()` and `updated_at` is maintained by a database `BEFORE UPDATE` trigger. Client write payloads never set either field. Notes and all independently editable user entities maintain a monotonic `lock_version` in a `BEFORE UPDATE` trigger; V2 save RPCs and V3 structural-mutation RPCs pass it as `p_expected_lock_version` (or per-row order items), return the new value where applicable, and raise `VERSION_CONFLICT` for stale writes. `habit_checkins` remain idempotent state facts and focus sessions remain state-machine operations.
 
 `deleted_at` is assigned by soft-delete RPCs. `completed_at` is assigned or cleared as task completion changes. Focus-session `started_at` and terminal `ended_at` are assigned by focus RPCs. New list/group/note ordering is assigned by save RPCs using transaction advisory locks within the relevant parent scope.
 

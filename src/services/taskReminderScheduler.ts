@@ -3,6 +3,33 @@ import { Task, parseReminder, TaskReminder } from "@/types/timeManagement";
 import { sendDesktopNotification, requestNotificationPermission } from "./notificationService";
 
 const notifiedTasks = new Set<string>();
+const NOTIFIED_STORAGE_KEY = "workbuddy_task_reminders_v1";
+const NOTIFICATION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+
+function readNotifiedTasks(): Set<string> {
+  try {
+    const raw = localStorage.getItem(NOTIFIED_STORAGE_KEY);
+    const entries = JSON.parse(raw ?? "[]") as Array<[string, number]>;
+    const cutoff = Date.now() - NOTIFICATION_RETENTION_MS;
+    const retained = entries.filter(([key, sentAt]) => typeof key === "string" && typeof sentAt === "number" && sentAt >= cutoff);
+    if (retained.length !== entries.length) localStorage.setItem(NOTIFIED_STORAGE_KEY, JSON.stringify(retained));
+    return new Set(retained.map(([key]) => key));
+  } catch {
+    return new Set();
+  }
+}
+
+function markNotified(key: string): void {
+  notifiedTasks.add(key);
+  try {
+    const cutoff = Date.now() - NOTIFICATION_RETENTION_MS;
+    const existing = JSON.parse(localStorage.getItem(NOTIFIED_STORAGE_KEY) ?? "[]") as Array<[string, number]>;
+    const next = [...existing.filter(([savedKey, sentAt]) => savedKey !== key && sentAt >= cutoff), [key, Date.now()] as [string, number]];
+    localStorage.setItem(NOTIFIED_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    // Notification delivery must still work if local storage is unavailable.
+  }
+}
 
 export function getTaskTargetDate(task: Task): dayjs.Dayjs {
   if (task.scheduledEndAt) return dayjs(task.scheduledEndAt);
@@ -29,6 +56,7 @@ export function computeTaskReminderTime(task: Task): number | null {
 
 export function checkTaskReminders(tasks: Task[]): void {
   const now = Date.now();
+  const persistedNotified = readNotifiedTasks();
 
   tasks.forEach((task) => {
     if (task.completed) return;
@@ -37,9 +65,11 @@ export function checkTaskReminders(tasks: Task[]): void {
     if (!remTime) return;
 
     const key = `${task.id}-${remTime}`;
-    // If reminder time reached (within 2-minute window and not yet notified)
-    if (now >= remTime && now - remTime <= 120 * 1000 && !notifiedTasks.has(key)) {
-      notifiedTasks.add(key);
+    // A reminder is delivered once even if the app was closed at its exact
+    // scheduled minute. The persisted key prevents duplicate delivery on a
+    // restart; changing the reminder produces a new key.
+    if (now >= remTime && !notifiedTasks.has(key) && !persistedNotified.has(key)) {
+      markNotified(key);
 
       const targetDate = getTaskTargetDate(task);
       const dateText = targetDate.format("M月D日 HH:mm");

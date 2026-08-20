@@ -68,7 +68,7 @@ export const TimeManagementPanel: React.FC = () => {
     task?: Task,
     quadrant: QuadrantType = "Q2",
     anchorEl?: HTMLElement,
-    initialDate?: string
+    _initialDate?: string
   ) => {
     const targetEl = anchorEl || document.body;
     void openQuickEditWindow({
@@ -79,14 +79,11 @@ export const TimeManagementPanel: React.FC = () => {
         updateTask(taskId, updates);
       },
       onCreate: (targetQ, draft) => {
-        const fallbackEndAt = initialDate
-          ? new Date(`${initialDate}T23:59:59.999`).getTime()
-          : undefined;
         addTask(draft.title, targetQ, {
           description: draft.description,
-          scheduleMode: draft.scheduleMode ?? (fallbackEndAt ? "point" : undefined),
+          scheduleMode: draft.scheduleMode,
           scheduledStartAt: draft.scheduledStartAt,
-          scheduledEndAt: draft.scheduledEndAt ?? fallbackEndAt,
+          scheduledEndAt: draft.scheduledEndAt,
           reminder: draft.reminder,
         });
       },

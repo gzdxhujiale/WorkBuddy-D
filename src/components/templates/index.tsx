@@ -46,7 +46,10 @@ export function useTemplateActions() {
   };
 
   const deleteTemplateFn = async (id: string) => {
-    await deleteTemplate(id);
+    const data = queryClient.getQueryData<KnowledgeTemplate[]>(TEMPLATE_QUERY_KEY) ?? await loadTemplates();
+    const target = data.find((template) => template.id === id);
+    if (!target) return;
+    await deleteTemplate(target);
     queryClient.invalidateQueries({ queryKey: TEMPLATE_QUERY_KEY });
   };
 

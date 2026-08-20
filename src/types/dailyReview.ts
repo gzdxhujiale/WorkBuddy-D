@@ -6,6 +6,9 @@ export interface DailyReviewItem {
   content: string; // Text or HTML/JSON content string
   createdAt: number; // Timestamp ms
   updatedAt: number; // Timestamp ms
+  /** Database-owned optimistic-concurrency token; absent only before insert. */
+  lockVersion?: number;
+  isNew?: boolean;
   /** Server version the pending edit was based on; omitted for a new review. */
   baseUpdatedAt?: number;
 }

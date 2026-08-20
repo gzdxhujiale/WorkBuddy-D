@@ -132,31 +132,31 @@ function getHabitsForDate(habits: Habit[], dateStr: string): Habit[] {
 }
 
 function getCheckInStatus(checkIns: HabitCheckIn[], habitId: string, dateStr: string): boolean {
-  return checkIns.some((ci) => ci.habitId === habitId && ci.date === dateStr);
+  return checkIns.some((ci) => ci.habitId === habitId && ci.date === dateStr && ci.completed);
 }
 
 function getHabitStreak(checkIns: HabitCheckIn[], habitId: string): number {
-  const habitCheckIns = checkIns
-    .filter((ci) => ci.habitId === habitId)
-    .map((ci) => ci.date)
-    .sort()
-    .reverse();
+  const habitCheckIns = new Set(
+    checkIns
+      .filter((ci) => ci.habitId === habitId && ci.completed)
+      .map((ci) => ci.date),
+  );
 
-  if (habitCheckIns.length === 0) return 0;
+  if (habitCheckIns.size === 0) return 0;
 
   const today = todayYMD();
   const yesterday = formatDateYMD(new Date(Date.now() - 86400000));
 
-  if (!habitCheckIns.includes(today) && !habitCheckIns.includes(yesterday)) {
+  if (!habitCheckIns.has(today) && !habitCheckIns.has(yesterday)) {
     return 0;
   }
 
   let streak = 0;
-  let checkDate = habitCheckIns.includes(today) ? new Date(today) : new Date(yesterday);
+  let checkDate = habitCheckIns.has(today) ? new Date(today) : new Date(yesterday);
 
   while (true) {
     const dateStr = formatDateYMD(checkDate);
-    if (habitCheckIns.includes(dateStr)) {
+    if (habitCheckIns.has(dateStr)) {
       streak++;
       checkDate = new Date(checkDate.getTime() - 86400000);
     } else {

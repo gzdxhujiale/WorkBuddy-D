@@ -145,6 +145,12 @@ export function useKnowledgeActions(): KnowledgeActions {
       if (pending) markPendingScope(scope);
       else clearPendingScope(scope);
     },
+    onTaskError: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.lists.all(userId),
+        refetchType: 'active',
+      });
+    },
   });
 
   return useMemo<KnowledgeActions>(() => {
@@ -158,11 +164,11 @@ export function useKnowledgeActions(): KnowledgeActions {
       };
       setData(queryClient, userId, () => ({ ...data, lists: [...data.lists, newList] }));
       debouncedSync.schedule(`list:${newList.id}`, async () => {
-        const savedSortOrder = await knowledgeService.upsertKnowledgeFolder(newList);
-        if (savedSortOrder === undefined) return;
+        const saved = await knowledgeService.upsertKnowledgeFolder(newList);
+        if (saved === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
-          lists: current.lists.map((item) => item.id === newList.id ? { ...item, sortOrder: savedSortOrder } : item),
+          lists: current.lists.map((item) => item.id === newList.id ? { ...item, sortOrder: saved.sortOrder, lockVersion: saved.lockVersion, isNew: false } : item),
         }));
       }, LOW_FREQ_DELAY);
       return newList;
@@ -176,7 +182,12 @@ export function useKnowledgeActions(): KnowledgeActions {
       newLists[index] = { ...newLists[index], ...updates };
       const list = newLists[index];
       setData(queryClient, userId, () => ({ ...data, lists: newLists }));
-      debouncedSync.schedule(`list:${id}`, async () => { await knowledgeService.upsertKnowledgeFolder(list); }, HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`list:${id}`, async () => {
+        const saved = await knowledgeService.upsertKnowledgeFolder(list);
+        if (!saved) return;
+        setData(queryClient, userId, (current) => ({ ...current, lists: current.lists.map((item) => item.id === id
+          ? { ...item, sortOrder: saved.sortOrder, lockVersion: saved.lockVersion, isNew: false } : item) }));
+      }, HIGH_FREQ_DELAY);
     };
 
     const deleteKnowledgeFolder: KnowledgeActions['deleteKnowledgeFolder'] = (id) => {
@@ -188,23 +199,32 @@ export function useKnowledgeActions(): KnowledgeActions {
         noteGroups: data.noteGroups.filter(g => g.folderId !== id),
       }));
       debouncedSync.cancel(`list:${id}`);
-      knowledgeService.deleteKnowledgeFolder(id).catch(() => {});
+      void knowledgeService.deleteKnowledgeFolder({ id, lockVersion: data.lists.find((list) => list.id === id)?.lockVersion })
+        .catch(() => queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' }));
     };
 
     const reorderKnowledgeFolders: KnowledgeActions['reorderKnowledgeFolders'] = (orderedIds) => {
       const data = getData(queryClient, userId);
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
-      const items: Array<[string, number]> = [];
+      const items: knowledgeService.VersionedOrderItem[] = [];
       const newLists = data.lists.map(l => {
         if (orderMap.has(l.id)) {
           const order = orderMap.get(l.id)!;
-          items.push([l.id, order]);
+          if (l.lockVersion !== undefined) items.push({ id: l.id, sortOrder: order, lockVersion: l.lockVersion });
           return { ...l, sortOrder: order };
         }
         return l;
       });
       setData(queryClient, userId, () => ({ ...data, lists: newLists }));
-      debouncedSync.schedule('reorder:lists', () => knowledgeService.reorderKnowledgeFolders(items), LOW_FREQ_DELAY);
+      debouncedSync.schedule('reorder:lists', async () => {
+        const saved = await knowledgeService.reorderKnowledgeFolders(items);
+        if (!saved) return;
+        const versions = new Map(saved.map((item) => [item.id, item]));
+        setData(queryClient, userId, (current) => ({ ...current, lists: current.lists.map((item) => {
+          const version = versions.get(item.id);
+          return version ? { ...item, sortOrder: version.sortOrder, lockVersion: version.lockVersion } : item;
+        }) }));
+      }, LOW_FREQ_DELAY);
     };
 
     const moveKnowledgeFolder: KnowledgeActions['moveKnowledgeFolder'] = (folderId, knowledgeBaseId, targetIndex) => {
@@ -234,7 +254,27 @@ export function useKnowledgeActions(): KnowledgeActions {
       const updatedList = newLists.find(l => l.id === folderId);
       debouncedSync.schedule(
         `list:${folderId}`,
-        () => knowledgeService.moveKnowledgeFolder(folderId, knowledgeBaseId, updatedList?.sortOrder || 0),
+        async () => {
+          if (!updatedList) return;
+          const moved = await knowledgeService.moveKnowledgeFolder({
+            id: updatedList.id,
+            knowledgeBaseId,
+            lockVersion: updatedList.lockVersion,
+          });
+          if (!moved) return;
+          setData(queryClient, userId, (current) => ({ ...current, lists: current.lists.map((item) => item.id === folderId
+            ? { ...item, sortOrder: moved.sortOrder, lockVersion: moved.lockVersion } : item) }));
+          const reordered = getData(queryClient, userId).lists
+            .filter((item) => item.knowledgeBaseId === knowledgeBaseId && item.lockVersion !== undefined)
+            .map((item) => ({ id: item.id, sortOrder: item.sortOrder ?? 0, lockVersion: item.lockVersion }));
+          const saved = await knowledgeService.reorderKnowledgeFolders(reordered);
+          if (!saved) return;
+          const versions = new Map(saved.map((item) => [item.id, item]));
+          setData(queryClient, userId, (current) => ({ ...current, lists: current.lists.map((item) => {
+            const version = versions.get(item.id);
+            return version ? { ...item, sortOrder: version.sortOrder, lockVersion: version.lockVersion } : item;
+          }) }));
+        },
         LOW_FREQ_DELAY
       );
     };
@@ -250,11 +290,11 @@ export function useKnowledgeActions(): KnowledgeActions {
       };
       setData(queryClient, userId, () => ({ ...data, noteGroups: [...data.noteGroups, newGroup] }));
       debouncedSync.schedule(`group:${newGroup.id}`, async () => {
-        const savedSortOrder = await knowledgeService.upsertGroup(newGroup);
-        if (savedSortOrder === undefined) return;
+        const saved = await knowledgeService.upsertGroup(newGroup);
+        if (saved === undefined) return;
         setData(queryClient, userId, (current) => ({
           ...current,
-          noteGroups: current.noteGroups.map((item) => item.id === newGroup.id ? { ...item, sortOrder: savedSortOrder } : item),
+          noteGroups: current.noteGroups.map((item) => item.id === newGroup.id ? { ...item, sortOrder: saved.sortOrder, lockVersion: saved.lockVersion, isNew: false } : item),
         }));
       }, LOW_FREQ_DELAY);
       return newGroup;
@@ -268,7 +308,12 @@ export function useKnowledgeActions(): KnowledgeActions {
       newGroups[index] = { ...newGroups[index], ...updates };
       const group = newGroups[index];
       setData(queryClient, userId, () => ({ ...data, noteGroups: newGroups }));
-      debouncedSync.schedule(`group:${id}`, async () => { await knowledgeService.upsertGroup(group); }, HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`group:${id}`, async () => {
+        const saved = await knowledgeService.upsertGroup(group);
+        if (!saved) return;
+        setData(queryClient, userId, (current) => ({ ...current, noteGroups: current.noteGroups.map((item) => item.id === id
+          ? { ...item, sortOrder: saved.sortOrder, lockVersion: saved.lockVersion, isNew: false } : item) }));
+      }, HIGH_FREQ_DELAY);
     };
 
     const deleteGroup: KnowledgeActions['deleteGroup'] = (id) => {
@@ -279,7 +324,8 @@ export function useKnowledgeActions(): KnowledgeActions {
         notes: data.notes.map(n => (n.groupId === id ? { ...n, groupId: null } : n)),
       }));
       debouncedSync.cancel(`group:${id}`);
-      knowledgeService.deleteGroup(id).catch(() => {});
+      void knowledgeService.deleteGroup({ id, lockVersion: data.noteGroups.find((group) => group.id === id)?.lockVersion })
+        .catch(() => queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' }));
     };
 
     // ── Notes ──
@@ -400,7 +446,8 @@ export function useKnowledgeActions(): KnowledgeActions {
         notes: data.notes.filter(n => n.id !== id),
       }));
       debouncedSync.cancel(`note:${id}`);
-      knowledgeService.deleteNote(id).catch(() => {});
+      void knowledgeService.deleteNote({ id, lockVersion: data.notes.find((note) => note.id === id)?.lockVersion })
+        .catch(() => queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' }));
     };
 
     const moveNoteAndReorder: KnowledgeActions['moveNoteAndReorder'] = (noteId, groupId, targetIndex) => {
@@ -520,11 +567,11 @@ export function useKnowledgeActions(): KnowledgeActions {
     const reorderNotes: KnowledgeActions['reorderNotes'] = (orderedIds) => {
       const data = getData(queryClient, userId);
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
-      const items: Array<[string, number]> = [];
+      const items: knowledgeService.VersionedOrderItem[] = [];
       const newNotes = data.notes.map(n => {
         if (orderMap.has(n.id)) {
           const order = orderMap.get(n.id)!;
-          items.push([n.id, order]);
+          if (n.lockVersion !== undefined) items.push({ id: n.id, sortOrder: order, lockVersion: n.lockVersion });
           return { ...n, sortOrder: order };
         }
         return n;
@@ -540,7 +587,7 @@ export function useKnowledgeActions(): KnowledgeActions {
             const saved = versions.get(note.id);
             return saved === undefined
               ? note
-              : { ...note, updatedAt: saved.updatedAt, lockVersion: saved.lockVersion };
+              : { ...note, updatedAt: saved.updatedAt, lockVersion: saved.lockVersion, sortOrder: saved.sortOrder };
           }),
         }));
       }, LOW_FREQ_DELAY);
@@ -555,7 +602,12 @@ export function useKnowledgeActions(): KnowledgeActions {
         sortOrder: data.folders.length,
       };
       setData(queryClient, userId, () => ({ ...data, folders: [...data.folders, newFolder] }));
-      debouncedSync.schedule(`folder:${newFolder.id}`, () => knowledgeService.upsertKnowledgeBase(newFolder), LOW_FREQ_DELAY);
+      debouncedSync.schedule(`folder:${newFolder.id}`, async () => {
+        const saved = await knowledgeService.upsertKnowledgeBase(newFolder);
+        if (!saved) return;
+        setData(queryClient, userId, (current) => ({ ...current, folders: current.folders.map((item) => item.id === newFolder.id
+          ? { ...item, sortOrder: saved.sortOrder, lockVersion: saved.lockVersion, isNew: false } : item) }));
+      }, LOW_FREQ_DELAY);
       return newFolder;
     };
 
@@ -567,23 +619,36 @@ export function useKnowledgeActions(): KnowledgeActions {
       newFolders[index] = { ...newFolders[index], ...updates };
       const folder = newFolders[index];
       setData(queryClient, userId, () => ({ ...data, folders: newFolders }));
-      debouncedSync.schedule(`folder:${id}`, () => knowledgeService.upsertKnowledgeBase(folder), HIGH_FREQ_DELAY);
+      debouncedSync.schedule(`folder:${id}`, async () => {
+        const saved = await knowledgeService.upsertKnowledgeBase(folder);
+        if (!saved) return;
+        setData(queryClient, userId, (current) => ({ ...current, folders: current.folders.map((item) => item.id === id
+          ? { ...item, sortOrder: saved.sortOrder, lockVersion: saved.lockVersion, isNew: false } : item) }));
+      }, HIGH_FREQ_DELAY);
     };
 
     const reorderKnowledgeBases: KnowledgeActions['reorderKnowledgeBases'] = (orderedIds) => {
       const data = getData(queryClient, userId);
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
-      const items: Array<[string, number]> = [];
+      const items: knowledgeService.VersionedOrderItem[] = [];
       const newFolders = data.folders.map(f => {
         if (orderMap.has(f.id)) {
           const order = orderMap.get(f.id)!;
-          items.push([f.id, order]);
+          if (f.lockVersion !== undefined) items.push({ id: f.id, sortOrder: order, lockVersion: f.lockVersion });
           return { ...f, sortOrder: order };
         }
         return f;
       });
       setData(queryClient, userId, () => ({ ...data, folders: newFolders }));
-      debouncedSync.schedule('reorder:folders', () => knowledgeService.reorderKnowledgeBases(items), LOW_FREQ_DELAY);
+      debouncedSync.schedule('reorder:folders', async () => {
+        const saved = await knowledgeService.reorderKnowledgeBases(items);
+        if (!saved) return;
+        const versions = new Map(saved.map((item) => [item.id, item]));
+        setData(queryClient, userId, (current) => ({ ...current, folders: current.folders.map((item) => {
+          const version = versions.get(item.id);
+          return version ? { ...item, sortOrder: version.sortOrder, lockVersion: version.lockVersion } : item;
+        }) }));
+      }, LOW_FREQ_DELAY);
     };
 
     const deleteKnowledgeBase: KnowledgeActions['deleteKnowledgeBase'] = (id) => {
@@ -594,7 +659,8 @@ export function useKnowledgeActions(): KnowledgeActions {
         lists: data.lists.map(l => (l.knowledgeBaseId === id ? { ...l, knowledgeBaseId: null } : l)),
       }));
       debouncedSync.cancel(`folder:${id}`);
-      knowledgeService.deleteKnowledgeBase(id).catch(() => {});
+      void knowledgeService.deleteKnowledgeBase({ id, lockVersion: data.folders.find((folder) => folder.id === id)?.lockVersion })
+        .catch(() => queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' }));
     };
 
     // ── Duplicate (composes the primitives above) ──
@@ -619,8 +685,6 @@ export function useKnowledgeActions(): KnowledgeActions {
           contentLoaded: true,
         });
       });
-
-      knowledgeService.duplicateKnowledgeFolder(list.id, newList).catch(() => {});
 
       return newList;
     };
