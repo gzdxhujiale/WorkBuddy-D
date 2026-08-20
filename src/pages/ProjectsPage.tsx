@@ -659,10 +659,10 @@ export function ProjectsPage() {
                     "py-1 px-1 text-[11px] font-medium text-center transition-all cursor-pointer flex items-center justify-center gap-1 min-w-0 select-none",
                     isActive
                       ? isPixelTheme
-                        ? "rounded-xs bg-amber-500 text-amber-950 border border-amber-900 shadow-[1px_1px_0px_#000] font-black"
+                        ? "rounded-xs bg-amber-500 text-amber-950 border border-amber-900 shadow-[1px_1px_0px_#000] font-black active:translate-x-[1px] active:translate-y-[1px]"
                         : "rounded-md bg-card text-foreground shadow-2xs font-bold border border-border/80"
                       : isPixelTheme
-                      ? "rounded-xs text-muted-foreground hover:text-foreground hover:bg-amber-100/30"
+                      ? "rounded-xs text-muted-foreground hover:text-foreground hover:bg-amber-100/30 active:translate-x-[1px] active:translate-y-[1px]"
                       : "rounded-md text-muted-foreground hover:text-foreground hover:bg-card/40"
                   )}
                   title={`${tab.label} (${tab.count})`}
@@ -732,13 +732,24 @@ export function ProjectsPage() {
                   isPixelTheme ? "rounded-xs font-mono" : "rounded-xl",
                   isCurrent
                     ? isPixelTheme
-                      ? "border-2 border-amber-800 dark:border-amber-500 bg-amber-200/90 dark:bg-amber-950 shadow-[3px_3px_0px_rgba(0,0,0,0.18)]"
+                      ? "border-2 border-amber-800 dark:border-amber-500 bg-amber-200/95 dark:bg-amber-950/80 shadow-[3px_3px_0px_#000] pl-5"
                       : "border-sky-300 bg-sky-50/80 shadow-sm dark:border-sky-800 dark:bg-sky-950/40"
                     : isPixelTheme
-                    ? "border-2 border-border/80 bg-card hover:bg-amber-100/60 dark:hover:bg-amber-950/40 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] hover:-translate-x-0.5 hover:-translate-y-0.5"
+                    ? "border-2 border-border/80 bg-card hover:bg-amber-100/60 dark:hover:bg-amber-950/40 shadow-[2px_2px_0px_rgba(0,0,0,0.06)] hover:-translate-x-0.5 hover:-translate-y-0.5 active:translate-x-[1px] active:translate-y-[1px] active:shadow-none"
                     : "border-border/60 hover:bg-accent/60"
                 )}
               >
+                {/* Retro Pixel Active Indicator Arrow */}
+                {isPixelTheme && isCurrent && (
+                  <span
+                    className="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center select-none pointer-events-none"
+                    aria-hidden="true"
+                  >
+                    <span className="text-amber-800 dark:text-amber-400 text-[8px] leading-none font-mono font-black animate-pixel-hop block">
+                      ▶
+                    </span>
+                  </span>
+                )}
                 <div className="flex items-start gap-2.5">
                   <ProgressRing completed={done} total={taskSet.length} isPixelTheme={isPixelTheme} />
                   <div className="min-w-0 flex-1">

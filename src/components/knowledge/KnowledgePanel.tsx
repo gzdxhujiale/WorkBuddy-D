@@ -110,19 +110,35 @@ const SidebarListItemDroppable: React.FC<SidebarListItemDroppableProps> = memo((
     <div
       ref={setNodeRef}
       className={cn(
-        'group relative flex cursor-pointer select-none items-center gap-2 px-2 py-1.5 text-sm transition-all duration-150',
-        isNested ? 'pl-9' : 'pl-7',
+        'group relative flex cursor-pointer select-none items-center gap-2 px-2 py-1.5 text-sm transition-all duration-100',
+        isNested
+          ? (isPixelTheme ? 'pl-8' : 'pl-9')
+          : (isPixelTheme ? 'pl-6.5' : 'pl-7'),
         isActive
           ? (isPixelTheme
-              ? 'bg-amber-200/90 text-amber-950 dark:bg-amber-900/60 dark:text-amber-100 font-mono font-bold shadow-[2px_2px_0px_rgba(0,0,0,0.15)] border border-amber-900/40 dark:border-amber-600/40 rounded-xs'
+              ? 'bg-amber-200/95 text-amber-950 dark:bg-amber-900/80 dark:text-amber-100 font-mono font-bold shadow-[2px_2px_0px_#000] border-2 border-amber-800/90 dark:border-amber-500 rounded-xs'
               : 'bg-sidebar-primary/15 font-medium text-sidebar-primary rounded-md')
           : (isPixelTheme
-              ? 'text-sidebar-foreground hover:bg-amber-100/60 dark:hover:bg-amber-950/40 hover:text-amber-900 dark:hover:text-amber-100 font-mono rounded-xs'
+              ? 'text-sidebar-foreground hover:bg-amber-100/60 dark:hover:bg-amber-950/40 hover:text-amber-900 dark:hover:text-amber-100 font-mono rounded-xs active:translate-x-[1px] active:translate-y-[1px]'
               : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md'),
         isTarget && (isPixelTheme ? 'bg-amber-200/30 ring-2 ring-amber-500' : 'bg-sidebar-primary/10 ring-2 ring-sidebar-ring')
       )}
       onClick={() => onSelectList(list.id)}
     >
+      {/* Retro Pixel Active Indicator */}
+      {isPixelTheme && isActive && (
+        <span
+          className={cn(
+            "absolute top-1/2 -translate-y-1/2 flex items-center justify-center pointer-events-none select-none",
+            isNested ? "left-4" : "left-1.5"
+          )}
+          aria-hidden="true"
+        >
+          <span className="text-amber-800 dark:text-amber-400 text-[8px] leading-none font-mono font-black animate-pixel-hop block">
+            ▶
+          </span>
+        </span>
+      )}
       {children}
     </div>
   );
@@ -249,8 +265,10 @@ function ListsSidebar({
   return (
       <aside
         className={cn(
-          'flex w-[210px] flex-none flex-col overflow-hidden border-r bg-sidebar text-sidebar-foreground transition-all duration-[250ms] ease-in-out',
-          isPixelTheme ? 'border-r-2 border-border font-mono' : 'border-border',
+          'flex w-[210px] flex-none flex-col overflow-hidden border-r bg-sidebar text-sidebar-foreground transition-all duration-[220ms]',
+          isPixelTheme
+            ? 'border-r-2 border-border font-mono [transition-timing-function:steps(4,jump-none)]'
+            : 'border-border ease-in-out',
           isCollapsed && 'pointer-events-none !w-0 border-r-transparent opacity-0'
         )}
       >
@@ -266,7 +284,7 @@ function ListsSidebar({
           size="icon"
           className={cn(
             "text-sidebar-foreground opacity-0 transition-opacity hover:bg-sidebar-accent hover:text-sidebar-accent-foreground group-hover/header:opacity-100",
-            isPixelTheme ? "rounded-xs" : "rounded-md"
+            isPixelTheme ? "rounded-xs active:translate-x-[1px] active:translate-y-[1px]" : "rounded-md"
           )}
           onClick={() => onAddClick()}
           title="新建文件夹"
@@ -298,7 +316,11 @@ function ListsSidebar({
                   >
                     <ChevronDown
                       size={14}
-                      className={cn('text-sidebar-foreground/60 transition-transform duration-200', isCollapsedFolder && '-rotate-90')}
+                      className={cn(
+                        'text-sidebar-foreground/60 transition-transform duration-150',
+                        isPixelTheme ? '[transition-timing-function:steps(2,jump-none)]' : 'ease-in-out',
+                        isCollapsedFolder && '-rotate-90'
+                      )}
                     />
                     <span className="flex-1 truncate">{folder.name}</span>
 

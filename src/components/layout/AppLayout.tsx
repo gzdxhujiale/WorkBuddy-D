@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, Outlet } from "@tanstack/react-router";
+import { Link, Outlet, useLocation } from "@tanstack/react-router";
 import {
   CalendarCheck,
   ListTodo,
@@ -18,6 +18,7 @@ import { SettingsDialog } from "./SettingsDialog";
 import { Toaster } from "../ui/toast";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { cn } from "@/lib/utils";
 
 // ============================================================
 // Navigation Tool Items Config
@@ -199,26 +200,52 @@ export const DesktopToolbar: React.FC<DesktopToolbarProps> = ({ onSettingsClick 
               to={tool.to}
               title={tool.name}
               aria-label={tool.name}
-              className={`relative group flex items-center justify-center w-10 h-[38px] transition-all duration-150 text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/70 ${
-                isPixelTheme ? "rounded-md" : "rounded-lg"
-              }`}
+              className={cn(
+                "relative group flex items-center justify-center w-10 h-[38px] transition-all select-none cursor-pointer",
+                isPixelTheme
+                  ? "rounded-xs active:translate-x-[1.5px] active:translate-y-[1.5px] active:shadow-none"
+                  : "rounded-lg active:scale-95"
+              )}
               activeProps={{
                 className: isPixelTheme
                   ? "bg-amber-200 dark:bg-amber-900/80 text-amber-950 dark:text-amber-100 border-2 border-amber-800/90 dark:border-amber-500 shadow-[2px_2px_0px_#000] font-bold hover:bg-amber-200 dark:hover:bg-amber-900/80"
                   : "bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700 font-semibold hover:bg-white dark:hover:bg-slate-800",
               }}
+              inactiveProps={{
+                className: isPixelTheme
+                  ? "text-amber-900/70 dark:text-amber-300/70 hover:bg-amber-200/50 dark:hover:bg-amber-950/40 hover:text-amber-950 dark:hover:text-amber-100 border-2 border-transparent hover:border-amber-800/30"
+                  : "text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/70",
+              }}
             >
-              <Icon size={19} strokeWidth={isPixelTheme ? 2.2 : 1.9} />
+              {({ isActive }: { isActive: boolean }) => (
+                <>
+                  <Icon size={19} strokeWidth={isPixelTheme ? 2.2 : 1.9} />
 
-              <span
-                className={`pointer-events-none absolute left-14 z-50 whitespace-nowrap px-2.5 py-1 text-xs opacity-0 shadow-md transition-opacity group-hover:opacity-100 ${
-                  isPixelTheme
-                    ? "rounded bg-[#2a1d13] text-[#faeed9] border-2 border-amber-700 font-mono shadow-[2px_2px_0px_#000]"
-                    : "rounded-md bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-                }`}
-              >
-                {tool.name}
-              </span>
+                  {/* Retro Pixel Active Indicator Arrow (Classic Left-side RPG Cursor) */}
+                  {isPixelTheme && isActive && (
+                    <span
+                      className="absolute -left-2.5 top-1/2 -translate-y-1/2 flex items-center justify-center select-none pointer-events-none"
+                      aria-hidden="true"
+                    >
+                      <span className="text-amber-800 dark:text-amber-400 text-[9px] leading-none font-mono font-black animate-pixel-hop block">
+                        ▶
+                      </span>
+                    </span>
+                  )}
+
+                  {/* Floating Tooltip */}
+                  <span
+                    className={cn(
+                      "pointer-events-none absolute left-14 z-50 whitespace-nowrap px-2.5 py-1 text-xs opacity-0 shadow-md transition-opacity group-hover:opacity-100",
+                      isPixelTheme
+                        ? "rounded-xs bg-[#2a1d13] text-[#faeed9] border-2 border-amber-700 font-mono shadow-[2px_2px_0px_#000] before:content-[''] before:absolute before:-left-1.5 before:top-1/2 before:-translate-y-1/2 before:border-y-4 before:border-y-transparent before:border-r-4 before:border-r-amber-700"
+                        : "rounded-md bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+                    )}
+                  >
+                    {tool.name}
+                  </span>
+                </>
+              )}
             </Link>
           );
         })}
@@ -228,21 +255,23 @@ export const DesktopToolbar: React.FC<DesktopToolbarProps> = ({ onSettingsClick 
         <button
           type="button"
           onClick={onSettingsClick}
-          className={`relative group flex items-center justify-center w-10 h-[38px] transition-all duration-150 cursor-pointer ${
+          className={cn(
+            "relative group flex items-center justify-center w-10 h-[38px] transition-all select-none cursor-pointer",
             isPixelTheme
-              ? "rounded-md text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/60 border border-transparent hover:border-amber-800/40"
-              : "rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/70"
-          }`}
+              ? "rounded-xs text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/60 border-2 border-transparent hover:border-amber-800/40 active:translate-x-[1.5px] active:translate-y-[1.5px] active:shadow-none"
+              : "rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/70 active:scale-95"
+          )}
           title="设置"
           aria-label="设置"
         >
           <Settings size={18} strokeWidth={isPixelTheme ? 2.2 : 1.9} />
           <span
-            className={`pointer-events-none absolute left-14 z-50 whitespace-nowrap px-2.5 py-1 text-xs opacity-0 shadow-md transition-opacity group-hover:opacity-100 ${
+            className={cn(
+              "pointer-events-none absolute left-14 z-50 whitespace-nowrap px-2.5 py-1 text-xs opacity-0 shadow-md transition-opacity group-hover:opacity-100",
               isPixelTheme
-                ? "rounded bg-[#2a1d13] text-[#faeed9] border-2 border-amber-700 font-mono shadow-[2px_2px_0px_#000]"
+                ? "rounded-xs bg-[#2a1d13] text-[#faeed9] border-2 border-amber-700 font-mono shadow-[2px_2px_0px_#000] before:content-[''] before:absolute before:-left-1.5 before:top-1/2 before:-translate-y-1/2 before:border-y-4 before:border-y-transparent before:border-r-4 before:border-r-amber-700"
                 : "rounded-md bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
-            }`}
+            )}
           >
             设置
           </span>
@@ -258,6 +287,7 @@ export const DesktopToolbar: React.FC<DesktopToolbarProps> = ({ onSettingsClick 
 export const AppLayout: React.FC = () => {
   const { isPixelTheme } = useAppThemeStyle();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const location = useLocation();
 
   return (
     <div
@@ -293,7 +323,15 @@ export const AppLayout: React.FC = () => {
               </div>
             }
           >
-            <Outlet />
+            <div
+              key={location.pathname}
+              className={cn(
+                "w-full h-full min-h-0",
+                isPixelTheme ? "animate-pixel-page-in" : "animate-fade-in"
+              )}
+            >
+              <Outlet />
+            </div>
           </React.Suspense>
         </main>
       </div>

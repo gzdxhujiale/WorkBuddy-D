@@ -1100,16 +1100,27 @@ const HabitItem: React.FC<HabitItemProps> = memo(({
     <Item
       onClick={onClick}
       className={cn(
-        "cursor-pointer group transition-all duration-150",
+        "cursor-pointer group transition-all duration-100 relative select-none",
         isPixelTheme
           ? isSelected
-            ? "rounded-xs border-2 border-amber-800 dark:border-amber-500 bg-amber-100/90 dark:bg-amber-950/70 shadow-[3px_3px_0px_#000] font-mono scale-[1.008]"
-            : "rounded-xs border-2 border-border/90 bg-card shadow-[3px_3px_0px_rgba(0,0,0,0.08)] hover:shadow-[4px_4px_0px_rgba(0,0,0,0.14)] hover:border-amber-700/60 font-mono"
+            ? "rounded-xs border-2 border-amber-800 dark:border-amber-500 bg-amber-100/95 dark:bg-amber-950/80 shadow-[3px_3px_0px_#000] font-mono pl-5.5"
+            : "rounded-xs border-2 border-border/90 bg-card shadow-[2px_2px_0px_rgba(0,0,0,0.08)] hover:shadow-[3px_3px_0px_rgba(0,0,0,0.14)] hover:border-amber-700/60 font-mono active:translate-x-[1px] active:translate-y-[1px]"
           : isSelected
           ? "border-blue-500/60 dark:border-blue-500/50 bg-blue-500/[0.06] dark:bg-blue-500/[0.12] ring-1 ring-blue-500/40 shadow-xs"
           : "hover:bg-accent/40"
       )}
     >
+      {/* Retro Pixel Active Indicator Arrow */}
+      {isPixelTheme && isSelected && (
+        <span
+          className="absolute left-1.5 top-1/2 -translate-y-1/2 flex items-center justify-center select-none pointer-events-none"
+          aria-hidden="true"
+        >
+          <span className="text-amber-800 dark:text-amber-400 text-[8px] leading-none font-mono font-black animate-pixel-hop block">
+            ▶
+          </span>
+        </span>
+      )}
       <div className="flex items-center gap-4 min-w-0">
         <ItemAvatar>
           <HabitAvatar category={habit.category} />

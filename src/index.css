@@ -470,3 +470,52 @@ html.tqe-window body > div:has(> [class*="richtext-max-h-"]) {
   font-family: ui-monospace, "Cascadia Code", monospace !important;
   color: var(--color-foreground) !important;
 }
+
+/* Retro Pixel Animations */
+@keyframes pixel-pointer-hop {
+  0%, 100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(2px);
+  }
+}
+
+.animate-pixel-hop {
+  animation: pixel-pointer-hop 0.8s steps(2) infinite;
+}
+
+/* Route Page Transition: 8-Bit Step Fade-In */
+@keyframes pixel-page-step-in {
+  0% {
+    opacity: 0.2;
+    transform: translateX(4px);
+  }
+  50% {
+    opacity: 0.75;
+    transform: translateX(2px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.animate-pixel-page-in {
+  animation: pixel-page-step-in 100ms steps(3, jump-none) forwards;
+}
+
+@keyframes modern-fade-in {
+  from {
+    opacity: 0.7;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: modern-fade-in 100ms ease-out forwards;
+}
+
+
