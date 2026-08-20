@@ -6,7 +6,8 @@ export type PetEvent =
   | "focus_stop"
   | "rest_complete"
   | "rest_skip"
-  | "poke";
+  | "poke"
+  | "task_reminder";
 
 export interface PetDialogueOptions {
   targetName?: string;
@@ -59,6 +60,12 @@ const CAT_DIALOGUES: Record<PetEvent, string[]> = {
     "主人加油！我在旁边给你默默加油打气~",
     "呼噜呼噜… 被你戳得好舒服呀 (｡•̀ᴗ-)✧",
   ],
+  task_reminder: [
+    "⏰ 喵！主人，有任务到提醒时间啦，快去看看吧~",
+    "🐾 叮咚！本喵提醒你：设定的任务时间到了，加油搞定它！",
+    "🔔 喵呜~ 记得处理手头的任务哦，本喵监督你行动！",
+    "✨ 滴滴！任务提醒时间到，保持专注，一鼓作气拿下它！",
+  ],
 };
 
 const DOG_DIALOGUES: Record<PetEvent, string[]> = {
@@ -105,6 +112,12 @@ const DOG_DIALOGUES: Record<PetEvent, string[]> = {
     "主人加油！我在旁边给你默默加油打气~",
     "汪汪！蹭蹭手心，被你摸得好开心呀 (｡•̀ᴗ-)✧",
   ],
+  task_reminder: [
+    "⏰ 汪！主人，有任务到提醒时间啦，快去看看吧！",
+    "🐾 汪汪！狗狗提醒你：设定的任务时间到了，冲鸭！",
+    "🔔 汪呜！主人主人，任务到点啦，狗狗陪你一起战斗！",
+    "✨ 滴！任务提醒已送达，保持状态，立刻出发搞定它！",
+  ],
 };
 
 export function getPetDialogue(event: PetEvent, options?: PetDialogueOptions): string {
@@ -119,6 +132,8 @@ export function getPetDialogue(event: PetEvent, options?: PetDialogueOptions): s
     text = `${prefix}开始专注「${options.targetName}」啦，加油冲鸭！`;
   } else if (event === "focus_complete" && options?.restMinutes) {
     text = `🎉 太棒啦！专注完成，快跟我一起休息 ${options.restMinutes} 分钟吧~`;
+  } else if (event === "task_reminder" && options?.targetName) {
+    text = `⏰ ${prefix}主人，任务「${options.targetName}」到提醒时间啦，快去处理吧~`;
   }
 
   return text;

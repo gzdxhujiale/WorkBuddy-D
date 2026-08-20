@@ -37,6 +37,7 @@ async fn show_multi_monitor_notification(
     pet_type: String,
     theme_style: String,
     event_type: String,
+    task_id: Option<String>,
 ) -> Result<(), String> {
     let monitors = app.available_monitors().map_err(|e| e.to_string())?;
     for (idx, monitor) in monitors.iter().enumerate() {
@@ -49,8 +50,8 @@ async fn show_multi_monitor_notification(
         let size = monitor.size();
         let scale_factor = monitor.scale_factor();
 
-        let toast_w = 320.0;
-        let toast_h = 88.0;
+        let toast_w = 340.0;
+        let toast_h = 96.0;
         let margin_x = 24.0;
         let margin_y = 36.0;
 
@@ -62,7 +63,7 @@ async fn show_multi_monitor_notification(
         let target_x = pos.x + size.width as i32 - phys_w - phys_margin_x;
         let target_y = pos.y + size.height as i32 - phys_h - phys_margin_y;
 
-        let query = format!(
+        let mut query = format!(
             "idx={}&title={}&body={}&pet={}&theme={}&type={}",
             idx,
             urlencode_str(&title),
@@ -71,6 +72,9 @@ async fn show_multi_monitor_notification(
             urlencode_str(&theme_style),
             urlencode_str(&event_type),
         );
+        if let Some(ref tid) = task_id {
+            query.push_str(&format!("&task_id={}", urlencode_str(tid)));
+        }
         let url = format!("notification-toast.html?{}", query);
 
         let builder = tauri::WebviewWindowBuilder::new(

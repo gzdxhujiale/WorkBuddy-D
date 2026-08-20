@@ -4,6 +4,9 @@ import { useAuth } from "@/lib/auth";
 import { realtimeManager } from "@/lib/realtimeManager";
 import { useUiStore } from "@/stores/uiStore";
 import { emit, listen } from "@tauri-apps/api/event";
+import { startTaskReminderScheduler, checkTaskReminders } from "@/services/taskReminderScheduler";
+import { queryKeys } from "@/lib/syncEngine";
+import type { TimeManagementData } from "@/types/timeManagement";
 
 const UI_STATE_EVENT = "workbuddy:ui-state";
 const UI_SOURCE_ID = crypto.randomUUID();
@@ -13,6 +16,28 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
   const setUserId = useUiStore((state) => state.setUserId);
   const hydrateForUser = useUiStore((state) => state.hydrateForUser);
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    // Mount global task reminder scheduler across the authenticated application
+    const getTasks = () => {
+      const data = queryClient.getQueryData<TimeManagementData>(queryKeys.timeManagement(userId));
+      return data?.tasks ?? [];
+    };
+
+    const cleanupScheduler = startTaskReminderScheduler(getTasks);
+
+    // Re-arm immediately whenever the time-management query cache updates
+    const unsubscribeCache = queryClient.getQueryCache().subscribe((event) => {
+      if (event?.query?.queryKey?.[0] === "time-management-tasks") {
+        checkTaskReminders(getTasks());
+      }
+    });
+
+    return () => {
+      cleanupScheduler();
+      unsubscribeCache();
+    };
+  }, [queryClient, userId]);
 
   useEffect(() => {
     hydrateForUser(userId);

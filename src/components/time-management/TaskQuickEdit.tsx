@@ -232,11 +232,12 @@ export const TaskQuickEditPopover = memo(
       const [customMode, setCustomMode] = useState(false);
 
       const openRemind = () => {
-        setDraftOffset(appliedReminder ? appliedReminder.offsetDays : null);
-        setDraftTime(appliedReminder?.time || "09:00");
+        const offset = appliedReminder ? appliedReminder.offsetDays : 0;
+        setDraftOffset(offset);
+        setDraftTime(appliedReminder?.time || timeSel || "09:00");
         setDraftRepeat(appliedReminder?.repeat || false);
         setCustomMode(
-          !!appliedReminder && ![0, 1, 2, 3, 7].includes(appliedReminder.offsetDays)
+          appliedReminder ? ![0, 1, 2, 3, 7].includes(appliedReminder.offsetDays) : false
         );
         setThird("remind");
       };
@@ -245,8 +246,18 @@ export const TaskQuickEditPopover = memo(
         const next: TaskReminder | null =
           draftOffset === null
             ? null
-            : { offsetDays: draftOffset, time: draftTime || "09:00", repeat: draftRepeat };
+            : {
+                offsetDays: Math.max(0, draftOffset),
+                time: draftTime || "09:00",
+                repeat: draftRepeat,
+              };
         setAppliedReminder(next);
+        setThird(null);
+      };
+
+      const clearRemind = () => {
+        setAppliedReminder(null);
+        setDraftOffset(null);
         setThird(null);
       };
 
@@ -1153,106 +1164,205 @@ export const TaskQuickEditPopover = memo(
               }}
               className={
                 isPixelTheme
-                  ? "fixed z-[1070] bg-card border-2 border-border shadow-[4px_4px_0px_#000] rounded-xl p-2 animate-in fade-in duration-100 select-none flex flex-col gap-0.5 text-foreground font-mono"
-                  : "fixed z-[1070] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl p-2 animate-in fade-in duration-100 select-none flex flex-col gap-0.5 text-slate-900 dark:text-slate-100"
+                  ? "fixed z-[1070] bg-card border-2 border-border shadow-[4px_4px_0px_#000] rounded-xl p-2.5 animate-in fade-in duration-100 select-none flex flex-col gap-1.5 text-foreground font-mono"
+                  : "fixed z-[1070] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl shadow-2xl p-3 animate-in fade-in duration-100 select-none flex flex-col gap-1.5 text-slate-900 dark:text-slate-100"
               }
             >
-              {[0, 1, 2, 3, 7].map((off) => (
+              {/* Presets Grid / List */}
+              <div className="grid grid-cols-2 gap-1">
+                {[
+                  { off: 0, label: "当天" },
+                  { off: 1, label: "提前 1 天" },
+                  { off: 2, label: "提前 2 天" },
+                  { off: 3, label: "提前 3 天" },
+                  { off: 7, label: "提前 1 周" },
+                ].map(({ off, label }) => (
+                  <button
+                    key={off}
+                    type="button"
+                    className={`flex items-center justify-between px-2.5 py-1.5 text-xs text-left transition-colors cursor-pointer ${
+                      isPixelTheme ? "rounded-xs" : "rounded-lg"
+                    } ${
+                      !customMode && draftOffset === off
+                        ? isPixelTheme
+                          ? "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-800 font-bold shadow-[1px_1px_0px_#000]"
+                          : "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/60"
+                        : isPixelTheme
+                          ? "text-foreground hover:bg-muted"
+                          : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    }`}
+                    onClick={() => {
+                      setCustomMode(false);
+                      setDraftOffset(off);
+                    }}
+                  >
+                    <span>{label}</span>
+                    <span className="text-[10px] text-muted-foreground opacity-80">{draftTime}</span>
+                  </button>
+                ))}
+
                 <button
-                  key={off}
                   type="button"
-                  className={`w-full flex items-baseline justify-between px-3 py-2 text-xs text-left transition-colors cursor-pointer ${
-                    isPixelTheme ? "rounded-xs" : "rounded-xl"
+                  className={`flex items-center justify-center px-2.5 py-1.5 text-xs font-medium transition-colors cursor-pointer ${
+                    isPixelTheme ? "rounded-xs" : "rounded-lg"
                   } ${
-                    !customMode && draftOffset === off
+                    customMode
                       ? isPixelTheme
                         ? "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-800 font-bold shadow-[1px_1px_0px_#000]"
-                        : "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/60 dark:bg-blue-950/40"
+                        : "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800/60"
                       : isPixelTheme
                         ? "text-foreground hover:bg-muted"
                         : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
                   }`}
                   onClick={() => {
-                    setCustomMode(false);
-                    setDraftOffset((prev) => (prev === off && !customMode ? null : off));
+                    setCustomMode(true);
+                    if (draftOffset === null) setDraftOffset(0);
                   }}
                 >
-                  <span>{off === 0 ? "当天" : `提前 ${off} 天`}</span>
-                  <span className="text-[11px] text-muted-foreground">({draftTime})</span>
+                  <span>自定义设置</span>
                 </button>
-              ))}
-              <button
-                type="button"
-                className={`w-full flex items-baseline gap-1.5 px-3 py-2 text-xs text-left transition-colors cursor-pointer ${
-                  isPixelTheme ? "rounded-xs" : "rounded-xl"
-                } ${
-                  customMode
-                    ? isPixelTheme
-                      ? "bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-800 font-bold shadow-[1px_1px_0px_#000]"
-                      : "text-blue-600 dark:text-blue-400 font-semibold bg-blue-50/60 dark:bg-blue-950/40"
-                    : isPixelTheme
-                      ? "text-foreground hover:bg-muted"
-                      : "text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800"
-                }`}
-                onClick={() => {
-                  setCustomMode((v) => !v);
-                  setDraftOffset((prev) => (customMode ? null : prev ?? 0));
-                }}
-              >
-                <span>自定义</span>
-              </button>
+              </div>
+
+              {/* Custom Settings Panel */}
               {customMode && (
-                <div className="flex items-center gap-2 px-3 py-2 text-xs text-foreground">
-                  <label className="inline-flex items-center gap-1.5">
-                    提前
+                <div
+                  className={`flex flex-col gap-2 p-2 mt-0.5 rounded-lg ${
+                    isPixelTheme
+                      ? "bg-muted/60 border border-border"
+                      : "bg-slate-50 dark:bg-slate-800/50 border border-slate-200/70 dark:border-slate-800"
+                  }`}
+                >
+                  {/* 1. 提前天数设置 (0为当天，默认0) */}
+                  <div className="flex items-center justify-between gap-2 text-xs text-foreground">
+                    <span className="text-muted-foreground shrink-0 font-medium">提前天数:</span>
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="number"
+                        min={0}
+                        max={365}
+                        value={draftOffset ?? 0}
+                        className={`w-14 px-2 py-1 text-xs text-center outline-none bg-background text-foreground ${
+                          isPixelTheme
+                            ? "rounded-xs border border-border font-mono"
+                            : "border border-slate-200 dark:border-slate-700 rounded-md"
+                        }`}
+                        onChange={(e) =>
+                          setDraftOffset(Math.max(0, Math.min(365, Number(e.target.value) || 0)))
+                        }
+                      />
+                      <span className="text-[11px] text-muted-foreground shrink-0">
+                        {draftOffset === 0 ? "天 (当天)" : `天前`}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 2. 时、分具体时刻设置 */}
+                  <div className="flex items-center justify-between gap-2 text-xs text-foreground">
+                    <span className="text-muted-foreground shrink-0 font-medium">提醒时刻:</span>
                     <input
-                      type="number"
-                      min={0}
-                      max={30}
-                      value={draftOffset ?? 0}
-                      className={`w-12 px-2 py-1 text-xs outline-none bg-background text-foreground ${
-                        isPixelTheme ? "rounded-xs border border-border font-mono" : "border border-slate-200 dark:border-slate-700 rounded-lg"
+                      type="time"
+                      value={draftTime}
+                      className={`px-2 py-1 text-xs outline-none bg-background text-foreground ${
+                        isPixelTheme
+                          ? "rounded-xs border border-border font-mono"
+                          : "border border-slate-200 dark:border-slate-700 rounded-md"
                       }`}
-                      onChange={(e) =>
-                        setDraftOffset(Math.max(0, Math.min(30, Number(e.target.value) || 0)))
-                      }
+                      onChange={(e) => setDraftTime(e.target.value || "09:00")}
                     />
-                    天
-                  </label>
-                  <label className="inline-flex items-center gap-1.5 ml-auto cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={draftRepeat}
-                      className="rounded border-input text-amber-600 focus:ring-amber-500"
-                      onChange={(e) => setDraftRepeat(e.target.checked)}
-                    />
-                    每天提醒
-                  </label>
+                  </div>
+
+                  {/* 3. 常用时段快捷选择 Chips */}
+                  <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                    {["09:00", "12:00", "15:00", "18:00", "21:00"].map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => setDraftTime(t)}
+                        className={`px-1.5 py-0.5 text-[10px] tabular-nums transition-colors cursor-pointer ${
+                          isPixelTheme ? "rounded-xs" : "rounded-md"
+                        } ${
+                          draftTime === t
+                            ? isPixelTheme
+                              ? "bg-amber-600 text-white font-bold"
+                              : "bg-blue-600 text-white font-medium shadow-xs"
+                            : isPixelTheme
+                              ? "bg-background text-foreground border border-border hover:bg-muted"
+                              : "bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700"
+                        }`}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 4. 每天重复开关 */}
+                  <div className="flex items-center justify-between pt-1 border-t border-border/50 text-xs">
+                    <span className="text-muted-foreground text-[11px]">每天重复提醒</span>
+                    <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={draftRepeat}
+                        className="rounded border-input text-blue-600 focus:ring-blue-500"
+                        onChange={(e) => setDraftRepeat(e.target.checked)}
+                      />
+                    </label>
+                  </div>
                 </div>
               )}
-              <div className={`flex items-center justify-end gap-2 px-3 py-2 border-t mt-1 ${isPixelTheme ? "border-border" : "border-slate-200/60 dark:border-slate-800"}`}>
-                <button
-                  type="button"
-                  className={`px-2.5 py-1 text-xs transition-colors cursor-pointer ${
-                    isPixelTheme
-                      ? "rounded-xs border border-border bg-muted hover:bg-accent text-foreground shadow-[1px_1px_0px_#000]"
-                      : "rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
-                  }`}
-                  onClick={() => setThird(null)}
-                >
-                  取消
-                </button>
-                <button
-                  type="button"
-                  className={`px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
-                    isPixelTheme
-                      ? "rounded-xs bg-amber-600 hover:bg-amber-700 text-white shadow-[1px_1px_0px_#000]"
-                      : "rounded-lg bg-blue-600 text-white hover:bg-blue-700"
-                  }`}
-                  onClick={saveRemind}
-                >
-                  保存
-                </button>
+
+              {/* 实时提醒预览摘要 */}
+              <div className="px-1 py-0.5 text-[11px] text-muted-foreground flex items-center justify-between">
+                <span>预计提醒:</span>
+                <span className="font-semibold text-foreground">
+                  {draftOffset === 0 ? "当天" : `提前 ${draftOffset} 天`} {draftTime}
+                  {draftRepeat ? " (每天)" : ""}
+                </span>
+              </div>
+
+              {/* 操作按钮栏 */}
+              <div
+                className={`flex items-center justify-between gap-1.5 px-1 py-1.5 border-t mt-0.5 ${
+                  isPixelTheme ? "border-border" : "border-slate-200/60 dark:border-slate-800"
+                }`}
+              >
+                {appliedReminder ? (
+                  <button
+                    type="button"
+                    className={`px-2 py-1 text-[11px] text-rose-500 hover:text-rose-600 transition-colors cursor-pointer ${
+                      isPixelTheme ? "rounded-xs hover:bg-rose-950/30" : "rounded-md hover:bg-rose-50 dark:hover:bg-rose-950/40"
+                    }`}
+                    onClick={clearRemind}
+                  >
+                    清除提醒
+                  </button>
+                ) : (
+                  <div />
+                )}
+
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    className={`px-2.5 py-1 text-xs transition-colors cursor-pointer ${
+                      isPixelTheme
+                        ? "rounded-xs border border-border bg-muted hover:bg-accent text-foreground shadow-[1px_1px_0px_#000]"
+                        : "rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800"
+                    }`}
+                    onClick={() => setThird(null)}
+                  >
+                    取消
+                  </button>
+                  <button
+                    type="button"
+                    className={`px-2.5 py-1 text-xs font-semibold transition-colors cursor-pointer ${
+                      isPixelTheme
+                        ? "rounded-xs bg-amber-600 hover:bg-amber-700 text-white shadow-[1px_1px_0px_#000]"
+                        : "rounded-lg bg-blue-600 text-white hover:bg-blue-700 shadow-xs"
+                    }`}
+                    onClick={saveRemind}
+                  >
+                    保存
+                  </button>
+                </div>
               </div>
             </div>
           )}

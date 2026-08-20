@@ -24,7 +24,7 @@ import { MonthView } from "./MonthView";
 import {
   openQuickEditWindow,
 } from "@/services/quickEditWindow";
-import { startTaskReminderScheduler } from "@/services/taskReminderScheduler";
+import { listen } from "@tauri-apps/api/event";
 import { getTaskEndAt, taskIntersectsDay, taskIntersectsInterval, taskTimeLabel, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
 import { toggleFocusAssistant } from "@/services/focusAssistantWindow";
 import { getTaskDescriptionText } from "@/lib/taskDescription";
@@ -60,8 +60,23 @@ export const TimeManagementPanel: React.FC = () => {
   }, [tasks]);
 
   useEffect(() => {
-    const cleanup = startTaskReminderScheduler(() => tasksRef.current);
-    return cleanup;
+    let unlisten: (() => void) | undefined;
+    const setupListener = async () => {
+      try {
+        unlisten = await listen<{ taskId: string }>("workbuddy:navigate-to-task", (event) => {
+          const targetTask = tasksRef.current.find((t) => t.id === event.payload.taskId);
+          if (targetTask) {
+            handleOpenTaskEditor(targetTask, targetTask.quadrant);
+          }
+        });
+      } catch {
+        // Non-tauri environment fallback
+      }
+    };
+    void setupListener();
+    return () => {
+      if (unlisten) unlisten();
+    };
   }, []);
 
   const handleOpenTaskEditor = (

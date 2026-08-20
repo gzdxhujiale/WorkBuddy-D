@@ -23,6 +23,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import { useFocusTaskOptions } from "@/hooks/useTimeManagement";
 import { useHabitData } from "@/hooks/useHabits";
 import { useProjectsData } from "@/hooks/useProjects";
@@ -32,6 +33,7 @@ import {
   playVictorySound,
   playRestEndSound,
   playPokeSound,
+  playTaskReminderSound,
   isSoundEnabled,
   setSoundEnabled,
 } from "@/lib/soundFeedback";
@@ -458,6 +460,77 @@ export function FocusAssistant() {
       if (unlisten) unlisten();
     };
   }, [isPinned, activeModal, showStats, isPurePet]);
+
+  // Listen for global task reminders & focus selection events
+  useEffect(() => {
+    let unlistenReminder: (() => void) | undefined;
+    let unlistenSelectTask: (() => void) | undefined;
+    let glowTimer: number | null = null;
+    let knockTimer: number | null = null;
+
+    const setupListeners = async () => {
+      try {
+        unlistenReminder = await listen<{
+          taskId: string;
+          title: string;
+          body?: string;
+          dateText?: string;
+        }>("workbuddy:task-reminder", (event) => {
+          const { title } = event.payload;
+
+          // 1. Trigger attention-grabbing glow
+          setIsGlowActive(true);
+          if (glowTimer) window.clearTimeout(glowTimer);
+          glowTimer = window.setTimeout(() => {
+            setIsGlowActive(false);
+            glowTimer = null;
+          }, 8000);
+
+          // 2. Animate pet in knocking / attention state
+          setPetOverrideState("knocking");
+          if (knockTimer) window.clearTimeout(knockTimer);
+          knockTimer = window.setTimeout(() => {
+            setPetOverrideState(null);
+            knockTimer = null;
+          }, 6000);
+
+          // 3. Pet speaks customized reminder dialogue
+          const dialogueText = getDialogue("task_reminder", { targetName: title });
+          speak(dialogueText, 7000);
+
+          // 4. Audio chime
+          void playTaskReminderSound(currentThemeStyle === "pixel");
+        });
+
+        unlistenSelectTask = await listen<{
+          taskId: string;
+          taskTitle: string;
+        }>("workbuddy:select-focus-task", (event) => {
+          const { taskId, taskTitle } = event.payload;
+          const target: SelectedTarget = {
+            type: "task",
+            id: taskId,
+            name: taskTitle || "专注任务",
+          };
+          setSelectedTarget(target);
+          localStorage.setItem("workbuddy.focusAssistant.target", JSON.stringify(target));
+          const text = getDialogue("focus_start", { targetName: target.name });
+          speak(text, 4000);
+        });
+      } catch {
+        // Browser fallback
+      }
+    };
+
+    void setupListeners();
+
+    return () => {
+      if (unlistenReminder) unlistenReminder();
+      if (unlistenSelectTask) unlistenSelectTask();
+      if (glowTimer) window.clearTimeout(glowTimer);
+      if (knockTimer) window.clearTimeout(knockTimer);
+    };
+  }, [currentSpecies, currentThemeStyle]);
 
   // Pet state
   const petState: PetState = useMemo(() => {

@@ -34,7 +34,8 @@ export async function requestNotificationPermission(): Promise<boolean> {
 export interface DesktopNotificationOptions {
   petType?: "cat" | "dog" | "shiba";
   themeStyle?: "modern" | "pixel";
-  eventType?: "focus_complete" | "rest_complete" | "general";
+  eventType?: "focus_complete" | "rest_complete" | "task_reminder" | "general";
+  taskId?: string;
 }
 
 export async function sendDesktopNotification(
@@ -43,8 +44,9 @@ export async function sendDesktopNotification(
   options?: DesktopNotificationOptions
 ): Promise<void> {
   const petType = options?.petType || "cat";
-  const themeStyle = options?.themeStyle || getAppThemeStyle();
+  const themeStyle = options?.themeStyle || (getAppThemeStyle() === "retro-pixel" ? "pixel" : "modern");
   const eventType = options?.eventType || "focus_complete";
+  const taskId = options?.taskId || null;
 
   // 1. Multi-monitor toast overlay windows across all connected displays
   try {
@@ -54,6 +56,7 @@ export async function sendDesktopNotification(
       petType,
       themeStyle,
       eventType,
+      taskId,
     });
   } catch (error) {
     logError("notification", "Multi-monitor notification failed", error);
