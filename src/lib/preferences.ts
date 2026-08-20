@@ -25,7 +25,7 @@ export function getAppThemeStyle(): AppThemeStyle {
   if (saved === "retro-pixel" || saved === "default") {
     return saved;
   }
-  return "default";
+  return "retro-pixel";
 }
 
 export function setAppThemeStyle(style: AppThemeStyle): void {

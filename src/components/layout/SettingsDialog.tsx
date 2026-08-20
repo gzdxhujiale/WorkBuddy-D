@@ -5,6 +5,7 @@ import {
   LogOut,
   Mail,
   Palette,
+  Power,
   Settings2,
   SlidersHorizontal,
   Sparkles,
@@ -13,6 +14,11 @@ import {
   X,
   Check,
 } from "lucide-react";
+import {
+  enable as enableAutostart,
+  disable as disableAutostart,
+  isEnabled as isAutostartEnabled,
+} from "@tauri-apps/plugin-autostart";
 import { useAuth } from "@/lib/auth";
 import {
   setOpenFocusAssistantOnStart as persistOpenFocusAssistantOnStart,
@@ -22,6 +28,7 @@ import {
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { supabase } from "@/lib/supabase";
 import { ProjectTemplateManager } from "@/components/projects/ProjectTemplateManager";
+import { Switch } from "@/components/ui/switch";
 import {
   PixelFlame,
   PixelSword,
@@ -43,6 +50,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const { session } = useAuth();
   const [tab, setTab] = useState<Tab>("general");
   const [openFocusAssistantOnStart, setOpenFocusAssistantOnStart] = useState(shouldOpenFocusAssistantOnStart);
+  const [autostartEnabled, setAutostartEnabled] = useState(false);
+  const [autostartLoading, setAutostartLoading] = useState(true);
   const { themeStyle, setThemeStyle, isPixelTheme } = useAppThemeStyle();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -53,6 +62,44 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const profileUsername = [metadata?.username, metadata?.name, metadata?.full_name]
     .find((value): value is string => typeof value === "string" && value.trim().length > 0);
   const username = profileUsername ?? email.split("@")[0] ?? "未设置用户名";
+
+  useEffect(() => {
+    let active = true;
+    isAutostartEnabled()
+      .then((enabled) => {
+        if (active) setAutostartEnabled(enabled);
+      })
+      .catch((err) => {
+        console.warn("Failed to check autostart status:", err);
+      })
+      .finally(() => {
+        if (active) setAutostartLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const handleToggleAutostart = async (checked: boolean) => {
+    setAutostartLoading(true);
+    try {
+      if (checked) {
+        await enableAutostart();
+        setAutostartEnabled(true);
+      } else {
+        await disableAutostart();
+        setAutostartEnabled(false);
+      }
+    } catch (err) {
+      console.error("Failed to toggle autostart:", err);
+      try {
+        const currentStatus = await isAutostartEnabled();
+        setAutostartEnabled(currentStatus);
+      } catch {}
+    } finally {
+      setAutostartLoading(false);
+    }
+  };
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -119,7 +166,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               <Settings2 size={18} />
             )}
             <span className={cn(isPixelTheme && "font-mono font-bold")}>
-              {isPixelTheme ? "⚙️ 冒险配置" : "设置"}
+              {isPixelTheme ? "冒险配置" : "设置"}
             </span>
           </div>
           <nav aria-label="设置分类" className="space-y-1.5">
@@ -145,10 +192,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   <Icon size={16} />
                   {isPixelTheme
                     ? item.id === "account"
-                      ? "⚔️ 冒险家账号"
+                      ? "冒险家账号"
                       : item.id === "general"
-                      ? "🔮 核心设定"
-                      : "📜 战术模板"
+                      ? "核心设定"
+                      : "战术模板"
                     : item.label}
                 </button>
               );
@@ -176,10 +223,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             >
               {isPixelTheme
                 ? current.id === "account"
-                  ? "⚔️ 冒险家账号档案"
+                  ? "冒险家账号档案"
                   : current.id === "general"
-                  ? "🔮 核心系统设定"
-                  : "📜 战术模板管理"
+                  ? "核心系统设定"
+                  : "战术模板管理"
                 : current.label}
             </h2>
             <button
@@ -222,7 +269,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                       {username}
                     </h3>
                     <p className="mt-1 text-sm text-muted-foreground">
-                      {isPixelTheme ? "🎖️ 当前登录冒险家" : "当前登录账号"}
+                      {isPixelTheme ? "当前登录冒险家" : "当前登录账号"}
                     </p>
                   </div>
                 </div>
@@ -268,7 +315,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 >
                   <div>
                     <h3 className="font-medium text-foreground">
-                      {isPixelTheme ? "⚔️ 解除冒险者契约 (退出登录)" : "退出登录"}
+                      {isPixelTheme ? "解除冒险者契约 (退出登录)" : "退出登录"}
                     </h3>
                     <p className="mt-1 text-xs text-muted-foreground">
                       {isPixelTheme
@@ -301,7 +348,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                     {isPixelTheme ? <PixelSparkle size={18} /> : <Palette size={18} className="text-primary" />}
                     <div>
                       <h3 className={cn("text-foreground", isPixelTheme ? "font-mono font-bold text-sm" : "font-semibold")}>
-                        {isPixelTheme ? "🎨 界面视觉与交互风格" : "界面视觉风格"}
+                        {isPixelTheme ? "界面视觉与交互风格" : "界面视觉风格"}
                       </h3>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {isPixelTheme ? "切换现代极简或 8-bit RPG 像素冒险模式" : "选择你喜爱的设计语言与交互风格"}
@@ -310,7 +357,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   </div>
 
                   <div className="grid grid-cols-2 gap-4 pt-1">
-                    {/* 选项 1: 初始风格 */}
+                    {/* 选项 1: 现代简洁风 */}
                     <div
                       onClick={() => handleSelectThemeStyle("default")}
                       className={cn(
@@ -337,7 +384,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                             <Sparkles size={18} />
                           </div>
                           <span className={cn("text-sm font-bold text-foreground", isPixelTheme && "font-mono")}>
-                            初始风格
+                            现代简洁风
                           </span>
                         </div>
                         {themeStyle === "default" && (
@@ -444,52 +491,46 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
 
-                <div className={cn("pt-6", isPixelTheme ? "border-t-2 border-border/90 font-mono" : "border-t border-border")}>
+                <div className={cn("pt-6 space-y-4", isPixelTheme ? "border-t-2 border-border/90 font-mono" : "border-t border-border")}>
+                  {/* 开机自启动开关 */}
+                  <div className="flex items-center justify-between gap-5">
+                    <div className="flex items-center gap-3">
+                      <Power size={19} className={cn(isPixelTheme ? "text-amber-600 dark:text-amber-400" : "text-primary")} />
+                      <div>
+                        <h3 className={cn("text-foreground", isPixelTheme ? "font-mono font-bold text-sm" : "font-medium")}>
+                          {isPixelTheme ? "开机自动启程 (开机自启动)" : "开机自启动"}
+                        </h3>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {isPixelTheme ? "开机登录操作系统后，自动启动 WorkBuddy 冒险工坊" : "开机登录系统后自动启动 WorkBuddy"}
+                        </p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={autostartEnabled}
+                      onCheckedChange={handleToggleAutostart}
+                      disabled={autostartLoading}
+                      ariaLabel={isPixelTheme ? "开机自启动" : "开机自启动"}
+                    />
+                  </div>
+
+                  {/* 启动时打开悬浮专注助手 */}
                   <div className="flex items-center justify-between gap-5">
                     <div className="flex items-center gap-3">
                       <Timer size={19} className={cn(isPixelTheme ? "text-amber-600 dark:text-amber-400" : "text-primary")} />
                       <div>
                         <h3 className={cn("text-foreground", isPixelTheme ? "font-mono font-bold text-sm" : "font-medium")}>
-                          {isPixelTheme ? "⏱️ 启动时自动召唤悬浮专注助手" : "启动时打开悬浮专注助手"}
+                          {isPixelTheme ? "启动时自动召唤悬浮专注助手" : "启动时打开悬浮专注助手"}
                         </h3>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {isPixelTheme ? "启动冒险工坊时，自动召唤桌面精灵专注伙伴" : "打开应用后自动显示专注助手"}
                         </p>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={openFocusAssistantOnStart}
-                      onClick={toggleFocusAssistantOnStart}
-                      className={cn(
-                        "relative cursor-pointer transition-all",
-                        isPixelTheme
-                          ? cn(
-                              "h-6 w-11 rounded-xs border-2 border-amber-900 shadow-[1px_1px_0px_#000]",
-                              openFocusAssistantOnStart ? "bg-amber-500" : "bg-muted-foreground/30"
-                            )
-                          : cn(
-                              "h-6 w-11 rounded-full",
-                              openFocusAssistantOnStart ? "bg-primary" : "bg-muted-foreground/30"
-                            )
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "absolute top-0.5 transition-transform",
-                          isPixelTheme
-                            ? cn(
-                                "size-4.5 rounded-xs bg-white border border-black/80 shadow-[1px_1px_0px_#000]",
-                                openFocusAssistantOnStart ? "translate-x-5" : "translate-x-0.5"
-                              )
-                            : cn(
-                                "size-5 rounded-full bg-white shadow",
-                                openFocusAssistantOnStart ? "translate-x-5" : "translate-x-0.5"
-                              )
-                        )}
-                      />
-                    </button>
+                    <Switch
+                      checked={openFocusAssistantOnStart}
+                      onCheckedChange={toggleFocusAssistantOnStart}
+                      ariaLabel={isPixelTheme ? "启动时自动召唤悬浮专注助手" : "启动时打开悬浮专注助手"}
+                    />
                   </div>
                 </div>
               </div>

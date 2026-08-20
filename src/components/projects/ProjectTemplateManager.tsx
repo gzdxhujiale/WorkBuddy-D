@@ -38,7 +38,7 @@ export function ProjectTemplateManager() {
           <div className="flex items-center gap-1.5">
             {isPixelTheme && <PixelSword size={16} />}
             <h3 className="font-semibold text-foreground">
-              {isPixelTheme ? "⚔️ 冒险公会战术蓝图 (项目模板)" : "项目模板"}
+              {isPixelTheme ? "冒险公会战术蓝图 (项目模板)" : "项目模板"}
             </h3>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">

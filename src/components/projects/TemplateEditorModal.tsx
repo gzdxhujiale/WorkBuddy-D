@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import {
-  X,
   Plus,
   Trash2,
   ChevronLeft,
@@ -15,7 +14,7 @@ import { QUADRANT_DB_MAP } from "@/types/timeManagement";
 import type { Priority, ProjectTemplate, ProjectTemplateDefinition, ProjectTemplateStage, ProjectTemplateTask } from "@/types/projects";
 import { createProjectTemplateId } from "@/lib/entityIds";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
-import { PixelSword, PixelShield, PixelScroll } from "@/components/pixel/PixelIcons";
+import { PixelSword, PixelScroll } from "@/components/pixel/PixelIcons";
 import { cn } from "@/lib/utils";
 
 export interface TemplateEditorModalProps {
@@ -108,13 +107,15 @@ export function TemplateEditorModal({
   }, [open, template]);
 
   // Stage Handlers
-  const handleAddStage = () => {
-    if (!newStageName.trim()) return;
+  const handleAddStage = (customName?: string, customAssignee?: string) => {
+    const finalName = (customName !== undefined ? customName : newStageName).trim();
+    if (!finalName) return;
+    const finalAssignee = (customAssignee !== undefined ? customAssignee : newStageAssignee).trim();
     const stageKey = `stage_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
     const newStage: ProjectTemplateStage = {
       key: stageKey,
-      name: newStageName.trim(),
-      defaultAssigneeName: newStageAssignee.trim() || undefined,
+      name: finalName,
+      defaultAssigneeName: finalAssignee || undefined,
     };
     setStages((prev) => [...prev, newStage]);
     setNewStageName("");
@@ -238,7 +239,7 @@ export function TemplateEditorModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "max-w-3xl max-h-[85vh] flex flex-col p-0 overflow-hidden",
+          "w-full max-w-5xl lg:max-w-2xl max-h-[80vh] flex flex-col p-0 overflow-hidden",
           isPixelTheme ? "font-mono border-2 border-border/90 rounded-xs shadow-[6px_6px_0px_rgba(0,0,0,0.3)]" : "rounded-xl"
         )}
         onClose={() => onOpenChange(false)}
@@ -255,11 +256,11 @@ export function TemplateEditorModal({
             <span>
               {template
                 ? isPixelTheme
-                  ? "📜 编辑公会战术蓝图 (项目模板)"
+                  ? "编辑公会战术蓝图 (项目模板)"
                   : "编辑项目模板"
                 : isPixelTheme
-                ? "✨ 新建公会战术蓝图 (项目模板)"
-                : "新建项目模板"}
+                  ? "新建公会战术蓝图 (项目模板)"
+                  : "新建项目模板"}
             </span>
           </DialogTitle>
           <DialogDescription className="text-xs text-muted-foreground mt-1">
@@ -310,17 +311,17 @@ export function TemplateEditorModal({
             </div>
           </section>
 
-          {/* Section 1: Stage Pipeline Management */}
-          <section className="space-y-3">
+          {/* Section: Stage & Task Planning */}
+          <section className="space-y-4 pt-1">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <span className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5", isPixelTheme && "font-mono")}>
-                  {isPixelTheme ? <PixelShield size={14} /> : <Layers size={14} className="text-primary" />}
-                  <span>阶段流程编排</span>
+                  {isPixelTheme ? <PixelScroll size={14} /> : <ListTodo size={14} className="text-primary" />}
+                  <span>阶段与预设委托任务规划</span>
                 </span>
                 <span className={cn(
                   "text-[11px] px-1.5 py-0.2 rounded-full",
-                  isPixelTheme ? "rounded-xs font-mono bg-amber-200 text-amber-950 border border-amber-900/40" : "bg-muted text-muted-foreground"
+                  isPixelTheme ? "rounded-xs font-mono bg-emerald-200 text-emerald-950 border border-emerald-900/40" : "bg-muted text-muted-foreground"
                 )}>
                   {stages.length} 个阶段
                 </span>
@@ -333,7 +334,7 @@ export function TemplateEditorModal({
                   className={cn(
                     "inline-flex items-center gap-1 text-xs font-medium cursor-pointer transition-all",
                     isPixelTheme
-                      ? "px-2 py-1 rounded-xs bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold border-2 border-amber-900 shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                      ? "px-2.5 py-1 rounded-xs bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold border-2 border-amber-900 shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
                       : "text-primary hover:underline"
                   )}
                 >
@@ -341,87 +342,6 @@ export function TemplateEditorModal({
                   <span>新增阶段</span>
                 </button>
               )}
-            </div>
-
-            {/* Stages Pipeline List */}
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              {stages.map((stage, idx) => (
-                <div
-                  key={stage.key}
-                  className={cn(
-                    "flex items-center gap-1.5 p-1.5 pl-2.5 transition-all",
-                    isPixelTheme
-                      ? "rounded-xs border-2 border-border/90 bg-card shadow-[2px_2px_0px_#000] font-mono"
-                      : "rounded-lg border border-border bg-card shadow-2xs"
-                  )}
-                >
-                  {/* Stage Index Badge */}
-                  <span
-                    className={cn(
-                      "flex items-center justify-center size-5 text-[11px] font-bold select-none",
-                      isPixelTheme
-                        ? "rounded-xs bg-amber-500 text-amber-950 border border-amber-900"
-                        : "rounded-full bg-primary/10 text-primary"
-                    )}
-                  >
-                    {idx + 1}
-                  </span>
-
-                  {/* Stage Name Input */}
-                  <input
-                    value={stage.name}
-                    onChange={(e) => handleUpdateStage(stage.key, { name: e.target.value })}
-                    placeholder="阶段名称"
-                    className={cn(
-                      "h-6 w-24 bg-transparent text-xs font-bold text-foreground outline-none",
-                      isPixelTheme && "font-mono"
-                    )}
-                  />
-
-                  {/* Default Assignee Pill */}
-                  <div className="flex items-center gap-1 bg-muted/60 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground">
-                    <UserRound size={11} className="shrink-0" />
-                    <input
-                      value={stage.defaultAssigneeName ?? ""}
-                      onChange={(e) => handleUpdateStage(stage.key, { defaultAssigneeName: e.target.value })}
-                      placeholder="负责人"
-                      className="w-14 bg-transparent text-[11px] outline-none text-foreground"
-                    />
-                  </div>
-
-                  {/* Reorder Buttons */}
-                  <div className="flex items-center">
-                    <button
-                      type="button"
-                      disabled={idx === 0}
-                      onClick={() => handleMoveStage(idx, -1)}
-                      className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
-                      title="前移阶段"
-                    >
-                      <ChevronLeft size={14} />
-                    </button>
-                    <button
-                      type="button"
-                      disabled={idx === stages.length - 1}
-                      onClick={() => handleMoveStage(idx, 1)}
-                      className="p-0.5 text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
-                      title="后移阶段"
-                    >
-                      <ChevronRight size={14} />
-                    </button>
-                  </div>
-
-                  {/* Delete Stage */}
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteStage(stage.key)}
-                    className="p-0.5 text-muted-foreground hover:text-destructive cursor-pointer ml-0.5"
-                    title="删除阶段"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              ))}
             </div>
 
             {/* Inline Add Stage Bar */}
@@ -436,7 +356,7 @@ export function TemplateEditorModal({
                   autoFocus
                   value={newStageName}
                   onChange={(e) => setNewStageName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddStage()}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddStage(newStageName, newStageAssignee)}
                   placeholder="新阶段名称 (例如：上线发布)"
                   className={cn(
                     "h-8 px-2.5 bg-background text-xs rounded border border-border outline-none flex-1 min-w-[160px]",
@@ -446,7 +366,7 @@ export function TemplateEditorModal({
                 <input
                   value={newStageAssignee}
                   onChange={(e) => setNewStageAssignee(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleAddStage()}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddStage(newStageName, newStageAssignee)}
                   placeholder="默认负责人 (例如：运维)"
                   className={cn(
                     "h-8 px-2.5 bg-background text-xs rounded border border-border outline-none w-32",
@@ -455,7 +375,7 @@ export function TemplateEditorModal({
                 />
                 <Button
                   size="sm"
-                  onClick={handleAddStage}
+                  onClick={() => handleAddStage(newStageName, newStageAssignee)}
                   className={cn(
                     "h-8 text-xs",
                     isPixelTheme && "rounded-xs border-2 shadow-[1px_1px_0px_#000]"
@@ -477,27 +397,9 @@ export function TemplateEditorModal({
                 </Button>
               </div>
             )}
-          </section>
 
-          {/* Section 2: Stage-Grouped Tasks Planning */}
-          <section className="space-y-4 pt-2 border-t border-border">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className={cn("text-xs font-bold uppercase tracking-wider text-foreground flex items-center gap-1.5", isPixelTheme && "font-mono")}>
-                  {isPixelTheme ? <PixelScroll size={14} /> : <ListTodo size={14} className="text-primary" />}
-                  <span>阶段预设委托任务规划</span>
-                </span>
-                <span className={cn(
-                  "text-[11px] px-1.5 py-0.2 rounded-full",
-                  isPixelTheme ? "rounded-xs font-mono bg-emerald-200 text-emerald-950 border border-emerald-900/40" : "bg-muted text-muted-foreground"
-                )}>
-                  共 {tasks.length} 项任务
-                </span>
-              </div>
-            </div>
-
-            {/* Stages Cards with Tasks */}
-            <div className="space-y-3.5">
+            {/* Stages Cards with Integrated Flow Controls & Task Delegation */}
+            <div className="space-y-4">
               {stages.map((stage, sIdx) => {
                 const stageTasks = tasks
                   .map((task, originalIndex) => ({ task, originalIndex }))
@@ -513,19 +415,20 @@ export function TemplateEditorModal({
                         : "rounded-xl border border-border bg-card/60 shadow-2xs"
                     )}
                   >
-                    {/* Stage Card Header */}
+                    {/* Stage Card Header (Integrated with stage name, default assignee, reorder, delete & add task) */}
                     <div
                       className={cn(
-                        "flex items-center justify-between px-3.5 py-2 border-b select-none",
+                        "flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 border-b select-none",
                         isPixelTheme
                           ? "border-b-2 border-border/90 bg-amber-100/50 dark:bg-amber-950/40 font-mono"
                           : "border-border bg-muted/40"
                       )}
                     >
-                      <div className="flex items-center gap-2 min-w-0">
+                      {/* Left: Index badge + Inline Stage Name + Default Assignee */}
+                      <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                         <span
                           className={cn(
-                            "flex items-center justify-center size-5 text-[11px] font-black",
+                            "flex items-center justify-center size-5 text-[11px] font-black shrink-0",
                             isPixelTheme
                               ? "rounded-xs bg-amber-500 text-amber-950 border border-amber-900"
                               : "rounded-full bg-primary text-primary-foreground"
@@ -533,27 +436,78 @@ export function TemplateEditorModal({
                         >
                           {sIdx + 1}
                         </span>
-                        <span className={cn("text-xs font-bold text-foreground truncate", isPixelTheme && "font-mono")}>
-                          {stage.name || "未命名阶段"}
-                        </span>
-                        <span className="text-[11px] text-muted-foreground">
-                          ({stageTasks.length} 项任务)
-                        </span>
+
+                        <input
+                          value={stage.name}
+                          onChange={(e) => handleUpdateStage(stage.key, { name: e.target.value })}
+                          placeholder="阶段名称"
+                          className={cn(
+                            "h-6 px-2 bg-background/80 hover:bg-background focus:bg-background text-xs font-bold text-foreground outline-none rounded border border-border/60 focus:border-primary w-36",
+                            isPixelTheme && "font-mono rounded-xs border-2 border-border/80 focus:border-amber-700"
+                          )}
+                        />
+
+                        {/* Default Assignee Pill */}
+                        <div className="flex items-center gap-1 bg-muted/70 px-1.5 py-0.5 rounded text-[11px] text-muted-foreground shrink-0 border border-border/40">
+                          <UserRound size={11} className="shrink-0" />
+                          <input
+                            value={stage.defaultAssigneeName ?? ""}
+                            onChange={(e) => handleUpdateStage(stage.key, { defaultAssigneeName: e.target.value })}
+                            placeholder="默认负责人"
+                            className="w-20 bg-transparent text-[11px] outline-none text-foreground placeholder:text-muted-foreground/60"
+                          />
+                        </div>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => handleAddTask(stage.key)}
-                        className={cn(
-                          "inline-flex items-center gap-1 text-xs font-medium cursor-pointer transition-all",
-                          isPixelTheme
-                            ? "px-2 py-0.5 rounded-xs bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold border border-amber-900 shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
-                            : "text-primary hover:underline"
-                        )}
-                      >
-                        <Plus size={13} />
-                        <span>添加任务</span>
-                      </button>
+                      {/* Right: Stage Reorder, Delete Stage & Add Task buttons */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {/* Reorder Buttons */}
+                        <div className="flex items-center bg-muted/40 rounded border border-border/40 px-0.5">
+                          <button
+                            type="button"
+                            disabled={sIdx === 0}
+                            onClick={() => handleMoveStage(sIdx, -1)}
+                            className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
+                            title="前移阶段"
+                          >
+                            <ChevronLeft size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={sIdx === stages.length - 1}
+                            onClick={() => handleMoveStage(sIdx, 1)}
+                            className="p-1 text-muted-foreground hover:text-foreground disabled:opacity-20 cursor-pointer"
+                            title="后移阶段"
+                          >
+                            <ChevronRight size={13} />
+                          </button>
+                        </div>
+
+                        {/* Delete Stage Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteStage(stage.key)}
+                          className="p-1 text-muted-foreground hover:text-destructive cursor-pointer rounded hover:bg-destructive/10 transition-colors"
+                          title="删除该阶段"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+
+                        {/* Add Task Button */}
+                        <button
+                          type="button"
+                          onClick={() => handleAddTask(stage.key)}
+                          className={cn(
+                            "inline-flex items-center gap-1 text-xs font-medium cursor-pointer transition-all ml-1",
+                            isPixelTheme
+                              ? "px-2 py-0.5 rounded-xs bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold border border-amber-900 shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                              : "text-primary hover:underline"
+                          )}
+                        >
+                          <Plus size={13} />
+                          <span>添加任务</span>
+                        </button>
+                      </div>
                     </div>
 
                     {/* Task List under Stage */}
@@ -562,7 +516,7 @@ export function TemplateEditorModal({
                         <div
                           onClick={() => handleAddTask(stage.key)}
                           className={cn(
-                            "py-4 text-center text-xs text-muted-foreground/80 cursor-pointer border border-dashed rounded-lg transition-colors hover:border-primary/40 hover:text-primary",
+                            "py-3 text-center text-xs text-muted-foreground/80 cursor-pointer border border-dashed rounded-lg transition-colors hover:border-primary/40 hover:text-primary",
                             isPixelTheme && "font-mono rounded-xs border-2 hover:border-amber-600"
                           )}
                         >
@@ -583,7 +537,7 @@ export function TemplateEditorModal({
                               )}
                             >
                               {/* Index Dot */}
-                              <span className="text-[11px] text-muted-foreground/60 w-4 text-center font-mono">
+                              <span className="text-[11px] text-muted-foreground/60 w-4 text-center font-mono shrink-0">
                                 {tIdx + 1}.
                               </span>
 
@@ -620,17 +574,17 @@ export function TemplateEditorModal({
                                     ? task.priority === "urgent"
                                       ? "rounded-xs bg-red-200 text-red-950 border border-red-700 shadow-[1px_1px_0px_#000]"
                                       : task.priority === "high"
-                                      ? "rounded-xs bg-amber-200 text-amber-950 border border-amber-700 shadow-[1px_1px_0px_#000]"
-                                      : task.priority === "low"
-                                      ? "rounded-xs bg-emerald-200 text-emerald-950 border border-emerald-700 shadow-[1px_1px_0px_#000]"
-                                      : "rounded-xs bg-blue-200 text-blue-950 border border-blue-700 shadow-[1px_1px_0px_#000]"
+                                        ? "rounded-xs bg-amber-200 text-amber-950 border border-amber-700 shadow-[1px_1px_0px_#000]"
+                                        : task.priority === "low"
+                                          ? "rounded-xs bg-emerald-200 text-emerald-950 border border-emerald-700 shadow-[1px_1px_0px_#000]"
+                                          : "rounded-xs bg-blue-200 text-blue-950 border border-blue-700 shadow-[1px_1px_0px_#000]"
                                     : task.priority === "urgent"
-                                    ? "rounded-md bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300 border border-red-300/40"
-                                    : task.priority === "high"
-                                    ? "rounded-md bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-300/40"
-                                    : task.priority === "low"
-                                    ? "rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/40"
-                                    : "rounded-md bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300/40"
+                                      ? "rounded-md bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300 border border-red-300/40"
+                                      : task.priority === "high"
+                                        ? "rounded-md bg-orange-100 text-orange-700 dark:bg-orange-950/60 dark:text-orange-300 border border-orange-300/40"
+                                        : task.priority === "low"
+                                          ? "rounded-md bg-emerald-100 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300/40"
+                                          : "rounded-md bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-300 border border-blue-300/40"
                                 )}
                               >
                                 {isPixelTheme ? pMeta.pixelLabel : pMeta.label}
@@ -653,6 +607,23 @@ export function TemplateEditorModal({
                   </div>
                 );
               })}
+
+              {/* Bottom Add Stage Button */}
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isAddingStage) setIsAddingStage(true);
+                }}
+                className={cn(
+                  "w-full py-2.5 text-center text-xs font-semibold cursor-pointer border border-dashed rounded-lg transition-colors flex items-center justify-center gap-1.5",
+                  isPixelTheme
+                    ? "rounded-xs border-2 border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20 text-amber-900 dark:text-amber-200 hover:bg-amber-100/60 font-mono shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                    : "border-border text-muted-foreground hover:text-primary hover:border-primary/40 hover:bg-muted/30"
+                )}
+              >
+                <Plus size={14} />
+                <span>新增流程阶段</span>
+              </button>
             </div>
           </section>
         </div>
@@ -690,8 +661,8 @@ export function TemplateEditorModal({
             {saving
               ? "保存中…"
               : isPixelTheme
-              ? "✨ 封存公会战术蓝图"
-              : "保存模板"}
+                ? "✨ 封存公会战术蓝图"
+                : "保存模板"}
           </Button>
         </DialogFooter>
       </DialogContent>

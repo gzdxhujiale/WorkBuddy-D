@@ -8,9 +8,10 @@ export interface DialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   children: React.ReactNode;
+  containerClassName?: string;
 }
 
-export function Dialog({ open, onOpenChange, children }: DialogProps) {
+export function Dialog({ open, onOpenChange, children, containerClassName }: DialogProps) {
   if (!open) return null;
 
   return createPortal(
@@ -21,7 +22,7 @@ export function Dialog({ open, onOpenChange, children }: DialogProps) {
         onClick={() => onOpenChange(false)}
       />
       {/* Container */}
-      <div className="relative z-50 w-full max-w-lg">
+      <div className={cn("relative z-50 w-full flex items-center justify-center", containerClassName)}>
         {children}
       </div>
     </div>,
@@ -40,7 +41,7 @@ export function DialogContent({
   return (
     <div
       className={cn(
-        "bg-card text-card-foreground overflow-visible animate-in fade-in zoom-in-95 duration-200 p-6 flex flex-col gap-4",
+        "relative bg-card text-card-foreground overflow-visible animate-in fade-in zoom-in-95 duration-200 p-6 flex flex-col gap-4",
         isPixelTheme
           ? "rounded-xs border-2 border-border shadow-[4px_4px_0px_#000] font-mono"
           : "rounded-2xl border border-border shadow-2xl",
@@ -53,7 +54,7 @@ export function DialogContent({
           type="button"
           onClick={onClose}
           className={cn(
-            "absolute right-4 top-4 p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
+            "absolute right-4 top-4 z-10 p-1 text-muted-foreground hover:text-foreground transition-colors cursor-pointer",
             isPixelTheme
               ? "rounded-xs border border-border bg-muted hover:bg-accent shadow-[1px_1px_0px_#000]"
               : "rounded-full hover:bg-accent"

@@ -32,27 +32,34 @@ The knowledge editor keeps local draft state and debounced persistence. Do not r
 
 `src/index.css` defines semantic background, foreground, card, popover, border, sidebar, primary, destructive, radius, animation, and quadrant tokens for light and dark themes. Use those roles or an established component pattern when they express the required meaning.
 
-### Dual Visual Themes (现代矢量风 vs 复古像素风)
+### Dual Visual Themes (现代简洁风 vs 复古像素风)
 
-WorkBuddy-D 支持在「设置 - 通用设置」中全局切换视觉风格体系（`app_theme_style`）：
-- **现代矢量风（Modern Vector）**：现代极简圆角（`rounded-xl` / `rounded-2xl`）、柔和高斯模糊阴影、低对比度线条与生动平滑矢量图标。
-- **复古像素风（Retro Pixel 8-Bit）**：8-Bit 像素直角外壳（`rounded-xs` / `border-2 border-border`）、硬边纯黑下落阴影（`shadow-[2px_2px_0px_#000]` / `shadow-[3px_3px_0px_#000]` / `shadow-[4px_4px_0px_#000]`）、经典等宽像素代码字体（`ui-monospace, "Cascadia Code"`）、按键下压回弹动效（`active:translate(1px,1px)`）与点阵金黄进度条。
-- **底层 UI 组件库自适应**：全站基础组件（`Dialog`, `Modal`, `Drawer`, `DatePicker`, `DateRangePicker`, `Popconfirm`, `Toast`, `Button`, `Input`, `Badge`, `Card`, `Item`, `Select`, `DropdownMenu`, `InputTag`）内置 `useAppThemeStyle` 驱动，在双风格间自动切换设计 Token，业务层无需重复手写适配逻辑。
+WorkBuddy-D 默认采用「复古像素风」，并支持在「设置 - 通用设置」中全局切换视觉风格体系（`app_theme_style`）：
+- **现代简洁风（Modern Clean）**：现代极简圆角（`rounded-xl` / `rounded-2xl`）、柔和高斯模糊阴影、低对比度线条与生动平滑矢量图标。
+- **复古像素风（Retro Pixel 8-Bit，系统默认）**：8-Bit 像素直角外壳（`rounded-xs` / `border-2 border-border`）、硬边纯黑下落阴影（`shadow-[2px_2px_0px_#000]` / `shadow-[3px_3px_0px_#000]` / `shadow-[4px_4px_0px_#000]`）、经典等宽像素代码字体（`ui-monospace, "Cascadia Code"`）、按键下压回弹动效（`active:translate(1.5px,1.5px)` 与 `active:shadow-none`）与点阵金黄进度条。
+- **像素交互与全屏转场系统（P0/P1/P2）**：
+  - **一级主导航游标（Selection Cursor `▶`）**：在当前激活项左侧展示经典 8-bit 微型光标 `▶`，配合 `steps(2)` 定格两帧水平跳跃（`animate-pixel-hop`），完美垂直居中；
+  - **二级侧边栏逐帧步进展开/折叠**：知识库与项目侧边栏在像素模式下采用 `steps(4, jump-none)` 阶梯式动画，文件夹折叠采用 `steps(2, jump-none)`，再现复古掌机逐帧渲染的质感；
+  - **列表项选中刻印**：知识库清单、项目中心列表、习惯打卡列表在选中时统一在左侧呈现精准居中的 `▶` 游标与加深边框投影；
+  - **主舞台 8-Bit 翻页微步进转场（Route Step-In）**：切页时触发 100ms 的 8-bit 日志翻页阶梯淡入（`animate-pixel-page-in` 搭配 `steps(3, jump-none)`），极速流畅。
+- **底层 UI 组件库自适应与浮层层级规范**：
+  - 全站基础组件（`Dialog`, `Modal`, `Drawer`, `DatePicker`, `DateRangePicker`, `Popconfirm`, `Toast`, `Button`, `Input`, `Badge`, `Card`, `Item`, `Select`, `DropdownMenu`, `InputTag`, `Switch`）内置 `useAppThemeStyle` 驱动，在双风格间自动切换设计 Token；
+  - **全局浮层与弹窗层级**：所有 Arco 浮层（`.arco-trigger`、`.arco-select-popup`、`.arco-picker-popup`、`.arco-dropdown`）统一定义为 `z-index: 1100 !important`，置于 Modal 弹窗容器（`1001`）之上；`Modal` 内部显式配置 `getChildrenPopupContainer={() => document.body}`，确保弹窗内所有下拉选择器突破内容区边界正常展开。
 - **全窗口无缝协同**：风格切换通过 Tauri 全局 IPC 事件广播（`workbuddy:theme-style-change`）同步至主窗口、快捷任务编辑浮层（`quick-edit.html`）与悬浮专注助手（`focus-assistant.html`）。
 
 ## Information hierarchy and surfaces
 
 | Surface | Intended role | Existing evidence |
 | --- | --- | --- |
-| Desktop chrome | Window controls and persistent tool navigation | `src/components/layout/AppLayout.tsx` |
-| Route canvas | Active task, habit, knowledge, or review work | `src/router.tsx`, `src/pages/` |
+| Desktop chrome | Window controls and persistent tool navigation with retro pixel cursor and physical press feedback | `src/components/layout/AppLayout.tsx` |
+| Route canvas | Active task, habit, knowledge, or review work with 8-bit step-in page transitions | `src/router.tsx`, `src/pages/`, `src/components/layout/AppLayout.tsx` |
 | Today Panel | 2-tier daily workspace: Top (Compact Focus Hub: Action Stream `[🕒 时间流/🗂️ 象限]` + Filter Pills `[全部/仅项目/仅独立]` + Habit Streaks + In-situ Review Wrap-up) and Bottom (Full-width Project Gantt Timeline with bidirectional hover glow linkage and unified scroll engine) | `src/components/today/TodayPanel.tsx`, `ProjectTimeline.tsx` |
 | Task Center | 4 Quadrants (`🔥 紧急讨伐`, `🌿 核心修炼`, `⚡ 突发委托`, `💧 支线见闻`) and period grouping | `src/components/time-management/DailyQuadrants.tsx`, `TimeManagementPanel.tsx` |
-| Project Center | Priority- and progress-sorted projects list, smart multi-dimensional status badge, compact 2x2 properties bar with Arco InputTag, Linear-style unified view control bar, vertical stage quadrant cards with schedule grouping, and full quick-edit integration | `src/pages/ProjectsPage.tsx`, `ProjectStageBoard.tsx`, `ProjectTemplateManager.tsx` |
-| Knowledge Base | 3-pane knowledge workspace: Sidebar (Folder/List tree + `📜 知识宝典`), Note List (Grouped scroll cards + Quick add feather), and Resizable Rich-Text Drawer (`ReactjsTiptapEditor` with debounced auto-seal status) | `src/pages/KnowledgePage.tsx`, `KnowledgePanel.tsx` |
+| Project Center | Priority- and progress-sorted projects list with left selection cursor, smart status badge, compact 2x2 properties bar, Linear-style view bar, stage cards, and Arco Modal pixel project creation dialog (`发起冒险项目`) | `src/pages/ProjectsPage.tsx`, `ProjectStageBoard.tsx`, `ProjectTemplateManager.tsx` |
+| Knowledge Base | 3-pane knowledge workspace: Sidebar with `steps(4)` collapse transition & list selection cursor, Note List, and Resizable Rich-Text Drawer (`ReactjsTiptapEditor`) | `src/pages/KnowledgePage.tsx`, `KnowledgePanel.tsx` |
 | Cards and panels | Group related information and actions with dual-theme tokens | `src/components/ui/card.tsx`, `src/components/ui/item.tsx`, feature panels |
-| Dialogs, modals, and drawers | Focused editing, settings, and standard dialogs with dual-theme border/shadow tokens | `src/components/ui/dialog.tsx`, `src/components/ui/modal.tsx` (Arco Modal), `src/components/ui/drawer.tsx`, `popconfirm.tsx` |
-| Floating menus and toasts | Transient actions, date picker popovers, and global feedback | `src/components/ui/dropdown-menu.tsx`, `src/components/ui/select.tsx`, `src/components/ui/date-picker.tsx`, `src/components/ui/toast.tsx` |
+| Dialogs, modals, and drawers | Focused editing, settings, and standard dialogs with dual-theme border/shadow tokens and `document.body` popup container escape | `src/components/ui/dialog.tsx`, `src/components/ui/modal.tsx` (Arco Modal), `src/components/ui/drawer.tsx`, `popconfirm.tsx` |
+| Floating menus and toasts | Transient actions, date picker popovers, high z-index (1100) selects, and global feedback | `src/components/ui/dropdown-menu.tsx`, `src/components/ui/select.tsx`, `src/components/ui/date-picker.tsx`, `src/components/ui/toast.tsx` |
 | Secondary webviews | Quick task editing (with priority flag switcher) and focus assistant companions (with 3-tab target binding & tree picker) | `quick-edit.html`, `focus-assistant.html` |
 
 ## Interaction and accessibility expectations

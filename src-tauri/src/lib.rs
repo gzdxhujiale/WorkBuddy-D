@@ -100,6 +100,10 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec![]),
+        ))
         .setup(|app| {
             let quit_item = MenuItem::with_id(app, "quit", "退出 WorkBuddy", true, None::<&str>)?;
             let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;

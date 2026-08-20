@@ -55,23 +55,32 @@ Tailwind 4 is configured through `src/index.css`; it is the application's Tailwi
 
 Key reusable primitives in `src/components/ui/` (all integrated with `useAppThemeStyle` for dual-theme token support):
 - `dialog.tsx` — accessible modal dialogs with dual-theme border, shadow, and title tokens.
-- `modal.tsx` — bridges the official `@arco-design/web-react` Modal component with theme style penetration.
+- `modal.tsx` — bridges the official `@arco-design/web-react` Modal component with theme style penetration and `getChildrenPopupContainer={() => document.body}` escape to guarantee child dropdowns and date pickers are not clipped by modal boundaries.
 - `drawer.tsx` — slide-over panels for knowledge details and focus sessions with theme tokens.
 - `date-picker.tsx` — standalone (`DatePicker`) and range (`DateRangePicker`) picker with dual-month grid, time modes, and theme tokens.
-- `select.tsx` — bridges the official `@arco-design/web-react` Select dropdown component with pixel theme tokens.
+- `select.tsx` — bridges the official `@arco-design/web-react` Select dropdown component with `getPopupContainer={() => document.body}`, `triggerProps.zIndex: 1100`, and pixel theme tokens.
 - `input-tag.tsx` — bridges the official `@arco-design/web-react` InputTag component with theme-aware tag rendering.
 - `dropdown-menu.tsx` — accessible floating dropdown menu with 3px solid black shadow in pixel mode.
 - `toast.tsx` — application-wide toast notification system with dual-theme badge styling.
 - `popconfirm.tsx` — inline confirmation popovers for destructive and critical actions with dual-theme tokens.
-- `button.tsx` — foundation button primitive with dual-theme variants, active press translation, and shadow tokens.
+- `button.tsx` — foundation button primitive with dual-theme variants, active press translation (`active:translate(1.5px, 1.5px)`), and shadow tokens.
 - `input.tsx` — foundation single-line text input with dual-theme border, focus glow, and shadow tokens.
 - `badge.tsx` — status and priority badges with theme-aware border and monospace tokens.
-- `card.tsx` & `item.tsx` — universal card and list-item containers with dual-theme background, border, and shadow tokens.
+- `card.tsx` & `item.tsx` — universal card and list-item containers with dual-theme background, border, active selection cursor indicators, and shadow tokens.
+- `switch.tsx` — accessible switch toggle primitive with dual-theme track, border, and precision thumb positioning preventing misalignment/overflow in pixel mode.
+
+### Route transitions and animations
+
+- **Main Route Canvas Transition**: In `src/components/layout/AppLayout.tsx`, the route canvas `<Outlet />` is wrapped in a dynamic container keyed by `useLocation().pathname`. Route switching triggers:
+  - **Pixel mode**: `animate-pixel-page-in` (`100ms steps(3, jump-none)` 8-bit logbook page step-in fade);
+  - **Modern mode**: `animate-fade-in` (`100ms ease-out` smooth subtle fade).
+- **Navigation and Item Cursor Hop**: Selection cursors (`▶`) use `animate-pixel-hop` (`0.8s steps(2) infinite` horizontal step hop), centered vertically via an absolute flex container.
+- **Secondary Sidebar Transition**: Knowledge base sidebar collapsing/expanding in pixel mode applies `[transition-timing-function:steps(4,jump-none)]`.
 
 ### Theme style system and multi-window IPC synchronization
 
-The application supports dual design systems: `modern` (Modern Vector) and `pixel` (Retro Pixel 8-Bit), coordinated through:
-- **Hook & Preferences API**: `useAppThemeStyle()` in `src/hooks/useAppThemeStyle.ts` and `getAppThemeStyle()`, `setAppThemeStyle()`, `applyAppThemeStyle()` in `src/lib/preferences.ts`.
+The application supports dual design systems: `default` (现代简洁风 / Modern Clean) and `retro-pixel` (复古像素风 / Retro Pixel 8-Bit，系统默认), coordinated through:
+- **Hook & Preferences API**: `useAppThemeStyle()` in `src/hooks/useAppThemeStyle.ts` and `getAppThemeStyle()`, `setAppThemeStyle()`, `applyAppThemeStyle()` in `src/lib/preferences.ts` (defaults to `"retro-pixel"` when unconfigured).
 - **Tauri IPC Global Broadcast**: Setting the theme emits `emit("workbuddy:theme-style-change", { style })`. All independent Webviews (`main`, `task-quick-edit`, `focus-assistant`) listen to this event and call `applyAppThemeStyle(style)` to synchronously toggle `.theme-retro-pixel` on `document.documentElement`.
 - **Pixel Icons System**: `src/components/pixel/PixelIcons.tsx` provides hand-crafted 8-bit SVG icons (`PixelSword`, `PixelScroll`, `PixelSparkle`, `PixelCalendar`, `PixelFlame`, `PixelLeaf`, `PixelBolt`, `PixelDrop`, `PixelBadge`, etc.) for rich retro game aesthetics.
 
