@@ -18,16 +18,11 @@ export function sortKnowledgeBases(folders: KnowledgeBase[]): KnowledgeBase[] {
   return [...folders].sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0));
 }
 
-/** Notes for a list: sortOrder ascending, then most-recently-updated. */
+/** Notes for a list, ordered by the authoritative sortOrder sequence. */
 export function getNotesByFolderId(notes: Note[], folderId: string): Note[] {
   return notes
     .filter(n => n.folderId === folderId)
-    .sort((a, b) => {
-      if (a.sortOrder !== b.sortOrder) {
-        return (a.sortOrder || 0) - (b.sortOrder || 0);
-      }
-      return b.updatedAt - a.updatedAt;
-    });
+    .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id.localeCompare(b.id));
 }
 
 /** Groups for a list, ordered by sortOrder ascending. */

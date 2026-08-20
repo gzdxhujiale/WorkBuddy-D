@@ -45,7 +45,13 @@ Broadcast 不保证作为持久化队列：断线、重连或错过消息必须�
 | 专注 `started_at`、`ended_at` | 数据库 | 创建、完成和中断 RPC |
 | 新列表/分组/笔记 `sort_order` | 数据库 | 保存 RPC + 父级范围 advisory lock |
 
-笔记、每日复盘、习惯、任务、项目、项目阶段、项目模板，以及知识库/文件夹/分组/知识库模板使用 `lock_version`。客户端可以做乐观显示，但必须在 RPC 成功后用数据库返回的 `updated_at`、`lock_version`、`sort_order` 替换缓存值。移动、排序和软删除同样必须携带已观察的版本，并由单个版本化 RPC 原子执行；它们不能退化成逐行的客户端直写或“RPC 失败后的直连表兜底”。遇到 `VERSION_CONFLICT` 时保留冲突，不得用本地时钟伪造一个新版本后重试覆盖。
+笔记、每日复盘、习惯、任务、项目、项目阶段、项目模板，以及知识库/文件夹/分组/知识库模板使用 `lock_version`。客户端可以做乐观显示，但必须在 RPC 成功后用数据库返回的 `updated_at`、`lock_version`、`sort_order` 替换缓存值。移动、排序和软删除同样必须携带已观察的版本，并由单个版本化 RPC 原子执行；它们不能退化成逐行的客户端直写或“RPC 失败后的直连表兜底”。笔记和清单跨容器移动传入目标容器完整的版本化排序集，由 `move_and_reorder_notes_v3` 或 `move_and_reorder_knowledge_base_folders_v3` 在单个事务中校验成员集、版本和连续顺序；同一事务还锁定并压紧源容器，返回全部受影响行的新版本。尚未完成首次保存、没有 `lock_version` 的实体不能参与结构移动或重排。遇到 `VERSION_CONFLICT` 时保留冲突，不得用本地时钟伪造一个新版本后重试覆盖。
+
+`useOptimisticSync` 的 pending 生命周期以 `hook 实例 × SyncKey` 标识：`idle -> pending -> syncing -> idle`。连续编辑同一实体只覆盖该实体尚未发送的 dirty payload，且在最后一次写入结算前持有同一个 pending token。不得按每次键入累加 query 级计数；防抖合并后的一个请求无法对称释放这类计数，会永久阻塞对应的 Realtime 失效。
+
+任务手动排序使用 `time_management_tasks.sort_order`。`created_at` 是数据库审计事实，禁止为拖放而更新它。创建任务由保存 RPC 在用户/象限 advisory-lock 范围内分配初始序号；拖放调用 `reorder_time_management_tasks_v3`，在验证整组 `lock_version` 后以单个事务同时更新目标任务位置和整组顺序。
+
+知识清单复制使用 `duplicate_knowledge_base_folder_v3`。函数通过 RLS 读取源清单，在一个事务内创建新清单、分组及每条笔记的完整 `content`，然后才把新清单返回给客户端。客户端不得从 shell cache 循环 `addNote`，因为该 cache 不含所有正文且多请求不能提供原子性。
 
 乐观写入失败时不得恢复整个 query 的旧快照，因为该快照可能抹掉其他实体更晚的编辑。仅在失败操作仍是该实体最新操作时，使受影响的活动 query 失效并以 RLS 查询收敛。
 

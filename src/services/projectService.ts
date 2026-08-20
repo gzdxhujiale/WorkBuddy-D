@@ -22,7 +22,7 @@ export const projectApi = {
     const [projectResult, stageResult, taskResult, templateResult] = await Promise.all([
       supabase.from("projects").select("id,name,description,status,start_date,end_date,priority,tags,owner_name,created_at,updated_at,lock_version").eq("user_id", userId).is("deleted_at", null).order("updated_at", { ascending: false }),
       supabase.from("project_stages").select("id,project_id,name,default_assignee_name,sort_order,template_key,start_date,end_date,updated_at,lock_version").eq("user_id", userId).is("deleted_at", null).order("sort_order"),
-      supabase.from("time_management_tasks").select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,project_id,project_stage_id,priority,assignee_name,created_at,updated_at,lock_version").eq("user_id", userId).is("deleted_at", null).not("project_id", "is", null).order("created_at", { ascending: false }),
+      supabase.from("time_management_tasks").select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,project_id,project_stage_id,priority,assignee_name,sort_order,created_at,updated_at,lock_version").eq("user_id", userId).is("deleted_at", null).not("project_id", "is", null).order("sort_order", { ascending: false }).order("created_at", { ascending: false }),
       supabase.from("project_templates").select("id,name,description,definition,updated_at,lock_version").eq("user_id", userId).is("deleted_at", null).order("updated_at", { ascending: false }),
     ]);
     throwOnPostgrestError(projectResult.error, "加载项目");
@@ -72,6 +72,7 @@ export const projectApi = {
         projectStageId: row.project_stage_id || undefined,
         priority: row.priority,
         assigneeName: row.assignee_name || undefined,
+        sortOrder: Number(row.sort_order),
         createdAt: asTimestamp(row.created_at),
         updatedAt: asTimestamp(row.updated_at),
         baseUpdatedAt: asTimestamp(row.updated_at),

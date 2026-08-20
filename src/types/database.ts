@@ -24,6 +24,7 @@ export interface TimeManagementTask {
   completed_at: string | null;
   description: string | null;
   reminder: ReminderConfig | null;
+  sort_order: number;
   created_at: string;
   updated_at: string;
   deleted_at: string | null;

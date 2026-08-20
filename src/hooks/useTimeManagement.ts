@@ -110,7 +110,7 @@ export function useTaskActions() {
               ...old,
               tasks: old.tasks.map((item) =>
                 item.id === task.id && item.updatedAt === task.updatedAt
-                  ? { ...item, updatedAt: savedUpdatedAt.updatedAt, baseUpdatedAt: savedUpdatedAt.updatedAt, lockVersion: savedUpdatedAt.lockVersion, isNew: false }
+                  ? { ...item, updatedAt: savedUpdatedAt.updatedAt, baseUpdatedAt: savedUpdatedAt.updatedAt, lockVersion: savedUpdatedAt.lockVersion, sortOrder: savedUpdatedAt.sortOrder, isNew: false }
                   : item
               ),
             }
@@ -123,7 +123,7 @@ export function useTaskActions() {
                 ...old,
                 tasks: old.tasks.map((item) =>
                   item.id === task.id && item.updatedAt === task.updatedAt
-                    ? { ...item, updatedAt: savedUpdatedAt.updatedAt, baseUpdatedAt: savedUpdatedAt.updatedAt, lockVersion: savedUpdatedAt.lockVersion, isNew: false }
+                  ? { ...item, updatedAt: savedUpdatedAt.updatedAt, baseUpdatedAt: savedUpdatedAt.updatedAt, lockVersion: savedUpdatedAt.lockVersion, sortOrder: savedUpdatedAt.sortOrder, isNew: false }
                     : item
                 ),
               }
@@ -175,6 +175,9 @@ export function useTaskActions() {
         completed: false,
         createdAt: Date.now(),
         updatedAt: Date.now(),
+        sortOrder: (queryClient.getQueryData<TimeManagementData>(QUERY_KEY)?.tasks
+          .filter((task) => task.quadrant === quadrant)
+          .reduce((max, task) => Math.max(max, task.sortOrder ?? -1), -1) ?? -1) + 1,
         ...draft,
       };
 
@@ -221,6 +224,7 @@ export function useTaskActions() {
                         updatedAt: savedUpdatedAt.updatedAt,
                         baseUpdatedAt: savedUpdatedAt.updatedAt,
                         lockVersion: savedUpdatedAt.lockVersion,
+                        sortOrder: savedUpdatedAt.sortOrder,
                         isNew: false,
                       }
                     : item
@@ -241,7 +245,8 @@ export function useTaskActions() {
                           ...item,
                           updatedAt: savedUpdatedAt.updatedAt,
                           baseUpdatedAt: savedUpdatedAt.updatedAt,
-                          lockVersion: savedUpdatedAt.lockVersion,
+                        lockVersion: savedUpdatedAt.lockVersion,
+                        sortOrder: savedUpdatedAt.sortOrder,
                           isNew: false,
                         }
                       : item
@@ -276,6 +281,17 @@ export function useTaskActions() {
       ) {
         return;
       }
+
+      // A new task has no server version. Keep its edits in the creation
+      // lifecycle so the debounced insert is replaced, never raced by a
+      // separate conditional-update writer for the same client UUID.
+      if (current && current.lockVersion === undefined) {
+        const nextTask = { ...current, ...updates, updatedAt: Date.now() };
+        triggerUpsert(nextTask);
+        syncTaskToProjects(nextTask);
+        return;
+      }
+
       triggerUpdate({ taskId, updates });
 
       // Conditional optimistic sync to projects cache (0ms instant UI response for project tasks)
@@ -298,7 +314,7 @@ export function useTaskActions() {
         });
       }
     },
-    [QUERY_KEY, PROJECTS_KEY, queryClient, triggerUpdate]
+    [QUERY_KEY, PROJECTS_KEY, queryClient, syncTaskToProjects, triggerUpdate, triggerUpsert]
   );
 
   const deleteTask = useCallback(
@@ -311,9 +327,72 @@ export function useTaskActions() {
     [QUERY_KEY, queryClient, triggerDelete, syncDeleteToProjects]
   );
 
+  const { trigger: triggerMoveAndReorder } = useOptimisticSync<
+    TimeManagementData,
+    { taskId: string; updates: Pick<Task, "quadrant" | "scheduleMode" | "scheduledStartAt" | "scheduledEndAt">; orderedIds: string[] }
+  >({
+    queryKey: QUERY_KEY,
+    debounceMs: 0,
+    updateCache: (old, { taskId, updates, orderedIds }) => {
+      const current = old ?? { tasks: [] };
+      const orderById = new Map(orderedIds.map((id, index) => [id, orderedIds.length - index - 1]));
+      return {
+        ...current,
+        tasks: current.tasks.map((task) => {
+          if (task.id === taskId) return { ...task, ...updates, sortOrder: orderById.get(task.id), updatedAt: Date.now() };
+          const sortOrder = orderById.get(task.id);
+          return sortOrder === undefined ? task : { ...task, sortOrder, updatedAt: Date.now() };
+        }),
+      };
+    },
+    syncFn: async ({ taskId, updates, orderedIds }) => {
+      const current = queryClient.getQueryData<TimeManagementData>(QUERY_KEY) ?? { tasks: [] };
+      const movedTask = current.tasks.find((task) => task.id === taskId);
+      if (!movedTask) throw new Error("任务不存在，无法调整顺序");
+      const orderById = new Map(orderedIds.map((id, index) => [id, orderedIds.length - index - 1]));
+      const items = orderedIds.map((id) => {
+        const task = current.tasks.find((candidate) => candidate.id === id);
+        if (!task) throw new Error("排序任务不存在，无法调整顺序");
+        return { ...task, sortOrder: orderById.get(id)! };
+      });
+      const saved = await timeManagementApi.reorderTasks({ ...movedTask, ...updates }, items);
+      const versions = new Map(saved.map((item) => [item.id, item]));
+      queryClient.setQueryData<TimeManagementData>(QUERY_KEY, (old) => old ? {
+        ...old,
+        tasks: old.tasks.map((task) => {
+          const version = versions.get(task.id);
+          return version ? {
+            ...task,
+            updatedAt: version.updatedAt,
+            baseUpdatedAt: version.updatedAt,
+            lockVersion: version.lockVersion,
+            sortOrder: version.sortOrder,
+            isNew: false,
+          } : task;
+        }),
+      } : old);
+      queryClient.setQueryData<ProjectCenterData>(PROJECTS_KEY, (old) => old ? {
+        ...old,
+        tasks: old.tasks.map((task) => {
+          const version = versions.get(task.id);
+          return version ? { ...task, updatedAt: version.updatedAt, baseUpdatedAt: version.updatedAt, lockVersion: version.lockVersion, sortOrder: version.sortOrder } : task;
+        }),
+      } : old);
+    },
+    getSyncKey: ({ taskId }) => taskId,
+  });
+
+  const moveAndReorderTask = useCallback(
+    (taskId: string, updates: Pick<Task, "quadrant" | "scheduleMode" | "scheduledStartAt" | "scheduledEndAt">, orderedIds: string[]) => {
+      triggerMoveAndReorder({ taskId, updates, orderedIds });
+    },
+    [triggerMoveAndReorder],
+  );
+
   return {
     addTask,
     updateTask,
     deleteTask,
+    moveAndReorderTask,
   };
 }

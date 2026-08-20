@@ -24,6 +24,8 @@ export interface Task {
   projectStageId?: string;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   assigneeName?: string;
+  /** Explicit server-owned ordering within a quadrant; never derived from createdAt. */
+  sortOrder?: number;
   createdAt: number;
   updatedAt?: number;
   lockVersion?: number;

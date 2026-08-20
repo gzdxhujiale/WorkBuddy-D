@@ -699,6 +699,8 @@ function NoteDrawerContent({
       await knowledgeService.saveMarkdownFile(`${title || (isPixelTheme ? '未命名卷轴' : '未命名笔记')}.md`, exportText);
       toast.success('导出成功！');
     } catch (err) {
+      logSilent('noteDrawer', 'note export failed', err);
+      toast.error('导出失败，请检查文件权限后重试。');
     }
   };
 
@@ -1539,9 +1541,15 @@ export function KnowledgePanel() {
     setIsAddModalOpen(true);
   };
 
-  const handleDuplicateList = (list: KnowledgeFolder) => {
-    const newList = duplicateKnowledgeFolder(list);
-    setActiveListId(newList.id);
+  const handleDuplicateList = async (list: KnowledgeFolder) => {
+    try {
+      const newList = await duplicateKnowledgeFolder(list);
+      setActiveListId(newList.id);
+      toast.success(`已复制清单「${newList.name}」`);
+    } catch (error) {
+      logSilent('listsPanel', 'knowledge folder clone failed', error);
+      toast.error('复制清单失败，请重试。');
+    }
   };
 
   const handleDeleteList = (list: KnowledgeFolder) => {
@@ -1583,6 +1591,7 @@ export function KnowledgePanel() {
       toast.success(`已成功导入 ${importedFiles.length} 条笔记！`);
     } catch (err) {
       logSilent('listsPanel', 'batch import cancelled or failed', err);
+      toast.error('导入失败，请检查文件后重试。');
     }
   };
 
@@ -1595,6 +1604,7 @@ export function KnowledgePanel() {
       }
     } catch (err) {
       logSilent('listsPanel', 'batch export cancelled or failed', err);
+      toast.error('导出失败，请检查文件权限后重试。');
     }
   };
 

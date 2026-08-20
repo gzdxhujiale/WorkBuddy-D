@@ -37,7 +37,7 @@ Query keys are defined in `src/lib/syncEngine.ts`. Use the narrowest matching ke
 
 Domain hooks compose Query with services. Services perform Supabase reads and RPC writes; `useTimeManagement.ts` is an existing hook-level read exception. Follow the closest established domain pattern instead of calling Supabase from new presentation components.
 
-Optimistic writes are immediate and may be debounced by `useDebouncedMutation` or `useOptimisticSync`. Writes for the list, task, habit, and daily-review domains use `runOrQueue` where their service supports offline replay. A queued operation replaces an older pending operation for the same entity key; non-network errors are not silently queued.
+Optimistic writes are immediate and may be debounced by `useDebouncedMutation` or `useOptimisticSync`. `useOptimisticSync` owns one pending token and one latest dirty payload for each SyncKey, so high-frequency edits serialize as `idle -> pending -> syncing -> idle` without leaving a query permanently pending. Writes for the list, task, habit, and daily-review domains use `runOrQueue` where their service supports offline replay. A queued operation replaces an older pending operation for the same entity key; non-network errors are not silently queued.
 
 The main window’s private Broadcast listener invalidates matching Query keys. It does not merge Broadcast payloads into authoritative records. Note writes keep the affected knowledge scope pending until their serialized RPC chain settles, so a writer does not refetch its own Broadcast hint mid-save.
 
@@ -96,7 +96,7 @@ For visual design direction, aesthetic choices, typography pairing, and anti-tem
 
 ## Errors, loading, and performance
 
-The Query client disables automatic retry/reconnect/mount refetching to avoid request bursts during Supabase incidents. Failures must be surfaced by the relevant feature; `logSilent` is diagnostic only. Routes are lazy-loaded and the app shell provides a Suspense fallback. No repository-owned error-monitoring, metrics, tracing, or performance budget is configured.
+The Query client disables automatic retry/reconnect/mount refetching to avoid request bursts during Supabase incidents. Failures must be surfaced by the relevant feature; `logSilent` is diagnostic only. `AppErrorBoundary` protects the main webview from render-time blank screens, and persistence/export actions show a Toast after logging their failure and reconciling stale optimistic state. Routes are lazy-loaded and the app shell provides a Suspense fallback. No repository-owned error-monitoring, metrics, tracing, or performance budget is configured.
 
 ## Verification
 

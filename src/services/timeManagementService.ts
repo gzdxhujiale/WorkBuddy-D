@@ -40,7 +40,7 @@ function resolveSchedule(task: Task): {
   return { scheduleMode, scheduledStartAt, scheduledEndAt };
 }
 
-export type SavedTaskVersion = { updatedAt: number; lockVersion: number };
+export type SavedTaskVersion = { updatedAt: number; lockVersion: number; sortOrder: number };
 
 async function saveRemoteTask(task: Task): Promise<SavedTaskVersion> {
   const schedule = resolveSchedule(task);
@@ -58,8 +58,12 @@ async function saveRemoteTask(task: Task): Promise<SavedTaskVersion> {
     p_expected_lock_version: task.lockVersion ?? null,
   });
   throwOnPostgrestError(error, "保存任务");
-  const saved = (data as Array<{ updated_at: string; lock_version: number }>)[0];
-  return { updatedAt: new Date(saved.updated_at).getTime(), lockVersion: Number(saved.lock_version) };
+  const saved = (data as Array<{ updated_at: string; lock_version: number; sort_order: number }>)[0];
+  return {
+    updatedAt: new Date(saved.updated_at).getTime(),
+    lockVersion: Number(saved.lock_version),
+    sortOrder: Number(saved.sort_order),
+  };
 }
 registerOfflineExecutor("task:save", async (payload) => { await saveRemoteTask(payload as Task); });
 registerOfflineExecutor("task:delete", async (payload) => {
@@ -74,9 +78,10 @@ export const timeManagementApi = {
     try {
       const { data: dbTasks, error: tasksErr } = await supabase
         .from("time_management_tasks")
-        .select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,project_id,project_stage_id,priority,assignee_name,created_at,updated_at,lock_version")
+        .select("id,title,quadrant,schedule_mode,scheduled_start_at,scheduled_end_at,completed,completed_at,description,reminder,project_id,project_stage_id,priority,assignee_name,sort_order,created_at,updated_at,lock_version")
         .eq("user_id", userId)
         .is("deleted_at", null)
+        .order("sort_order", { ascending: false })
         .order("created_at", { ascending: false });
 
       if (tasksErr) {
@@ -100,6 +105,7 @@ export const timeManagementApi = {
           projectStageId: t.project_stage_id || undefined,
           priority: t.priority || "medium",
           assigneeName: t.assignee_name || undefined,
+          sortOrder: Number(t.sort_order),
           createdAt: t.created_at ? new Date(t.created_at).getTime() : Date.now(),
           updatedAt: t.updated_at ? new Date(t.updated_at).getTime() : undefined,
           lockVersion: Number(t.lock_version),
@@ -125,5 +131,33 @@ export const timeManagementApi = {
       const { error } = await supabase.rpc("soft_delete_time_management_task_v3", { p_id: task.id, p_expected_lock_version: task.lockVersion });
       throwOnPostgrestError(error, "删除任务");
     });
+  },
+
+  reorderTasks: async (
+    movedTask: Pick<Task, "id" | "quadrant" | "scheduleMode" | "scheduledStartAt" | "scheduledEndAt">,
+    items: Array<Pick<Task, "id" | "sortOrder" | "lockVersion">>,
+  ): Promise<Array<SavedTaskVersion & { id: string }>> => {
+    if (items.some((item) => item.lockVersion === undefined || item.sortOrder === undefined)) {
+      throw new Error("任务版本或排序尚未加载，已阻止非条件排序");
+    }
+    const { data, error } = await supabase.rpc("reorder_time_management_tasks_v3", {
+      p_moved_task_id: movedTask.id,
+      p_target_quadrant: QUADRANT_DB_MAP[movedTask.quadrant] || movedTask.quadrant,
+      p_target_schedule_mode: movedTask.scheduleMode || null,
+      p_target_scheduled_start_at: movedTask.scheduledStartAt ? new Date(movedTask.scheduledStartAt).toISOString() : null,
+      p_target_scheduled_end_at: movedTask.scheduledEndAt ? new Date(movedTask.scheduledEndAt).toISOString() : null,
+      p_items: items.map((item) => ({
+        id: item.id,
+        sort_order: item.sortOrder,
+        lock_version: item.lockVersion,
+      })),
+    });
+    throwOnPostgrestError(error, "调整任务顺序");
+    return ((data ?? []) as Array<{ id: string; updated_at: string; lock_version: number; sort_order: number }>).map((item) => ({
+      id: item.id,
+      updatedAt: new Date(item.updated_at).getTime(),
+      lockVersion: Number(item.lock_version),
+      sortOrder: Number(item.sort_order),
+    }));
   },
 };

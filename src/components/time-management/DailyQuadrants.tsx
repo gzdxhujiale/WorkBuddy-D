@@ -98,6 +98,11 @@ export interface DailyQuadrantsProps {
   onDeleteTask: (taskId: string) => void;
   onEditTask: (task: Task, anchorEl?: HTMLElement) => void;
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
+  onMoveAndReorderTask: (
+    taskId: string,
+    updates: Pick<Task, "quadrant" | "scheduleMode" | "scheduledStartAt" | "scheduledEndAt">,
+    orderedIds: string[],
+  ) => void;
 }
 
 const QUADRANT_CONFIG: Record<
@@ -201,6 +206,7 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
     onDeleteTask,
     onEditTask,
     onUpdateTask,
+    onMoveAndReorderTask,
   }) => {
     const { isPixelTheme } = useAppThemeStyle();
     const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
@@ -269,53 +275,53 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
 
       if (!taskId || taskId === targetTask.id) return;
 
-      const targetQTasks = tasks.filter((t) => t.quadrant === targetTask.quadrant);
-      const filteredTasks = hideCompleted ? targetQTasks.filter((t) => !t.completed) : targetQTasks;
+      const movedTask = tasks.find((task) => task.id === taskId);
+      if (!movedTask) return;
 
-      const now = Date.now();
-      const targetGroup = getScheduleGroup(targetTask.scheduledEndAt, now);
-
-      const sameGroupTasks = [...filteredTasks]
-        .filter(
-          (t) =>
-            t.completed === targetTask.completed &&
-            getScheduleGroup(t.scheduledEndAt, now) === targetGroup &&
-            t.id !== taskId
-        )
-        .sort((a, b) => b.createdAt - a.createdAt);
-
-      const yIndex = sameGroupTasks.findIndex((t) => t.id === targetTask.id);
-      if (yIndex === -1) return;
-
-      let newCreatedAt = targetTask.createdAt;
-
-      const rect = e.currentTarget.getBoundingClientRect();
-      const relativeY = e.clientY - rect.top;
-      const isBelow = relativeY > rect.height / 2;
-
-      if (!isBelow) {
-        if (yIndex === 0) {
-          newCreatedAt = targetTask.createdAt + 1000;
-        } else {
-          const prevTask = sameGroupTasks[yIndex - 1];
-          newCreatedAt = Math.round((prevTask.createdAt + targetTask.createdAt) / 2);
-        }
-      } else {
-        if (yIndex === sameGroupTasks.length - 1) {
-          newCreatedAt = targetTask.createdAt - 1000;
-        } else {
-          const nextTask = sameGroupTasks[yIndex + 1];
-          newCreatedAt = Math.round((targetTask.createdAt + nextTask.createdAt) / 2);
-        }
-      }
-
-      onUpdateTask(taskId, {
+      const updates = {
         quadrant: targetTask.quadrant,
         scheduleMode: targetTask.scheduleMode,
         scheduledStartAt: targetTask.scheduledStartAt,
         scheduledEndAt: targetTask.scheduledEndAt,
-        createdAt: newCreatedAt,
-      });
+      };
+
+      // Completion is an independent task state. Moving across its visual
+      // divider changes the destination fields but does not silently complete
+      // or reopen the task, so there is no shared order set to reindex.
+      if (movedTask.completed !== targetTask.completed) {
+        onUpdateTask(taskId, updates);
+        return;
+      }
+
+      const now = Date.now();
+      const targetGroup = getScheduleGroup(targetTask.scheduledEndAt, now);
+
+      const sameGroupTasks = tasks
+        .filter(
+          (t) =>
+            t.quadrant === targetTask.quadrant &&
+            t.completed === movedTask.completed &&
+            getScheduleGroup(t.scheduledEndAt, now) === targetGroup &&
+            t.id !== taskId
+        )
+        .sort((a, b) => (b.sortOrder ?? -1) - (a.sortOrder ?? -1));
+
+      const yIndex = sameGroupTasks.findIndex((t) => t.id === targetTask.id);
+      if (yIndex === -1) return;
+
+      const rect = e.currentTarget.getBoundingClientRect();
+      const relativeY = e.clientY - rect.top;
+      const isBelow = relativeY > rect.height / 2;
+      const orderedTasks = [...sameGroupTasks];
+      orderedTasks.splice(isBelow ? yIndex + 1 : yIndex, 0, movedTask);
+
+      // A just-created task has no database version yet. Its first save assigns
+      // an initial order; only persisted task sets may enter a versioned reorder.
+      if (orderedTasks.every((task) => task.lockVersion !== undefined && task.sortOrder !== undefined)) {
+        onMoveAndReorderTask(taskId, updates, orderedTasks.map((task) => task.id));
+      } else {
+        onUpdateTask(taskId, updates);
+      }
     };
 
     const handleDropOnGroup = (
@@ -477,7 +483,7 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
       }
 
       const sortedTasks = [...qTasks].sort((a, b) => {
-        if (a.completed === b.completed) return b.createdAt - a.createdAt;
+        if (a.completed === b.completed) return (b.sortOrder ?? -1) - (a.sortOrder ?? -1);
         return a.completed ? 1 : -1;
       });
 

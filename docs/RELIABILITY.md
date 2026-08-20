@@ -49,7 +49,6 @@ For a changed failure path, manually verify the affected observable behavior: di
 
 - No automated coverage verifies offline replay, RLS/RPC behavior, Broadcast delivery, or cross-window synchronization.
 - Query retries are intentionally disabled, but there is no documented operation-specific timeout or backoff policy beyond the 521 auth-refresh pause.
-- The list-note Tauri cache-patch path conflicts with the accepted Broadcast-as-hint design and needs reconciliation.
 - Migration-history drift is tracked in [the technical-debt tracker](exec-plans/tech-debt-tracker.md).
 
 Track substantial reliability work through [PLANS.md](PLANS.md) and update [QUALITY_SCORE.md](QUALITY_SCORE.md) after verified improvement.

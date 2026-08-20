@@ -5,6 +5,7 @@ import {
 } from "@tauri-apps/plugin-notification";
 import { invoke } from "@tauri-apps/api/core";
 import { getAppThemeStyle } from "@/lib/preferences";
+import { logError } from "@/lib/syncEngine";
 
 export async function requestNotificationPermission(): Promise<boolean> {
   try {
@@ -14,13 +15,15 @@ export async function requestNotificationPermission(): Promise<boolean> {
       granted = permission === "granted";
     }
     return granted;
-  } catch {
+  } catch (error) {
+    logError("notification", "Tauri notification permission request failed", error);
     if (typeof window !== "undefined" && "Notification" in window) {
       if (Notification.permission === "granted") return true;
       try {
         const permission = await Notification.requestPermission();
         return permission === "granted";
-      } catch {
+      } catch (browserError) {
+        logError("notification", "Browser notification permission request failed", browserError);
         return false;
       }
     }
@@ -52,8 +55,8 @@ export async function sendDesktopNotification(
       themeStyle,
       eventType,
     });
-  } catch {
-    // Non-Tauri fallback
+  } catch (error) {
+    logError("notification", "Multi-monitor notification failed", error);
   }
 
   // 2. System Toast backup via Tauri notification plugin
@@ -70,8 +73,8 @@ export async function sendDesktopNotification(
       });
       return;
     }
-  } catch {
-    // Non-Tauri fallback
+  } catch (error) {
+    logError("notification", "System notification failed", error);
   }
 
   // 3. Browser / Webview standard Web Notification fallback
@@ -84,8 +87,8 @@ export async function sendDesktopNotification(
         if (permission === "granted") {
           new Notification(title, { body });
         }
-      } catch {
-        // Ignore fallback error
+      } catch (error) {
+        logError("notification", "Browser notification request failed", error);
       }
     }
   }

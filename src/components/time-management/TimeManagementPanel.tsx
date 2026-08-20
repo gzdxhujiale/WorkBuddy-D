@@ -52,7 +52,7 @@ export const TimeManagementPanel: React.FC = () => {
   const { data: tmData } = useTimeManagementData();
   const tasks = tmData?.tasks ?? [];
 
-  const { addTask, updateTask, deleteTask } = useTaskActions();
+  const { addTask, updateTask, deleteTask, moveAndReorderTask } = useTaskActions();
 
   const tasksRef = useRef(tasks);
   useEffect(() => {
@@ -383,6 +383,7 @@ export const TimeManagementPanel: React.FC = () => {
               handleOpenTaskEditor(task, task.quadrant, anchorEl)
             }
             onUpdateTask={updateTask}
+            onMoveAndReorderTask={moveAndReorderTask}
           />
         ) : (
           <div className="flex-1 min-h-0 flex gap-3.5 items-stretch">

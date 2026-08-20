@@ -145,6 +145,7 @@ The supported save RPC uses `(user_id, habit_id, date)` as the upsert identity, 
 | `project_stage_id` | `uuid nullable` | Optional stage inside its owning project. |
 | `priority` | `text` | `low`, `medium`, `high`, or `urgent`. |
 | `assignee_name` | `text nullable` | Task-level responsible person, which may override the stage default. |
+| `sort_order` | `integer` | Explicit display order within a quadrant. Creation and manual reordering are database-owned; it is never derived from or written through `created_at`. |
 
 ### Project center
 
@@ -220,7 +221,7 @@ It deliberately excludes note bodies and complete row values. The main client co
 
 `created_at` defaults to `now()` and `updated_at` is maintained by a database `BEFORE UPDATE` trigger. Client write payloads never set either field. Notes and all independently editable user entities maintain a monotonic `lock_version` in a `BEFORE UPDATE` trigger; V2 save RPCs and V3 structural-mutation RPCs pass it as `p_expected_lock_version` (or per-row order items), return the new value where applicable, and raise `VERSION_CONFLICT` for stale writes. `habit_checkins` remain idempotent state facts and focus sessions remain state-machine operations.
 
-`deleted_at` is assigned by soft-delete RPCs. `completed_at` is assigned or cleared as task completion changes. Focus-session `started_at` and terminal `ended_at` are assigned by focus RPCs. New list/group/note ordering is assigned by save RPCs using transaction advisory locks within the relevant parent scope.
+`deleted_at` is assigned by soft-delete RPCs. `completed_at` is assigned or cleared as task completion changes. Focus-session `started_at` and terminal `ended_at` are assigned by focus RPCs. New list/group/note ordering is assigned by save RPCs using transaction advisory locks within the relevant parent scope. Tasks likewise receive an initial `sort_order` from `save_time_management_task_v2`; `reorder_time_management_tasks_v3` validates all supplied versions and commits a drag order atomically. `move_and_reorder_notes_v3` and `move_and_reorder_knowledge_base_folders_v3` lock source and destination scopes, validate the complete versioned destination order, then compact the source scope in the same transaction. `duplicate_knowledge_base_folder_v3` atomically copies an owned folder, its groups, and full note bodies under `security invoker` + RLS.
 
 The checked-in migration `20260814040000_fix_save_note_updated_at_ambiguity.sql` clarifies the `save_note` return-column reference. Verify applied migration history before asserting that this repository fix is present in a live environment.
 

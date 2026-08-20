@@ -1,28 +1,37 @@
 import type { QueryKey } from "@tanstack/react-query";
 
-const pending = new Map<string, number>();
+/**
+ * A query can have several independent optimistic writers.  Counted marks are
+ * unsafe for debounced writes because many edits can collapse into one request;
+ * use stable lifecycle tokens instead so one settled write releases exactly its
+ * own pending state.
+ */
+const pending = new Map<string, Set<string>>();
 const pendingScopes = new Map<string, number>();
 
 function keyOf(queryKey: QueryKey) {
   return JSON.stringify(queryKey);
 }
 
-export function markQueryPending(queryKey: QueryKey) {
+export function markQueryPending(queryKey: QueryKey, token = "default") {
   const key = keyOf(queryKey);
-  pending.set(key, (pending.get(key) ?? 0) + 1);
+  const tokens = pending.get(key) ?? new Set<string>();
+  tokens.add(token);
+  pending.set(key, tokens);
 }
 
-export function clearQueryPending(queryKey: QueryKey) {
+export function clearQueryPending(queryKey: QueryKey, token = "default") {
   const key = keyOf(queryKey);
-  const count = pending.get(key) ?? 0;
-  if (count <= 1) pending.delete(key);
-  else pending.set(key, count - 1);
+  const tokens = pending.get(key);
+  if (!tokens) return;
+  tokens.delete(token);
+  if (tokens.size === 0) pending.delete(key);
 }
 
 export function isQueryPending(queryKey: QueryKey) {
   const target = queryKey.map(String);
-  for (const [serialized, count] of pending) {
-    if (count <= 0) continue;
+  for (const [serialized, tokens] of pending) {
+    if (tokens.size === 0) continue;
     const pendingKey = JSON.parse(serialized) as unknown[];
     if (target.every((part, index) => String(pendingKey[index]) === part)) return true;
   }

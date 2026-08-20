@@ -8,9 +8,9 @@ import {
 } from '@/lib/syncEngine';
 import { clearPendingScope, markPendingScope } from '@/lib/queryPending';
 import { useDebouncedMutation } from '@/hooks/useDebouncedMutation';
+import { toast } from '@/components/ui/toast';
 import * as knowledgeService from '@/services/knowledgeService';
 import type { KnowledgeFolder, KnowledgeBase, Note, NoteGroup } from '@/types/knowledge';
-import { getNoteGroups as selectNoteGroups, getNotesByFolderId as selectNotesByFolderId } from '@/utils/knowledgeSelectors';
 import { useAuth } from '@/lib/auth';
 import {
   createKnowledgeBaseId,
@@ -83,7 +83,7 @@ export interface KnowledgeActions {
   addList: (list: Omit<KnowledgeFolder, 'id'>) => KnowledgeFolder;
   updateList: (id: string, updates: Partial<KnowledgeFolder>) => void;
   deleteKnowledgeFolder: (id: string) => void;
-  duplicateKnowledgeFolder: (list: KnowledgeFolder) => KnowledgeFolder;
+  duplicateKnowledgeFolder: (list: KnowledgeFolder) => Promise<KnowledgeFolder>;
   reorderKnowledgeFolders: (orderedIds: string[]) => void;
   moveKnowledgeFolder: (folderId: string, knowledgeBaseId: string | null, targetIndex?: number) => void;
 
@@ -150,6 +150,7 @@ export function useKnowledgeActions(): KnowledgeActions {
         queryKey: queryKeys.lists.all(userId),
         refetchType: 'active',
       });
+      toast.error('保存失败，已重新加载最新数据。');
     },
   });
 
@@ -200,11 +201,19 @@ export function useKnowledgeActions(): KnowledgeActions {
       }));
       debouncedSync.cancel(`list:${id}`);
       void knowledgeService.deleteKnowledgeFolder({ id, lockVersion: data.lists.find((list) => list.id === id)?.lockVersion })
-        .catch(() => queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' }));
+        .catch(() => {
+          toast.error('删除清单失败，已重新加载最新数据。');
+          return queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' });
+        });
     };
 
     const reorderKnowledgeFolders: KnowledgeActions['reorderKnowledgeFolders'] = (orderedIds) => {
       const data = getData(queryClient, userId);
+      const orderedLists = orderedIds.map((id) => data.lists.find((item) => item.id === id));
+      if (orderedLists.some((item) => item?.lockVersion === undefined)) {
+        toast.info('新建清单正在保存，暂不能调整顺序。');
+        return;
+      }
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
       const items: knowledgeService.VersionedOrderItem[] = [];
       const newLists = data.lists.map(l => {
@@ -232,6 +241,7 @@ export function useKnowledgeActions(): KnowledgeActions {
       const listIndex = data.lists.findIndex(l => l.id === folderId);
       if (listIndex === -1) return;
 
+      const sourceKnowledgeBaseId = data.lists[listIndex].knowledgeBaseId;
       const list = { ...data.lists[listIndex], knowledgeBaseId };
       let newLists = [...data.lists];
       newLists[listIndex] = list;
@@ -249,25 +259,40 @@ export function useKnowledgeActions(): KnowledgeActions {
       const orderMap = new Map<string, number>();
       siblingLists.forEach((l, idx) => orderMap.set(l.id, idx));
 
+      const sourceSiblings = sourceKnowledgeBaseId === knowledgeBaseId
+        ? []
+        : data.lists
+          .filter((item) => item.knowledgeBaseId === sourceKnowledgeBaseId && item.id !== folderId)
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id.localeCompare(b.id));
+      sourceSiblings.forEach((item, index) => orderMap.set(item.id, index));
+
+      if ([...siblingLists, ...sourceSiblings].some((item) => item.lockVersion === undefined)) {
+        toast.info('新建清单正在保存，暂不能调整其结构顺序。');
+        return;
+      }
+
       newLists = newLists.map(l => (orderMap.has(l.id) ? { ...l, sortOrder: orderMap.get(l.id) } : l));
       setData(queryClient, userId, () => ({ ...data, lists: newLists }));
-      const updatedList = newLists.find(l => l.id === folderId);
       debouncedSync.schedule(
         `list:${folderId}`,
         async () => {
-          if (!updatedList) return;
-          const moved = await knowledgeService.moveKnowledgeFolder({
-            id: updatedList.id,
-            knowledgeBaseId,
-            lockVersion: updatedList.lockVersion,
-          });
+          const current = getData(queryClient, userId);
+          const moved = current.lists.find((item) => item.id === folderId);
           if (!moved) return;
-          setData(queryClient, userId, (current) => ({ ...current, lists: current.lists.map((item) => item.id === folderId
-            ? { ...item, sortOrder: moved.sortOrder, lockVersion: moved.lockVersion } : item) }));
-          const reordered = getData(queryClient, userId).lists
-            .filter((item) => item.knowledgeBaseId === knowledgeBaseId && item.lockVersion !== undefined)
-            .map((item) => ({ id: item.id, sortOrder: item.sortOrder ?? 0, lockVersion: item.lockVersion }));
-          const saved = await knowledgeService.reorderKnowledgeFolders(reordered);
+          const ordered = current.lists
+            .filter((item) => item.knowledgeBaseId === knowledgeBaseId)
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+            .map((item, index) => ({ id: item.id, sortOrder: index, lockVersion: item.lockVersion }));
+          if (ordered.some((item) => item.lockVersion === undefined)) {
+            throw new Error('清单版本尚未加载，无法原子移动并排序');
+          }
+          const saved = await knowledgeService.moveKnowledgeFolder({
+            id: moved.id,
+            knowledgeBaseId,
+            name: moved.name,
+            lockVersion: moved.lockVersion,
+            items: ordered as knowledgeService.VersionedOrderItem[],
+          });
           if (!saved) return;
           const versions = new Map(saved.map((item) => [item.id, item]));
           setData(queryClient, userId, (current) => ({ ...current, lists: current.lists.map((item) => {
@@ -325,7 +350,10 @@ export function useKnowledgeActions(): KnowledgeActions {
       }));
       debouncedSync.cancel(`group:${id}`);
       void knowledgeService.deleteGroup({ id, lockVersion: data.noteGroups.find((group) => group.id === id)?.lockVersion })
-        .catch(() => queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' }));
+        .catch(() => {
+          toast.error('删除分组失败，已重新加载最新数据。');
+          return queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' });
+        });
     };
 
     // ── Notes ──
@@ -447,7 +475,10 @@ export function useKnowledgeActions(): KnowledgeActions {
       }));
       debouncedSync.cancel(`note:${id}`);
       void knowledgeService.deleteNote({ id, lockVersion: data.notes.find((note) => note.id === id)?.lockVersion })
-        .catch(() => queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' }));
+        .catch(() => {
+          toast.error('删除笔记失败，已重新加载最新数据。');
+          return queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' });
+        });
     };
 
     const moveNoteAndReorder: KnowledgeActions['moveNoteAndReorder'] = (noteId, groupId, targetIndex) => {
@@ -456,15 +487,13 @@ export function useKnowledgeActions(): KnowledgeActions {
       if (noteIndex === -1) return;
 
       let newNotes = [...data.notes];
+      const sourceGroupId = data.notes[noteIndex].groupId;
       const note = { ...newNotes[noteIndex], groupId, updatedAt: Date.now() };
       newNotes[noteIndex] = note;
 
       const siblingNotes = newNotes
         .filter(n => n.folderId === note.folderId && n.groupId === groupId && n.id !== noteId)
-        .sort((a, b) => {
-          if (a.sortOrder !== b.sortOrder) return (a.sortOrder || 0) - (b.sortOrder || 0);
-          return b.updatedAt - a.updatedAt;
-        });
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id.localeCompare(b.id));
 
       if (targetIndex !== undefined) {
         siblingNotes.splice(targetIndex, 0, note);
@@ -475,35 +504,51 @@ export function useKnowledgeActions(): KnowledgeActions {
       const orderMap = new Map<string, number>();
       siblingNotes.forEach((n, idx) => orderMap.set(n.id, idx));
 
+      const sourceSiblings = sourceGroupId === groupId
+        ? []
+        : data.notes
+          .filter((item) => item.folderId === note.folderId && item.groupId === sourceGroupId && item.id !== noteId)
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id.localeCompare(b.id));
+      sourceSiblings.forEach((item, index) => orderMap.set(item.id, index));
+
+      if ([...siblingNotes, ...sourceSiblings].some((item) => item.lockVersion === undefined)) {
+        toast.info('新建笔记正在保存，暂不能调整其结构顺序。');
+        return;
+      }
+
       newNotes = newNotes.map(n => (orderMap.has(n.id) ? { ...n, sortOrder: orderMap.get(n.id)! } : n));
       setData(queryClient, userId, () => ({ ...data, notes: newNotes }));
-      const updatedNote = newNotes.find(n => n.id === noteId);
       debouncedSync.schedule(
         `note:${noteId}`,
         async () => {
-          const latest = getData(queryClient, userId).notes.find(item => item.id === noteId);
+          const current = getData(queryClient, userId);
+          const latest = current.notes.find(item => item.id === noteId);
           if (!latest) return;
-          const saved = latest.isNew
-            ? await knowledgeService.upsertNote(latest)
-            : await knowledgeService.moveNote(
-              noteId,
-              latest.folderId,
-              latest.groupId ?? null,
-              latest.sortOrder ?? updatedNote?.sortOrder ?? 0,
-              latest.lockVersion,
-            );
+          const ordered = current.notes
+            .filter((item) => item.folderId === latest.folderId && item.groupId === latest.groupId)
+            .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+            .map((item, index) => ({ id: item.id, sortOrder: index, lockVersion: item.lockVersion }));
+          if (ordered.some((item) => item.lockVersion === undefined)) {
+            throw new Error('笔记版本尚未加载，无法原子移动并排序');
+          }
+          const saved = await knowledgeService.moveNote({
+            ...latest,
+            items: ordered as knowledgeService.VersionedOrderItem[],
+          });
           if (saved === undefined) return;
+          const versions = new Map(saved.map((item) => [item.id, item]));
           setData(queryClient, userId, (current) => ({
             ...current,
-            notes: current.notes.map((item) => item.id === noteId
-              ? {
-                  ...item,
-                  updatedAt: saved.updatedAt,
-                  lockVersion: saved.lockVersion,
-                  isNew: false,
-                  sortOrder: item.sortOrder,
-                }
-              : item),
+            notes: current.notes.map((item) => {
+              const version = versions.get(item.id);
+              return version ? {
+                ...item,
+                updatedAt: version.updatedAt,
+                lockVersion: version.lockVersion,
+                isNew: false,
+                sortOrder: version.sortOrder,
+              } : item;
+            }),
           }));
         },
         LOW_FREQ_DELAY
@@ -517,17 +562,27 @@ export function useKnowledgeActions(): KnowledgeActions {
 
       const oldNote = data.notes[noteIndex];
       if (oldNote.folderId === targetListId && oldNote.groupId === targetGroupId) return;
+      if (oldNote.lockVersion === undefined) {
+        toast.info('新建笔记正在保存，暂不能移动。');
+        return;
+      }
 
-      const targetListNotes = data.notes.filter(n => n.folderId === targetListId);
-      const maxSortOrder = targetListNotes.reduce((max, n) => Math.max(max, n.sortOrder || 0), -1);
-      const newSortOrder = maxSortOrder + 1;
+      const sourceSiblings = data.notes
+        .filter((item) => item.folderId === oldNote.folderId && item.groupId === oldNote.groupId && item.id !== noteId)
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0) || a.id.localeCompare(b.id));
+      if (sourceSiblings.some((item) => item.lockVersion === undefined)) {
+        toast.info('源清单中有新建笔记正在保存，暂不能移动。');
+        return;
+      }
 
-      const newNotes = [...data.notes];
+      const sourceOrder = new Map(sourceSiblings.map((item, index) => [item.id, index]));
+      const newNotes = data.notes.map((item) => sourceOrder.has(item.id)
+        ? { ...item, sortOrder: sourceOrder.get(item.id)! }
+        : item);
       newNotes[noteIndex] = {
         ...oldNote,
         folderId: targetListId,
         groupId: targetGroupId,
-        sortOrder: newSortOrder,
         updatedAt: Date.now(),
       };
 
@@ -537,27 +592,24 @@ export function useKnowledgeActions(): KnowledgeActions {
         async () => {
           const latest = getData(queryClient, userId).notes.find(item => item.id === noteId);
           if (!latest) return;
-          const saved = latest.isNew
-            ? await knowledgeService.upsertNote(latest)
-            : await knowledgeService.moveNote(
-              noteId,
-              latest.folderId,
-              latest.groupId ?? null,
-              latest.sortOrder ?? newSortOrder,
-              latest.lockVersion,
-            );
+          if (latest.lockVersion === undefined) {
+            throw new Error('笔记版本尚未加载，无法移动');
+          }
+          const saved = await knowledgeService.moveNote(latest);
           if (saved === undefined) return;
+          const versions = new Map(saved.map((item) => [item.id, item]));
           setData(queryClient, userId, (current) => ({
             ...current,
-            notes: current.notes.map((item) => item.id === noteId
-              ? {
-                  ...item,
-                  updatedAt: saved.updatedAt,
-                  lockVersion: saved.lockVersion,
-                  isNew: false,
-                  sortOrder: item.sortOrder,
-                }
-              : item),
+            notes: current.notes.map((item) => {
+              const version = versions.get(item.id);
+              return version ? {
+                ...item,
+                updatedAt: version.updatedAt,
+                lockVersion: version.lockVersion,
+                isNew: false,
+                sortOrder: version.sortOrder,
+              } : item;
+            }),
           }));
         },
         LOW_FREQ_DELAY
@@ -566,6 +618,11 @@ export function useKnowledgeActions(): KnowledgeActions {
 
     const reorderNotes: KnowledgeActions['reorderNotes'] = (orderedIds) => {
       const data = getData(queryClient, userId);
+      const orderedNotes = orderedIds.map((id) => data.notes.find((item) => item.id === id));
+      if (orderedNotes.some((item) => item?.lockVersion === undefined)) {
+        toast.info('新建笔记正在保存，暂不能调整顺序。');
+        return;
+      }
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
       const items: knowledgeService.VersionedOrderItem[] = [];
       const newNotes = data.notes.map(n => {
@@ -629,6 +686,11 @@ export function useKnowledgeActions(): KnowledgeActions {
 
     const reorderKnowledgeBases: KnowledgeActions['reorderKnowledgeBases'] = (orderedIds) => {
       const data = getData(queryClient, userId);
+      const orderedBases = orderedIds.map((id) => data.folders.find((item) => item.id === id));
+      if (orderedBases.some((item) => item?.lockVersion === undefined)) {
+        toast.info('新建知识库正在保存，暂不能调整顺序。');
+        return;
+      }
       const orderMap = new Map(orderedIds.map((id, index) => [id, index]));
       const items: knowledgeService.VersionedOrderItem[] = [];
       const newFolders = data.folders.map(f => {
@@ -660,32 +722,20 @@ export function useKnowledgeActions(): KnowledgeActions {
       }));
       debouncedSync.cancel(`folder:${id}`);
       void knowledgeService.deleteKnowledgeBase({ id, lockVersion: data.folders.find((folder) => folder.id === id)?.lockVersion })
-        .catch(() => queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' }));
+        .catch(() => {
+          toast.error('删除知识库失败，已重新加载最新数据。');
+          return queryClient.invalidateQueries({ queryKey: queryKeys.lists.all(userId), refetchType: 'active' });
+        });
     };
 
-    // ── Duplicate (composes the primitives above) ──
-    const duplicateKnowledgeFolder: KnowledgeActions['duplicateKnowledgeFolder'] = (list) => {
-      const newList = addList({ ...list, name: list.name + ' (副本)' });
-
-      const sourceGroups = selectNoteGroups(getData(queryClient, userId).noteGroups, list.id);
-      const groupMap = new Map<string, string>();
-      sourceGroups.forEach(group => {
-        const newGroup = addGroup(newList.id, group.name);
-        updateGroup(newGroup.id, { sortOrder: group.sortOrder });
-        groupMap.set(group.id, newGroup.id);
+    // ── Duplicate ──
+    const duplicateKnowledgeFolder: KnowledgeActions['duplicateKnowledgeFolder'] = async (list) => {
+      const newList = await knowledgeService.duplicateKnowledgeFolder(list.id, `${list.name} (副本)`);
+      setData(queryClient, userId, (current) => ({ ...current, lists: [...current.lists, newList] }));
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.lists.all(userId),
+        refetchType: 'active',
       });
-
-      const sourceNotes = selectNotesByFolderId(getData(queryClient, userId).notes, list.id);
-      sourceNotes.forEach(note => {
-        addNote({
-          folderId: newList.id,
-          groupId: note.groupId ? groupMap.get(note.groupId) || null : null,
-          title: note.title,
-          content: note.content,
-          contentLoaded: true,
-        });
-      });
-
       return newList;
     };
 

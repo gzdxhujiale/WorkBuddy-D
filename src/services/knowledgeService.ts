@@ -94,15 +94,31 @@ async function remoteDeleteKnowledgeFolder(entity: VersionedEntity): Promise<voi
   throwOnPostgrestError(error, "\u5220\u9664\u6e05\u5355");
 }
 
-async function remoteMoveKnowledgeFolder(entity: VersionedEntity & { knowledgeBaseId: string | null }): Promise<SavedKnowledgeEntity> {
-  const { data, error } = await supabase.rpc("move_knowledge_base_folder_v3", {
+export type KnowledgeFolderStructuralMove = VersionedEntity & {
+  knowledgeBaseId: string | null;
+  name: string;
+  items?: VersionedOrderItem[];
+};
+
+async function remoteMoveKnowledgeFolder(entity: KnowledgeFolderStructuralMove): Promise<SavedKnowledgeOrderEntity[]> {
+  const { data, error } = await supabase.rpc("move_and_reorder_knowledge_base_folders_v3", {
     p_id: entity.id,
     p_knowledge_base_id: entity.knowledgeBaseId,
+    p_name: entity.name,
     p_expected_lock_version: requireLockVersion(entity, "移动清单"),
+    p_items: entity.items === undefined ? null : entity.items.map(({ id, sortOrder, lockVersion }) => ({
+      id,
+      sort_order: sortOrder,
+      lock_version: requireLockVersion({ id, lockVersion }, "移动清单排序"),
+    })),
   });
   throwOnPostgrestError(error, "\u79fb\u52a8\u6e05\u5355");
-  const saved = (data as Array<{ updated_at: string; lock_version: number; sort_order: number }>)[0];
-  return { updatedAt: new Date(saved.updated_at).getTime(), lockVersion: Number(saved.lock_version), sortOrder: saved.sort_order };
+  return ((data ?? []) as Array<{ id: string; updated_at: string; lock_version: number; sort_order: number }>).map((item) => ({
+    id: item.id,
+    updatedAt: new Date(item.updated_at).getTime(),
+    lockVersion: Number(item.lock_version),
+    sortOrder: Number(item.sort_order),
+  }));
 }
 
 async function remoteReorderKnowledgeFolders(items: VersionedOrderItem[]): Promise<SavedKnowledgeOrderEntity[]> {
@@ -142,14 +158,32 @@ async function remoteReorderNotes(items: VersionedOrderItem[]): Promise<Array<{ 
   }));
 }
 
-async function remoteMoveNote(noteId: string, folderId: string, groupId: string | null, sortOrder: number, lockVersion: number | undefined): Promise<SavedNoteVersion> {
-  const { data, error } = await supabase.rpc("move_note_v2", {
-    p_id: noteId, p_folder_id: folderId, p_group_id: groupId, p_sort_order: sortOrder,
-    p_expected_lock_version: lockVersion ?? null,
+export type NoteStructuralMove = Pick<Note, "id" | "folderId" | "groupId" | "title" | "content" | "contentLoaded" | "lockVersion"> & {
+  items?: VersionedOrderItem[];
+};
+
+async function remoteMoveNote(note: NoteStructuralMove): Promise<SavedKnowledgeOrderEntity[]> {
+  const { data, error } = await supabase.rpc("move_and_reorder_notes_v3", {
+    p_id: note.id,
+    p_folder_id: note.folderId,
+    p_group_id: note.groupId ?? null,
+    p_title: note.title,
+    p_content: note.content,
+    p_content_loaded: note.contentLoaded === true,
+    p_expected_lock_version: requireLockVersion(note, "移动笔记"),
+    p_items: note.items === undefined ? null : note.items.map(({ id, sortOrder, lockVersion }) => ({
+      id,
+      sort_order: sortOrder,
+      lock_version: requireLockVersion({ id, lockVersion }, "移动笔记排序"),
+    })),
   });
   throwOnPostgrestError(error, "\u79fb\u52a8\u7b14\u8bb0");
-  const saved = (data as Array<{ updated_at: string; lock_version: number }>)[0];
-  return { updatedAt: new Date(saved.updated_at).getTime(), lockVersion: Number(saved.lock_version) };
+  return ((data ?? []) as Array<{ id: string; updated_at: string; lock_version: number; sort_order: number }>).map((item) => ({
+    id: item.id,
+    updatedAt: new Date(item.updated_at).getTime(),
+    lockVersion: Number(item.lock_version),
+    sortOrder: Number(item.sort_order),
+  }));
 }
 
 async function remoteSaveNote(note: Note): Promise<SavedNote> {
@@ -216,7 +250,7 @@ registerOfflineExecutor("list-folder:reorder", async (p) => { await remoteReorde
 registerOfflineExecutor("list:save", async (p) => { await remoteUpsertKnowledgeFolder(p as KnowledgeFolder); });
 registerOfflineExecutor("list:delete", async (p) => remoteDeleteKnowledgeFolder(p as VersionedEntity));
 registerOfflineExecutor("list:move", async (p) => {
-  await remoteMoveKnowledgeFolder(p as VersionedEntity & { knowledgeBaseId: string | null });
+  await remoteMoveKnowledgeFolder(p as KnowledgeFolderStructuralMove);
 });
 registerOfflineExecutor("list:reorder", async (p) => { await remoteReorderKnowledgeFolders(p as VersionedOrderItem[]); });
 
@@ -228,10 +262,7 @@ registerOfflineExecutor("note:patch", async (p) => { await remotePatchNote(p as 
 registerOfflineExecutor("note:delete", async (p) => remoteDeleteNote(p as VersionedEntity));
 registerOfflineExecutor("note:reorder", async (p) => { await remoteReorderNotes(p as VersionedOrderItem[]); });
 registerOfflineExecutor("note:move", async (p) => {
-  const { noteId, folderId, groupId, sortOrder, lockVersion } = p as {
-    noteId: string; folderId: string; groupId: string | null; sortOrder: number; lockVersion?: number;
-  };
-  await remoteMoveNote(noteId, folderId, groupId, sortOrder, lockVersion);
+  await remoteMoveNote(p as NoteStructuralMove);
 });
 
 registerOfflineExecutor("template:save", async (p) => { await remoteUpsertTemplate(p as KnowledgeTemplate); });
@@ -375,7 +406,7 @@ export function deleteKnowledgeFolder(entity: VersionedEntity): Promise<void | u
   );
 }
 
-export function moveKnowledgeFolder(entity: VersionedEntity & { knowledgeBaseId: string | null }): Promise<SavedKnowledgeEntity | undefined> {
+export function moveKnowledgeFolder(entity: KnowledgeFolderStructuralMove): Promise<SavedKnowledgeOrderEntity[] | undefined> {
   return runOrQueue(
     { kind: "list:move", key: "list:move:" + entity.id, payload: entity },
     () => remoteMoveKnowledgeFolder(entity),
@@ -389,8 +420,27 @@ export function reorderKnowledgeFolders(items: VersionedOrderItem[]): Promise<Sa
   );
 }
 
-export async function duplicateKnowledgeFolder(_sourceId: string, newList: KnowledgeFolder): Promise<void> {
-  await remoteUpsertKnowledgeFolder(newList);
+export async function duplicateKnowledgeFolder(sourceId: string, newName: string): Promise<KnowledgeFolder> {
+  const { data, error } = await supabase.rpc("duplicate_knowledge_base_folder_v3", {
+    p_source_id: sourceId,
+    p_new_name: newName,
+  });
+  throwOnPostgrestError(error, "复制清单");
+  const cloned = (data as Array<{
+    id: string;
+    knowledge_base_id: string | null;
+    name: string;
+    sort_order: number;
+    lock_version: number;
+  }>)[0];
+  if (!cloned) throw new Error("复制清单未返回结果");
+  return {
+    id: cloned.id,
+    knowledgeBaseId: cloned.knowledge_base_id ?? null,
+    name: cloned.name,
+    sortOrder: Number(cloned.sort_order),
+    lockVersion: Number(cloned.lock_version),
+  };
 }
 
 export function upsertGroup(group: NoteGroup): Promise<SavedKnowledgeEntity | undefined> {
@@ -435,10 +485,10 @@ export function reorderNotes(items: VersionedOrderItem[]): Promise<Array<{ id: s
   );
 }
 
-export function moveNote(noteId: string, folderId: string, groupId: string | null, sortOrder: number, lockVersion: number | undefined): Promise<SavedNoteVersion | undefined> {
+export function moveNote(note: NoteStructuralMove): Promise<SavedKnowledgeOrderEntity[] | undefined> {
   return runOrQueue(
-    { kind: "note:move", key: "note:move:" + noteId, payload: { noteId, folderId, groupId, sortOrder, lockVersion } },
-    () => remoteMoveNote(noteId, folderId, groupId, sortOrder, lockVersion),
+    { kind: "note:move", key: "note:move:" + note.id, payload: note },
+    () => remoteMoveNote(note),
   );
 }
 
