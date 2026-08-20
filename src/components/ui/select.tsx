@@ -19,9 +19,16 @@ export const Select: React.ForwardRefExoticComponent<
   React.forwardRef<any, SelectProps>(({ className, dropdownMenuClassName, ...props }, ref) => {
     const { isPixelTheme } = useAppThemeStyle();
 
+    const mergedTriggerProps = {
+      zIndex: 1100,
+      ...(props.triggerProps as any),
+    };
+
     return (
       <ArcoSelect
         ref={ref}
+        getPopupContainer={props.getPopupContainer || (() => document.body)}
+        triggerProps={mergedTriggerProps}
         className={cn(
           isPixelTheme
             ? '!rounded-xs !border-2 !border-border !bg-muted/60 hover:!bg-muted !text-foreground !font-mono !shadow-[1px_1px_0px_#000] focus:!border-amber-600 focus:!bg-background transition-colors [&_.arco-select-view]:!bg-transparent [&_.arco-select-view]:!border-0 [&_.arco-select-view]:!rounded-xs [&_.arco-select-view]:!font-mono [&_.arco-select-view-value]:!text-foreground [&_.arco-select-view-icon]:!text-muted-foreground'

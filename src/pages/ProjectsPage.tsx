@@ -25,6 +25,9 @@ import { TemplateEditorModal } from "@/components/projects/TemplateEditorModal";
 import { useConfirmDialog } from "@/components/ui/ConfirmDeleteDialog";
 import { useProjectActions, useProjectsData } from "@/hooks/useProjects";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
+import { Modal } from "@/components/ui/modal";
 import { DateRangePicker } from "@/components/ui/date-picker";
 import { InputTag } from "@/components/ui/input-tag";
 import {
@@ -34,14 +37,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import {
   PRIORITY_LABELS,
   getProjectComputedStatus,
@@ -129,14 +124,34 @@ function CreateProjectDialog({
   const [endDate, setEndDate] = useState("");
   const [ownerName, setOwnerName] = useState("");
   const [priority, setPriority] = useState<Priority>("medium");
-  const [tags, setTags] = useState("");
+  const [tagsList, setTagsList] = useState<string[]>([]);
   const [templateId, setTemplateId] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  useEffect(() => {
+    if (!open) {
+      setName("");
+      setDescription("");
+      setStartDate("");
+      setEndDate("");
+      setOwnerName("");
+      setPriority("medium");
+      setTagsList([]);
+      setTemplateId("");
+      setError("");
+    }
+  }, [open]);
+
   const submit = async () => {
-    if (!name.trim()) return setError("请填写项目名称");
-    if (startDate && endDate && endDate < startDate) return setError("结束日期不能早于开始日期");
+    if (!name.trim()) {
+      setError(isPixelTheme ? "请填写冒险项目代号/名称" : "请填写项目名称");
+      return;
+    }
+    if (startDate && endDate && endDate < startDate) {
+      setError(isPixelTheme ? "凯旋之日不能早于启程之日" : "结束日期不能早于开始日期");
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -148,10 +163,7 @@ function CreateProjectDialog({
           endDate: endDate || undefined,
           ownerName: ownerName.trim() || undefined,
           priority,
-          tags: tags
-            .split(",")
-            .map((tag) => tag.trim())
-            .filter(Boolean),
+          tags: tagsList.map((tag) => tag.trim()).filter(Boolean),
         }),
         templateId || undefined
       );
@@ -160,153 +172,171 @@ function CreateProjectDialog({
       setStartDate("");
       setEndDate("");
       setOwnerName("");
-      setTags("");
+      setTagsList([]);
       setTemplateId("");
       onOpenChange(false);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "创建项目失败");
+      setError(cause instanceof Error ? cause.message : (isPixelTheme ? "发起冒险项目失败" : "创建项目失败"));
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onClose={() => onOpenChange(false)} className={isPixelTheme ? "font-mono border-2 border-border" : ""}>
-        <DialogHeader>
-          <DialogTitle className={isPixelTheme ? "font-mono flex items-center gap-2" : ""}>
-            {isPixelTheme && <PixelShield size={18} />}
-            {isPixelTheme ? "发起冒险项目" : "新建项目"}
-          </DialogTitle>
-          <DialogDescription>
-            {isPixelTheme
-              ? "项目从未启动状态出发；选用公会模板将自动生成阶段与相关委托任务。"
-              : "项目从未开始启动；选用模板会生成阶段和同一批任务中心任务。"}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
-            名称
-            <input
-              autoFocus
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              className={cn(
-                "h-9 px-3 text-sm outline-none transition-colors",
-                isPixelTheme
-                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
-                  : "rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring"
-              )}
-            />
+    <Modal
+      open={open}
+      title={
+        <div className="flex items-center gap-2">
+          {isPixelTheme ? (
+            <PixelShield size={18} className="text-amber-500 shrink-0" />
+          ) : (
+            <FolderKanban size={18} className="text-primary shrink-0" />
+          )}
+          <span className={isPixelTheme ? "font-mono font-bold text-amber-950 dark:text-amber-100" : ""}>
+            {isPixelTheme ? "⚔️ 发起冒险项目" : "新建项目"}
+          </span>
+        </div>
+      }
+      onCancel={() => onOpenChange(false)}
+      onOk={() => void submit()}
+      okText={isPixelTheme ? (saving ? "刻印中…" : "⚔️ 发起冒险") : (saving ? "创建中…" : "创建项目")}
+      cancelText={isPixelTheme ? "放弃" : "取消"}
+      okDisabled={saving}
+      width={560}
+    >
+      <div className={cn("flex flex-col gap-3.5 py-1 text-foreground", isPixelTheme && "font-mono")}>
+        <p className="text-xs text-muted-foreground -mt-1 mb-1">
+          {isPixelTheme
+            ? "📜 项目从未启动状态出发；选用公会模板将自动生成阶段与相关委托任务。"
+            : "项目从未开始启动；选用模板会生成阶段和同一批任务中心任务。"}
+        </p>
+
+        {/* Project Name */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground flex items-center justify-between">
+            <span>{isPixelTheme ? "冒险项目代号 / 名称" : "项目名称"}</span>
+            <span className="text-destructive">*</span>
           </label>
-          <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
-            说明
-            <textarea
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              className={cn(
-                "min-h-16 p-3 text-sm outline-none transition-colors",
-                isPixelTheme
-                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
-                  : "rounded-lg border border-border bg-background focus:ring-2 focus:ring-ring"
-              )}
-            />
+          <Input
+            autoFocus
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              if (error) setError("");
+            }}
+            placeholder={isPixelTheme ? "例如：巨龙遗迹远征计划" : "输入项目名称"}
+            className={cn("h-9.5", error && !name.trim() && "border-destructive bg-destructive/10")}
+          />
+        </div>
+
+        {/* Description */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground">
+            {isPixelTheme ? "冒险委托简述" : "项目说明"}
           </label>
-          <div className="grid gap-1.5 text-sm font-medium sm:col-span-2">
-            <span>项目周期</span>
-            <DateRangePicker
-              value={startDate || endDate ? [startDate, endDate] : undefined}
-              placeholder={["开始日期", "结束日期"]}
-              onChange={(dateStrings) => {
-                const [start, end] = dateStrings;
-                setStartDate(start || "");
-                setEndDate(end || "");
-              }}
+          <textarea
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder={isPixelTheme ? "描述本次冒险项目的背景、目标与通关要求..." : "输入项目描述或背景说明..."}
+            className={cn(
+              "w-full px-3 py-2 text-sm outline-none transition-colors resize-none",
+              isPixelTheme
+                ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
+                : "rounded-lg border border-border bg-background focus:ring-2 focus:ring-primary"
+            )}
+          />
+        </div>
+
+        {/* Date Range */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground">
+            {isPixelTheme ? "冒险历程周期" : "项目周期"}
+          </label>
+          <DateRangePicker
+            value={startDate || endDate ? [startDate, endDate] : undefined}
+            placeholder={isPixelTheme ? ["启程之日", "凯旋之日"] : ["开始日期", "结束日期"]}
+            onChange={(dateStrings) => {
+              const [start, end] = dateStrings;
+              setStartDate(start || "");
+              setEndDate(end || "");
+            }}
+            className="w-full"
+          />
+        </div>
+
+        {/* Owner & Priority (2 columns) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">
+              {isPixelTheme ? "冒险队长 / 领队" : "负责人"}
+            </label>
+            <Input
+              value={ownerName}
+              onChange={(e) => setOwnerName(e.target.value)}
+              placeholder={isPixelTheme ? "例如：勇者艾伦" : "例如：李明"}
+              className="h-9.5"
             />
           </div>
-          <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
-            负责人
-            <input
-              value={ownerName}
-              onChange={(event) => setOwnerName(event.target.value)}
-              placeholder="例如：李明"
-              className={cn(
-                "h-9 px-3 text-sm outline-none transition-colors",
-                isPixelTheme
-                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
-                  : "rounded-lg border border-border bg-background"
-              )}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            优先级
-            <select
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-muted-foreground">
+              {isPixelTheme ? "危险等级" : "优先级"}
+            </label>
+            <Select
               value={priority}
-              onChange={(event) => setPriority(event.target.value as Priority)}
-              className={cn(
-                "h-9 px-3 text-sm outline-none transition-colors cursor-pointer",
-                isPixelTheme
-                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
-                  : "rounded-lg border border-border bg-background"
-              )}
+              onChange={(val) => setPriority(val as Priority)}
+              className="w-full"
             >
-              {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>
-                  {label}优先级
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium">
-            标签
-            <input
-              value={tags}
-              onChange={(event) => setTags(event.target.value)}
-              placeholder="多个标签用逗号分隔"
-              className={cn(
-                "h-9 px-3 text-sm outline-none transition-colors",
-                isPixelTheme
-                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
-                  : "rounded-lg border border-border bg-background"
-              )}
-            />
-          </label>
-          <label className="grid gap-1.5 text-sm font-medium sm:col-span-2">
-            套用模板
-            <select
-              value={templateId}
-              onChange={(event) => setTemplateId(event.target.value)}
-              className={cn(
-                "h-9 px-3 text-sm outline-none transition-colors cursor-pointer",
-                isPixelTheme
-                  ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted focus:border-amber-600 focus:bg-background font-mono shadow-[1px_1px_0px_#000]"
-                  : "rounded-lg border border-border bg-background"
-              )}
-            >
-              <option value="">从空白项目开始</option>
-              {templates.map((template) => (
-                <option value={template.id} key={template.id}>
-                  {template.name}
-                </option>
-              ))}
-            </select>
-          </label>
+              <Select.Option value="urgent">{isPixelTheme ? "🔥 史诗 (紧急)" : "紧急优先级"}</Select.Option>
+              <Select.Option value="high">{isPixelTheme ? "🔴 困难 (高)" : "高优先级"}</Select.Option>
+              <Select.Option value="medium">{isPixelTheme ? "🟡 普通 (中)" : "中优先级"}</Select.Option>
+              <Select.Option value="low">{isPixelTheme ? "🟢 简易 (低)" : "低优先级"}</Select.Option>
+            </Select>
+          </div>
         </div>
+
+        {/* Tags */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground">
+            {isPixelTheme ? "契约标签" : "项目标签"}
+          </label>
+          <InputTag
+            value={tagsList}
+            onChange={(val) => setTagsList(val as string[])}
+            placeholder={isPixelTheme ? "输入标签后按回车添加..." : "输入标签后按回车添加..."}
+            className="w-full min-h-9"
+          />
+        </div>
+
+        {/* Template */}
+        <div className="space-y-1.5">
+          <label className="text-xs font-semibold text-muted-foreground">
+            {isPixelTheme ? "套用公会战术蓝图" : "套用模板"}
+          </label>
+          <Select
+            value={templateId}
+            onChange={(val) => setTemplateId(String(val || ""))}
+            className="w-full"
+            placeholder={isPixelTheme ? "📜 从空白冒险开始" : "从空白项目开始"}
+          >
+            <Select.Option value="">{isPixelTheme ? "📜 从空白冒险开始" : "从空白项目开始"}</Select.Option>
+            {templates.map((template) => (
+              <Select.Option value={template.id} key={template.id}>
+                {template.name}
+              </Select.Option>
+            ))}
+          </Select>
+        </div>
+
+        {/* Error */}
         {error && (
-          <p className="text-sm text-destructive" role="alert">
-            {error}
+          <p className="text-xs text-destructive mt-1 font-mono" role="alert">
+            ⚠️ {error}
           </p>
         )}
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
-          </Button>
-          <Button disabled={saving} onClick={() => void submit()}>
-            {saving ? "创建中…" : "创建项目"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </Modal>
   );
 }
 

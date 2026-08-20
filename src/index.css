@@ -424,5 +424,49 @@ html.tqe-window body > div:has(> [class*="richtext-max-h-"]) {
   font-weight: 700 !important;
 }
 
+/* Ensure all Arco trigger popups (Select, DatePicker, Dropdown, Popconfirm, Popover, Tooltip, Cascader) appear above Modals (z-index: 1001) */
+.arco-trigger {
+  z-index: 1100 !important;
+}
 
+.arco-trigger-popup,
+.arco-select-popup,
+.arco-picker-popup,
+.arco-dropdown,
+.arco-popover-popup,
+.arco-popconfirm-popup {
+  z-index: 1100 !important;
+}
 
+.theme-retro-pixel .arco-modal {
+  border-radius: 4px !important;
+  border: 2px solid #8c6239 !important;
+  box-shadow: 4px 4px 0px #000 !important;
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+  background-color: var(--color-card) !important;
+}
+
+.theme-retro-pixel .arco-modal-header {
+  border-bottom: 2px solid #8c6239 !important;
+  background-color: rgba(254, 243, 199, 0.4) !important;
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+}
+
+.dark .theme-retro-pixel .arco-modal-header {
+  background-color: rgba(69, 26, 3, 0.3) !important;
+}
+
+.theme-retro-pixel .arco-modal-footer {
+  border-top: 2px solid #8c6239 !important;
+  background-color: rgba(254, 243, 199, 0.2) !important;
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+}
+
+.dark .theme-retro-pixel .arco-modal-footer {
+  background-color: rgba(69, 26, 3, 0.15) !important;
+}
+
+.theme-retro-pixel .arco-modal-title {
+  font-family: ui-monospace, "Cascadia Code", monospace !important;
+  color: var(--color-foreground) !important;
+}

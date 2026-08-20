@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom';
 import {
   MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen,
   ChevronDown, FileText, Cloud, LoaderCircle,
-  Folder as FolderIcon, Check, Library
+  Folder as FolderIcon, Library
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverEvent, useDroppable } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -27,6 +27,7 @@ import { Popconfirm } from '@/components/ui/popconfirm';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Modal } from '@/components/ui/modal';
+import { Select } from '@/components/ui/select';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -900,6 +901,7 @@ interface FolderModalProps {
 }
 
 function FolderModal({ initialData, onClose, onSave }: FolderModalProps) {
+  const { isPixelTheme } = useAppThemeStyle();
   const [name, setName] = useState(initialData?.name || '');
 
   const handleSave = () => {
@@ -911,27 +913,36 @@ function FolderModal({ initialData, onClose, onSave }: FolderModalProps) {
   return (
     <Modal
       visible={true}
-      title={initialData ? '编辑知识库' : '添加知识库'}
+      title={
+        <div className="flex items-center gap-2">
+          {isPixelTheme ? <PixelLibrary size={18} /> : <Library size={18} className="text-primary shrink-0" />}
+          <span className={isPixelTheme ? "font-mono font-bold" : ""}>
+            {isPixelTheme
+              ? (initialData ? '📜 编辑知识宝库' : '✨ 创建新知识宝库')
+              : (initialData ? '编辑知识库' : '添加知识库')}
+          </span>
+        </div>
+      }
       onCancel={onClose}
       onOk={handleSave}
-      okText={initialData ? '保存' : '添加'}
+      okText={isPixelTheme ? (initialData ? '刻印保存' : '建立宝库') : (initialData ? '保存' : '添加')}
+      cancelText={isPixelTheme ? '放弃' : '取消'}
       okDisabled={!name.trim()}
       width={480}
     >
-      <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3">
-        <label className="text-sm font-medium text-muted-foreground">知识库名称</label>
-        <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
-          <Library size={18} className="text-primary shrink-0" />
-          <Input
-            type="text"
-            placeholder="知识库名称"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            autoFocus
-            className="h-full border-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-            onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
-          />
-        </div>
+      <div className={cn("grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3 py-2", isPixelTheme && "font-mono")}>
+        <label className="text-sm font-medium text-muted-foreground text-right">
+          {isPixelTheme ? '宝库代号' : '知识库名称'}
+        </label>
+        <Input
+          type="text"
+          placeholder={isPixelTheme ? '输入知识宝库名称...' : '知识库名称'}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
+          className="h-10"
+          onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
+        />
       </div>
     </Modal>
   );
@@ -947,8 +958,12 @@ interface AddListModalProps {
 }
 
 function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, onAddFolder }: AddListModalProps) {
+  const { isPixelTheme } = useAppThemeStyle();
   const [name, setName] = useState(initialData?.name || '');
-  const [knowledgeBaseId, setFolderId] = useState<string | null>(initialData?.knowledgeBaseId !== undefined ? initialData.knowledgeBaseId : (initialFolderId || null));
+  const [knowledgeBaseId, setFolderId] = useState<string | null>(
+    initialData?.knowledgeBaseId !== undefined ? initialData.knowledgeBaseId : (initialFolderId || null)
+  );
+  const [isCreatingFolder, setIsCreatingFolder] = useState(false);
   const [newFolderName, setNewFolderName] = useState('');
 
   const handleAdd = () => {
@@ -956,96 +971,114 @@ function AddListModal({ folders, initialFolderId, initialData, onClose, onAdd, o
     onAdd({ name, knowledgeBaseId });
   };
 
-  const getFolderDisplay = () => {
-    if (!knowledgeBaseId) return '无';
-    const folder = folders.find(f => f.id === knowledgeBaseId);
-    return folder ? folder.name : '无';
+  const handleCreateNewFolder = () => {
+    if (!newFolderName.trim()) return;
+    const newFolder = onAddFolder(newFolderName.trim());
+    setFolderId(newFolder.id);
+    setNewFolderName('');
+    setIsCreatingFolder(false);
+    toast.success(`已创建新知识库「${newFolder.name}」`);
   };
 
   return (
     <Modal
       visible={true}
-      title={initialData ? '编辑文件夹' : '添加文件夹'}
+      title={
+        <div className="flex items-center gap-2">
+          {isPixelTheme ? <PixelFolder size={18} /> : <FolderIcon size={18} className="text-primary shrink-0" />}
+          <span className={isPixelTheme ? "font-mono font-bold" : ""}>
+            {isPixelTheme
+              ? (initialData ? '📜 编辑卷轴文件夹' : '✨ 新建卷轴文件夹')
+              : (initialData ? '编辑文件夹' : '添加文件夹')}
+          </span>
+        </div>
+      }
       onCancel={onClose}
       onOk={handleAdd}
-      okText={initialData ? '保存' : '添加'}
+      okText={isPixelTheme ? (initialData ? '保存变更' : '新建文件夹') : (initialData ? '保存' : '添加')}
+      cancelText={isPixelTheme ? '放弃' : '取消'}
       okDisabled={!name.trim()}
       width={500}
     >
-      <div className="flex flex-col gap-4">
+      <div className={cn("flex flex-col gap-4 py-2", isPixelTheme && "font-mono")}>
         <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3">
-          <label className="text-sm font-medium text-muted-foreground">文件夹名称</label>
-          <div className="flex h-10 items-center gap-2 rounded-md border border-input bg-background px-3 transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20">
-          <FolderIcon size={18} className="text-primary shrink-0" />
+          <label className="text-sm font-medium text-muted-foreground text-right">
+            {isPixelTheme ? '文件夹名' : '文件夹名称'}
+          </label>
           <Input
             type="text"
-            placeholder="文件夹名称"
+            placeholder={isPixelTheme ? '输入文件夹名称...' : '文件夹名称'}
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
-            className="h-full border-none bg-transparent px-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            className="h-10"
             onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
           />
+        </div>
+
+        <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3">
+          <label className="text-sm font-medium text-muted-foreground text-right">
+            {isPixelTheme ? '所属宝库' : '所属知识库'}
+          </label>
+          <div className="flex items-center gap-2 min-w-0">
+            <Select
+              value={knowledgeBaseId || ""}
+              onChange={(val) => setFolderId(val ? String(val) : null)}
+              className="flex-1"
+              placeholder={isPixelTheme ? "选择所属知识宝库" : "选择所属知识库"}
+            >
+              <Select.Option value="">{isPixelTheme ? "无 (独立卷轴文件夹)" : "无 (独立文件夹)"}</Select.Option>
+              {folders.map((f) => (
+                <Select.Option key={f.id} value={f.id}>
+                  {f.name}
+                </Select.Option>
+              ))}
+            </Select>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setIsCreatingFolder(!isCreatingFolder)}
+              className={cn("shrink-0", isPixelTheme && "rounded-xs font-mono text-xs")}
+              title="新建所属知识库"
+            >
+              <Plus size={14} className="mr-1" />
+              {isPixelTheme ? "新建宝库" : "新建库"}
+            </Button>
           </div>
         </div>
 
-        <div className="flex items-center justify-between relative">
-          <span className="text-xs font-semibold text-muted-foreground">所属知识库</span>
-          <div className="relative flex-1 max-w-[220px]">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full flex items-center justify-between px-3 text-xs font-medium"
-                >
-                  <span>{getFolderDisplay()}</span>
-                  <ChevronDown size={14} className="text-muted-foreground" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[220px] max-h-48 overflow-y-auto">
-                <DropdownMenuItem
-                  className="flex items-center justify-between"
-                  onClick={() => setFolderId(null)}
-                >
-                  <span>无</span>
-                  {knowledgeBaseId === null && <Check size={14} className="text-primary" />}
-                </DropdownMenuItem>
-                {folders.map(f => (
-                  <DropdownMenuItem
-                    key={f.id}
-                    className="flex items-center justify-between"
-                    onClick={() => setFolderId(f.id)}
-                  >
-                    <span>{f.name}</span>
-                    {knowledgeBaseId === f.id && <Check size={14} className="text-primary" />}
-                  </DropdownMenuItem>
-                ))}
-                <div className="pt-1 border-t border-border flex items-center gap-1.5 px-2 py-1">
-                  <Plus size={14} className="text-muted-foreground shrink-0" />
-                  <Input
-                    type="text"
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    placeholder="新建知识库..."
-                    className="border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto text-xs"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        if (newFolderName.trim()) {
-                          const newFolder = onAddFolder(newFolderName.trim());
-                          setFolderId(newFolder.id);
-                          setNewFolderName('');
-                        }
-                      }
-                    }}
-                  />
-                </div>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        {isCreatingFolder && (
+          <div className="grid grid-cols-[96px_minmax(0,1fr)] items-center gap-3 bg-muted/40 p-2.5 rounded-md border border-border">
+            <span className="text-xs font-medium text-muted-foreground text-right">
+              {isPixelTheme ? "新宝库名称" : "新知识库"}
+            </span>
+            <div className="flex items-center gap-2">
+              <Input
+                type="text"
+                placeholder={isPixelTheme ? "输入新宝库名称..." : "输入新知识库名称..."}
+                value={newFolderName}
+                onChange={(e) => setNewFolderName(e.target.value)}
+                className="h-8 flex-1 text-xs"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleCreateNewFolder();
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={!newFolderName.trim()}
+                onClick={handleCreateNewFolder}
+                className={cn("h-8 text-xs shrink-0", isPixelTheme && "rounded-xs font-mono font-bold bg-amber-500 hover:bg-amber-600 text-amber-950 border border-amber-900 shadow-[1px_1px_0px_#000]")}
+              >
+                确定创建
+              </Button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </Modal>
   );
@@ -1058,6 +1091,7 @@ interface BatchExportModalProps {
 }
 
 function BatchExportModal({ notes, onExport, onClose }: BatchExportModalProps) {
+  const { isPixelTheme } = useAppThemeStyle();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(notes.map(n => n.id)));
 
   const handleToggleSelectAll = () => {
@@ -1091,26 +1125,42 @@ function BatchExportModal({ notes, onExport, onClose }: BatchExportModalProps) {
   return (
     <Modal
       visible={true}
-      title="批量导出笔记"
+      title={
+        <div className="flex items-center gap-2">
+          {isPixelTheme ? <PixelScroll size={18} /> : <FileText size={18} className="text-primary shrink-0" />}
+          <span className={isPixelTheme ? "font-mono font-bold" : ""}>
+            {isPixelTheme ? "📜 批量导出魔法卷轴笔记" : "批量导出笔记"}
+          </span>
+        </div>
+      }
       onCancel={onClose}
       onOk={handleConfirm}
-      okText={`导出选中的笔记 (${selectedIds.size})`}
+      okText={isPixelTheme ? `导出选中卷轴 (${selectedIds.size})` : `导出选中的笔记 (${selectedIds.size})`}
+      cancelText={isPixelTheme ? "放弃" : "取消"}
       okDisabled={selectedIds.size === 0 || notes.length === 0}
       width={500}
     >
-      <div className="overflow-y-auto max-h-[50vh] space-y-1">
+      <div className={cn("overflow-y-auto max-h-[50vh] space-y-1 py-1", isPixelTheme && "font-mono")}>
         {notes.length === 0 ? (
-          <div className="py-8 text-center text-sm text-muted-foreground">当前文件夹暂无笔记。</div>
+          <div className="py-8 text-center text-sm text-muted-foreground">
+            {isPixelTheme ? "当前文件夹暂无卷轴笔记。" : "当前文件夹暂无笔记。"}
+          </div>
         ) : (
           <>
-            <label className="flex items-center gap-3 px-3 py-2 border-b border-border cursor-pointer text-sm font-semibold text-foreground select-none">
+            <label className={cn(
+              "flex items-center gap-3 px-3 py-2 border-b border-border cursor-pointer text-sm font-semibold text-foreground select-none",
+              isPixelTheme && "hover:bg-amber-50/40 dark:hover:bg-amber-950/20"
+            )}>
               <input
                 type="checkbox"
                 checked={allSelected}
                 onChange={handleToggleSelectAll}
-                className="size-4 rounded-md accent-primary cursor-pointer"
+                className={cn(
+                  "size-4 cursor-pointer",
+                  isPixelTheme ? "accent-amber-600 rounded-xs" : "rounded-md accent-primary"
+                )}
               />
-              <span>全选 ({notes.length})</span>
+              <span>{isPixelTheme ? `全选卷轴 (${notes.length})` : `全选 (${notes.length})`}</span>
             </label>
             <div className="pt-1 space-y-1">
               {notes.map(note => {
@@ -1118,16 +1168,24 @@ function BatchExportModal({ notes, onExport, onClose }: BatchExportModalProps) {
                 return (
                   <label
                     key={note.id}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-accent hover:text-accent-foreground cursor-pointer select-none transition-colors"
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2 cursor-pointer select-none transition-colors",
+                      isPixelTheme
+                        ? "rounded-xs hover:bg-amber-100/60 dark:hover:bg-amber-950/40 text-foreground"
+                        : "rounded-lg hover:bg-accent hover:text-accent-foreground text-foreground"
+                    )}
                   >
                     <input
                       type="checkbox"
                       checked={isChecked}
                       onChange={() => handleToggleNote(note.id)}
-                      className="size-4 rounded-md accent-primary cursor-pointer"
+                      className={cn(
+                        "size-4 cursor-pointer",
+                        isPixelTheme ? "accent-amber-600 rounded-xs" : "rounded-md accent-primary"
+                      )}
                     />
                     <span className="text-sm text-foreground truncate">
-                      {note.title || '未命名笔记'}
+                      {note.title || (isPixelTheme ? '未命名卷轴' : '未命名笔记')}
                     </span>
                   </label>
                 );
