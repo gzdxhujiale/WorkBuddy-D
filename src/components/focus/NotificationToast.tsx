@@ -369,19 +369,34 @@ export const NotificationToast: React.FC = () => {
                 </button>
               )}
               {isRestComplete && (
-                <button
-                  type="button"
-                  onClick={handleStartFocusForTask}
-                  className={cn(
-                    "flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer",
-                    isPixel
-                      ? "bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-900 rounded-xs shadow-[1px_1px_0px_#000]"
-                      : "bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-xs"
-                  )}
-                >
-                  <Target className="size-2.5" />
-                  <span>开启专注</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleExtendRest(3)}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer",
+                      isPixel
+                        ? "bg-amber-200 dark:bg-amber-900/80 hover:bg-amber-300 dark:hover:bg-amber-800 text-amber-950 dark:text-amber-100 border border-amber-800 rounded-xs"
+                        : "bg-orange-500/20 hover:bg-orange-500/30 text-orange-300 rounded-md border border-orange-500/30"
+                    )}
+                  >
+                    <Moon className="size-2.5 text-orange-400" />
+                    <span>再眯 3m</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleStartFocusForTask}
+                    className={cn(
+                      "flex items-center gap-1 px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer",
+                      isPixel
+                        ? "bg-indigo-600 hover:bg-indigo-700 text-white border border-indigo-900 rounded-xs shadow-[1px_1px_0px_#000]"
+                        : "bg-indigo-600 hover:bg-indigo-700 text-white rounded-md shadow-xs"
+                    )}
+                  >
+                    <Target className="size-2.5" />
+                    <span>开启专注</span>
+                  </button>
+                </>
               )}
             </div>
           </div>

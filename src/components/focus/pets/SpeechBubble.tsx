@@ -24,7 +24,7 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
       <div
         onClick={onDismiss}
         className={cn(
-          "relative z-50 cursor-pointer select-none mx-auto w-fit max-w-[200px]",
+          "relative z-50 cursor-pointer select-none mx-auto w-fit max-w-[210px]",
           "animate-in fade-in zoom-in-95 duration-200",
           className
         )}
@@ -44,7 +44,7 @@ export const SpeechBubble: React.FC<SpeechBubbleProps> = ({
     <div
       onClick={onDismiss}
       className={cn(
-        "relative z-50 cursor-pointer select-none mx-auto w-fit max-w-[200px]",
+        "relative z-50 cursor-pointer select-none mx-auto w-fit max-w-[210px]",
         "animate-in fade-in slide-in-from-top-1 duration-200",
         className
       )}

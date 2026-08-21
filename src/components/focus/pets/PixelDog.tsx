@@ -7,6 +7,7 @@ interface PixelDogProps {
   size?: "sm" | "md" | "lg";
   isWalking?: boolean;
   direction?: "left" | "right";
+  isPoked?: boolean;
   onPoke?: () => void;
   className?: string;
 }
@@ -16,11 +17,13 @@ export const PixelDog: React.FC<PixelDogProps> = ({
   size = "md",
   isWalking = false,
   direction = "right",
+  isPoked: propIsPoked,
   onPoke,
   className,
 }) => {
   const [isBlinking, setIsBlinking] = useState(false);
-  const [isPoked, setIsPoked] = useState(false);
+  const [internalPoked, setInternalPoked] = useState(false);
+  const isPoked = propIsPoked !== undefined ? propIsPoked : internalPoked;
   const [frame, setFrame] = useState(0);
   const [walkFrame, setWalkFrame] = useState(0);
   const [celebrateTick, setCelebrateTick] = useState(0);
@@ -68,8 +71,11 @@ export const PixelDog: React.FC<PixelDogProps> = ({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsPoked(true);
-    setTimeout(() => setIsPoked(false), 600);
+    if (isWalking) return;
+    if (propIsPoked === undefined) {
+      setInternalPoked(true);
+      setTimeout(() => setInternalPoked(false), 600);
+    }
     onPoke?.();
   };
 

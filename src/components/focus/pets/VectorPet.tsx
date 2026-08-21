@@ -7,6 +7,7 @@ interface VectorPetProps {
   size?: "sm" | "md" | "lg";
   isWalking?: boolean;
   direction?: "left" | "right";
+  isPoked?: boolean;
   onPoke?: () => void;
   className?: string;
 }
@@ -16,11 +17,13 @@ export const VectorPet: React.FC<VectorPetProps> = ({
   size = "md",
   isWalking = false,
   direction = "right",
+  isPoked: propIsPoked,
   onPoke,
   className,
 }) => {
   const [isBlinking, setIsBlinking] = useState(false);
-  const [isPoked, setIsPoked] = useState(false);
+  const [internalPoked, setInternalPoked] = useState(false);
+  const isPoked = propIsPoked !== undefined ? propIsPoked : internalPoked;
   const [pawFrame, setPawFrame] = useState(0);
   const [walkFrame, setWalkFrame] = useState(0);
   const [celebrateTick, setCelebrateTick] = useState(0);
@@ -69,8 +72,11 @@ export const VectorPet: React.FC<VectorPetProps> = ({
 
   const handleClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsPoked(true);
-    setTimeout(() => setIsPoked(false), 500);
+    if (isWalking) return;
+    if (propIsPoked === undefined) {
+      setInternalPoked(true);
+      setTimeout(() => setInternalPoked(false), 500);
+    }
     onPoke?.();
   };
 

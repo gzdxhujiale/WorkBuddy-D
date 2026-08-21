@@ -79,6 +79,34 @@ export interface SelectedTarget {
 
 const clamp = (val: number, min = 1, max = 180) => Math.max(min, Math.min(max, Number.isFinite(val) ? Math.floor(val) : min));
 
+function getAssistantWindowSize(
+  activeModal: ActiveModal,
+  showStats: boolean,
+  isPurePet: boolean
+): { width: number; height: number } {
+  if (activeModal === "task-selector") {
+    return { width: 210, height: 260 };
+  }
+  if (activeModal === "time-editor") {
+    return { width: 210, height: 190 };
+  }
+  if (activeModal === "menu" || activeModal === "style-menu") {
+    return { width: 210, height: 260 };
+  }
+
+  // Pure pet mode: compact 140 x 165
+  if (isPurePet) {
+    return { width: 140, height: 165 };
+  }
+
+  // Standard card mode sizing (with stats expanded: 150, normal: 85)
+  if (showStats) {
+    return { width: 190, height: 150 };
+  }
+
+  return { width: 190, height: 85 };
+}
+
 async function setWindowGeometry(width: number, height: number) {
   try {
     const win = getCurrentWindow();
@@ -178,6 +206,7 @@ export function FocusAssistant() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [dragDirection, setDragDirection] = useState<"left" | "right">("right");
   const [petOverrideState, setPetOverrideState] = useState<PetState | null>(null);
+  const [isPetPoked, setIsPetPoked] = useState<boolean>(false);
   const [isGlowActive, setIsGlowActive] = useState<boolean>(false);
   const [soundOn, setSoundOn] = useState<boolean>(isSoundEnabled);
 
@@ -192,8 +221,10 @@ export function FocusAssistant() {
   const remainingRef = useRef(secondsLeft);
   const sessionRef = useRef<FocusSession | null>(null);
   const sessionTypeRef = useRef<FocusSessionType>(sessionType);
+  const statusRef = useRef<Status>(status);
   const isCompletingRef = useRef(false);
   const bubbleTimerRef = useRef<number | null>(null);
+  const lastDragEndedAt = useRef<number>(0);
 
   const isPurePet = theme === "pixel-pure" || theme === "pixel-dog-pure" || theme === "vector-pure";
   const currentSpecies: "cat" | "dog" =
@@ -330,6 +361,9 @@ export function FocusAssistant() {
   const handleDragPointerUp = (e?: React.PointerEvent) => {
     const session = dragSessionRef.current;
     if (session.isDown) {
+      if (session.hasMoved) {
+        lastDragEndedAt.current = Date.now();
+      }
       session.isDown = false;
       if (session.rafId !== null) {
         cancelAnimationFrame(session.rafId);
@@ -400,6 +434,10 @@ export function FocusAssistant() {
     sessionTypeRef.current = sessionType;
   }, [sessionType]);
 
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
   // Load stats
   const refreshStats = async () => {
     if (!userId) return;
@@ -417,19 +455,8 @@ export function FocusAssistant() {
 
   // Handle window sizing according to active state/modal
   useEffect(() => {
-    if (activeModal === "task-selector") {
-      setWindowGeometry(210, 260);
-    } else if (activeModal === "time-editor") {
-      setWindowGeometry(210, 190);
-    } else if (activeModal === "menu" || activeModal === "style-menu") {
-      setWindowGeometry(210, 260);
-    } else if (isPurePet) {
-      setWindowGeometry(220, 180);
-    } else if (showStats) {
-      setWindowGeometry(205, 145);
-    } else {
-      setWindowGeometry(205, 80);
-    }
+    const { width, height } = getAssistantWindowSize(activeModal, showStats, isPurePet);
+    void setWindowGeometry(width, height);
   }, [activeModal, showStats, isPurePet, theme]);
 
   // Setup scale change & pin listener
@@ -440,19 +467,8 @@ export function FocusAssistant() {
         const win = getCurrentWindow();
         await win.setAlwaysOnTop(isPinned);
         unlisten = await win.onScaleChanged(async () => {
-          if (activeModal === "task-selector") {
-            await win.setSize(new LogicalSize(210, 260)).catch(() => undefined);
-          } else if (activeModal === "time-editor") {
-            await win.setSize(new LogicalSize(210, 190)).catch(() => undefined);
-          } else if (activeModal === "menu" || activeModal === "style-menu") {
-            await win.setSize(new LogicalSize(210, 260)).catch(() => undefined);
-          } else if (isPurePet) {
-            await win.setSize(new LogicalSize(220, 180)).catch(() => undefined);
-          } else if (showStats) {
-            await win.setSize(new LogicalSize(205, 145)).catch(() => undefined);
-          } else {
-            await win.setSize(new LogicalSize(205, 80)).catch(() => undefined);
-          }
+          const { width, height } = getAssistantWindowSize(activeModal, showStats, isPurePet);
+          await win.setSize(new LogicalSize(width, height)).catch(() => undefined);
         });
       } catch {
         // Browser fallback
@@ -540,7 +556,6 @@ export function FocusAssistant() {
           "workbuddy:extend-focus-action",
           (event) => {
             const mins = event.payload?.durationMinutes || 15;
-            setFocusMinutes(mins);
             void startFocus(mins);
           }
         );
@@ -552,9 +567,29 @@ export function FocusAssistant() {
         unlistenExtendRest = await listen<{ durationMinutes?: number }>(
           "workbuddy:extend-rest-action",
           (event) => {
-            const extraSec = (event.payload?.durationMinutes || 3) * 60;
-            remainingRef.current += extraSec;
-            setSecondsLeft((prev) => prev + extraSec);
+            const mins = event.payload?.durationMinutes || 3;
+            if (sessionTypeRef.current === "rest" && statusRef.current === "running") {
+              const extraSec = mins * 60;
+              remainingRef.current += extraSec;
+              setSecondsLeft((prev) => prev + extraSec);
+              const cur = sessionRef.current;
+              if (cur) {
+                const newPlanned = (cur.plannedMinutes || restMinutes) + mins;
+                setSession((prev) => (prev ? { ...prev, plannedMinutes: newPlanned } : null));
+              }
+              const text =
+                currentSpecies === "dog"
+                  ? `汪！再多休息 ${mins} 分钟，好好放松一下吧 ☕`
+                  : `喵！再多休息 ${mins} 分钟，好好放松一下吧 ☕`;
+              speak(text);
+            } else {
+              void startRest(undefined, undefined, mins);
+              const text =
+                currentSpecies === "dog"
+                  ? `汪！再多眯 ${mins} 分钟，好好充电哦 ☕`
+                  : `喵！再多眯 ${mins} 分钟，好好充电哦 ☕`;
+              speak(text);
+            }
           }
         );
       } catch {
@@ -588,6 +623,11 @@ export function FocusAssistant() {
   }, [petOverrideState, sessionType, status]);
 
   const handlePokePet = () => {
+    if (dragSessionRef.current.hasMoved || Date.now() - lastDragEndedAt.current < 350) {
+      return;
+    }
+    setIsPetPoked(true);
+    setTimeout(() => setIsPetPoked(false), 600);
     playPokeSound(currentThemeStyle === "pixel");
     const text = getDialogue("poke");
     speak(text);
@@ -603,6 +643,7 @@ export function FocusAssistant() {
     remainingRef.current = minutes * 60;
     startedAt.current = Date.now();
     setStatus("running");
+    statusRef.current = "running";
 
     const text = getDialogue("focus_start");
     speak(text);
@@ -642,6 +683,7 @@ export function FocusAssistant() {
     remainingRef.current = minutes * 60;
     startedAt.current = Date.now();
     setStatus("running");
+    statusRef.current = "running";
 
     try {
       const created = await focusAssistantApi.create({
@@ -661,10 +703,11 @@ export function FocusAssistant() {
 
   const pause = async () => {
     if (!session) return;
-    const totalPlannedSec = (sessionTypeRef.current === "rest" ? restMinutes : focusMinutes) * 60;
+    const totalPlannedSec = (session.plannedMinutes || (sessionTypeRef.current === "rest" ? restMinutes : focusMinutes)) * 60;
     const activeSec = Math.max(0, totalPlannedSec - remainingRef.current);
     startedAt.current = null;
     setStatus("paused");
+    statusRef.current = "paused";
 
     const text = getDialogue("focus_pause");
     speak(text);
@@ -681,6 +724,7 @@ export function FocusAssistant() {
     if (!session) return;
     startedAt.current = Date.now();
     setStatus("running");
+    statusRef.current = "running";
 
     const text = getDialogue("focus_resume");
     speak(text);
@@ -782,7 +826,7 @@ export function FocusAssistant() {
       try {
         await focusAssistantApi.update(cur.id, {
           status: "completed",
-          activeSeconds: restMinutes * 60,
+          activeSeconds: (cur.plannedMinutes || restMinutes) * 60,
           restCompleted: true,
         });
       } catch (e) {
@@ -812,6 +856,7 @@ export function FocusAssistant() {
     setSessionType("focus");
     sessionTypeRef.current = "focus";
     setStatus("ready");
+    statusRef.current = "ready";
     setSecondsLeft(focusMinutes * 60);
     remainingRef.current = focusMinutes * 60;
     startedAt.current = null;
@@ -823,7 +868,8 @@ export function FocusAssistant() {
     isCompletingRef.current = false;
     const cur = sessionRef.current;
     if (cur) {
-      const activeSec = Math.max(0, restMinutes * 60 - remainingRef.current);
+      const planned = cur.plannedMinutes || restMinutes;
+      const activeSec = Math.max(0, planned * 60 - remainingRef.current);
       try {
         await focusAssistantApi.update(cur.id, {
           status: "interrupted",
@@ -847,6 +893,7 @@ export function FocusAssistant() {
     setSessionType("focus");
     sessionTypeRef.current = "focus";
     setStatus("ready");
+    statusRef.current = "ready";
     setSecondsLeft(focusMinutes * 60);
     remainingRef.current = focusMinutes * 60;
     startedAt.current = null;
@@ -917,7 +964,7 @@ export function FocusAssistant() {
   };
 
   // Progress Calculation
-  const totalSeconds = (sessionType === "rest" ? restMinutes : focusMinutes) * 60;
+  const totalSeconds = (sessionType === "rest" ? (session?.plannedMinutes || restMinutes) : (session?.plannedMinutes || focusMinutes)) * 60;
   const progressRatio = totalSeconds > 0 ? (totalSeconds - secondsLeft) / totalSeconds : 0;
   const strokeDashoffset = 113.1 * (1 - progressRatio); // 2 * PI * 18 ≈ 113.1
 
@@ -1880,7 +1927,7 @@ export function FocusAssistant() {
   if (isPurePet) {
     return (
       <div
-        className="relative w-[220px] h-[180px] select-none flex flex-col items-center justify-center overflow-visible outline-none group mx-auto cursor-grab active:cursor-grabbing"
+        className="relative w-full h-full select-none flex flex-col items-center justify-between overflow-visible outline-none group mx-auto cursor-grab active:cursor-grabbing px-1 py-1"
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -1891,13 +1938,14 @@ export function FocusAssistant() {
         onPointerUp={handleDragPointerUp}
         onPointerCancel={handleDragPointerUp}
       >
-        {/* Header: Speech Bubble / Timer */}
-        <div className="w-full flex items-center justify-center relative z-30 shrink-0 mb-0.5 pointer-events-auto">
+        {/* Header: Speech Bubble or Timer Pill (Anchored at bottom of header) */}
+        <div className="w-full h-[46px] flex items-end justify-center relative z-30 shrink-0 pb-0.5 pointer-events-auto">
           {bubbleText ? (
             <SpeechBubble
               text={bubbleText}
               theme={theme}
               onDismiss={() => setBubbleText(null)}
+              className="max-w-[130px]"
             />
           ) : (
             <button
@@ -1908,7 +1956,7 @@ export function FocusAssistant() {
                 setActiveModal("time-editor");
               }}
               className={cn(
-                "px-2.5 py-0.5 rounded-full text-xs font-bold transition-transform cursor-pointer hover:scale-105 active:scale-95 shadow-xs",
+                "px-2 py-0.5 rounded-full text-xs font-bold transition-transform cursor-pointer hover:scale-105 active:scale-95 shadow-xs animate-in fade-in duration-150",
                 theme.startsWith("pixel")
                   ? "bg-amber-50 text-amber-950 border border-amber-900 font-mono text-[11px]"
                   : sessionType === "rest"
@@ -1923,10 +1971,10 @@ export function FocusAssistant() {
           )}
         </div>
 
-        {/* Pet Display */}
+        {/* Pet Display (Fixed height 80px, pet is 80px, perfectly locked in position) */}
         <div
           className={cn(
-            "relative flex items-center justify-center pointer-events-auto transition-all duration-300 rounded-full",
+            "relative h-[80px] w-full flex items-center justify-center pointer-events-auto transition-all duration-300 rounded-full shrink-0",
             isGlowActive && "ring-8 ring-amber-400/50 shadow-[0_0_30px_rgba(245,158,11,0.6)] animate-pulse"
           )}
           onContextMenu={(e) => {
@@ -1941,6 +1989,7 @@ export function FocusAssistant() {
               size="lg"
               isWalking={isDragging}
               direction={dragDirection}
+              isPoked={isPetPoked}
               onPoke={handlePokePet}
             />
           ) : theme === "pixel-dog-pure" ? (
@@ -1949,6 +1998,7 @@ export function FocusAssistant() {
               size="lg"
               isWalking={isDragging}
               direction={dragDirection}
+              isPoked={isPetPoked}
               onPoke={handlePokePet}
             />
           ) : (
@@ -1957,15 +2007,16 @@ export function FocusAssistant() {
               size="lg"
               isWalking={isDragging}
               direction={dragDirection}
+              isPoked={isPetPoked}
               onPoke={handlePokePet}
             />
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none group-hover:pointer-events-auto z-20 shrink-0 mt-0.5">
+        {/* Footer Actions (Fixed height 28px) */}
+        <div className="h-[28px] w-full flex items-start justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 pointer-events-none group-hover:pointer-events-auto z-20 shrink-0">
           {status === "paused" ? (
-            <div className="flex items-center gap-1 bg-white/95 dark:bg-slate-800/95 p-1 rounded-full shadow-md border border-slate-200/80 dark:border-slate-700">
+            <div className="flex items-center gap-1 bg-white/95 dark:bg-slate-800/95 p-0.5 rounded-full shadow-md border border-slate-200/80 dark:border-slate-700">
               <button
                 onClick={(e) => { e.stopPropagation(); void resume(); }}
                 className="size-5 rounded-full bg-blue-500 text-white flex items-center justify-center cursor-pointer hover:scale-110"
@@ -1986,7 +2037,7 @@ export function FocusAssistant() {
               </button>
             </div>
           ) : (
-            <div className="flex items-center gap-1 bg-white/95 dark:bg-slate-800/95 px-1.5 py-0.5 rounded-full shadow-md border border-slate-200/80 dark:border-slate-700">
+            <div className="flex items-center gap-1 bg-white/95 dark:bg-slate-800/95 px-1 py-0.5 rounded-full shadow-md border border-slate-200/80 dark:border-slate-700">
               <button
                 onClick={(e) => { e.stopPropagation(); status === "ready" ? void startFocus() : void pause(); }}
                 className={cn("size-5 rounded-full text-white flex items-center justify-center cursor-pointer hover:scale-110", sessionType === "rest" ? "bg-emerald-500" : "bg-orange-500")}
@@ -1995,7 +2046,7 @@ export function FocusAssistant() {
               </button>
               <button
                 onClick={(e) => { e.stopPropagation(); setActiveModal("task-selector"); }}
-                className="px-1.5 py-0.5 text-[10px] text-slate-600 dark:text-slate-300 hover:text-blue-500 max-w-[65px] truncate cursor-pointer font-medium"
+                className="px-1 py-0.5 text-[10px] text-slate-600 dark:text-slate-300 hover:text-blue-500 max-w-[55px] truncate cursor-pointer font-medium"
               >
                 {getTargetLabel()}
               </button>
@@ -2017,16 +2068,7 @@ export function FocusAssistant() {
   // ============================================================================
   return (
     <div
-      className={cn(
-        "relative w-[200px] rounded-2xl select-none transition-all duration-300 flex flex-col justify-between overflow-visible outline-none mx-auto cursor-grab active:cursor-grabbing",
-        showStats ? "h-[140px] p-2.5" : "h-[75px] px-3 py-2",
-        isGlowActive && (
-          theme.startsWith("pixel")
-            ? "shadow-[0px_0px_0px_3px_#F59E0B,0px_0px_16px_rgba(245,158,11,0.6)]"
-            : "ring-4 ring-amber-400/70 dark:ring-amber-500/70 shadow-[0_0_24px_rgba(245,158,11,0.55)] animate-pulse"
-        ),
-        getThemeClasses()
-      )}
+      className="relative w-full h-full select-none flex items-center justify-center overflow-visible outline-none cursor-grab active:cursor-grabbing"
       onContextMenu={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -2037,86 +2079,101 @@ export function FocusAssistant() {
       onPointerUp={handleDragPointerUp}
       onPointerCancel={handleDragPointerUp}
     >
-      {/* Speech Bubble floating on top inside card */}
-      {bubbleText && (
-        <div className="absolute top-1.5 left-1/2 -translate-x-1/2 z-50 w-auto max-w-[185px]">
-          <SpeechBubble text={bubbleText} theme={theme} onDismiss={() => setBubbleText(null)} />
+      {/* Main Floating Card */}
+      <div
+        className={cn(
+          "relative w-[185px] rounded-2xl select-none transition-all duration-300 flex flex-col justify-between overflow-visible outline-none shrink-0",
+          showStats ? "h-[135px] p-2.5" : "h-[70px] px-2.5 py-1.5",
+          isGlowActive && (
+            theme.startsWith("pixel")
+              ? "shadow-[0px_0px_0px_3px_#F59E0B,0px_0px_16px_rgba(245,158,11,0.6)]"
+              : "ring-4 ring-amber-400/70 dark:ring-amber-500/70 shadow-[0_0_24px_rgba(245,158,11,0.55)] animate-pulse"
+          ),
+          getThemeClasses()
+        )}
+      >
+        {/* Speech Bubble floating overlay inside card */}
+        {bubbleText && (
+          <div className="absolute top-1 left-1/2 -translate-x-1/2 z-50 w-auto max-w-[185px]">
+            <SpeechBubble text={bubbleText} theme={theme} onDismiss={() => setBubbleText(null)} />
+          </div>
+        )}
+        {/* Top Right: Window Actions (Stats, Menu, Close) */}
+        <div className="absolute top-1.5 right-2 flex items-center gap-0.5 text-slate-400 dark:text-slate-500 z-20">
+          {/* Toggle Stats */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              handleToggleStats();
+            }}
+            className={cn(
+              "p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded",
+              showStats && "text-blue-500 dark:text-blue-400"
+            )}
+            title={showStats ? "收起统计" : "展开今日/本周统计"}
+          >
+            <RotateCcw size={12} className={cn("transition-transform", showStats && "rotate-180")} />
+          </button>
+
+          {/* More Menu */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setActiveModal("menu");
+            }}
+            className="p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded"
+            title="更多选项"
+          >
+            <MoreHorizontal size={13} />
+          </button>
+
+          {/* Close / Hide Window */}
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              hideWindow();
+            }}
+            className="p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded"
+            title="关闭悬浮助手"
+          >
+            <X size={13} />
+          </button>
         </div>
-      )}
 
-      {/* Top Right: Window Actions (Stats, Menu, Close) */}
-      <div className="absolute top-1.5 right-2 flex items-center gap-0.5 text-slate-400 dark:text-slate-500 z-20">
-        {/* Toggle Stats */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleToggleStats();
-          }}
-          className={cn(
-            "p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded",
-            showStats && "text-blue-500 dark:text-blue-400"
-          )}
-          title={showStats ? "收起统计" : "展开今日/本周统计"}
-        >
-          <RotateCcw size={12} className={cn("transition-transform", showStats && "rotate-180")} />
-        </button>
-
-        {/* More Menu */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setActiveModal("menu");
-          }}
-          className="p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded"
-          title="更多选项"
-        >
-          <MoreHorizontal size={13} />
-        </button>
-
-        {/* Close / Hide Window */}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            hideWindow();
-          }}
-          className="p-0.5 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer rounded"
-          title="关闭悬浮助手"
-        >
-          <X size={13} />
-        </button>
-      </div>
-
-      {/* Main Row: Pet Avatar + Middle Info + Right Control Button */}
-      <div className="flex items-center w-full h-[58px] mt-0.5" data-drag="true">
-        {/* Left Side: Avatar / Pet / Circular Ring according to Theme */}
-        {theme === "pixel" ? (
-          <PixelPet
-            state={petState}
-            size="md"
-            isWalking={isDragging}
-            direction={dragDirection}
-            onPoke={handlePokePet}
-            className="shrink-0 mr-1.5"
-          />
-        ) : theme === "pixel-dog" ? (
-          <PixelDog
-            state={petState}
-            size="md"
-            isWalking={isDragging}
-            direction={dragDirection}
-            onPoke={handlePokePet}
-            className="shrink-0 mr-1.5"
-          />
-        ) : theme === "vector" ? (
-          <VectorPet
-            state={petState}
-            size="md"
-            isWalking={isDragging}
-            direction={dragDirection}
-            onPoke={handlePokePet}
-            className="shrink-0 mr-1.5"
-          />
-        ) : (
+        {/* Main Row: Pet Avatar + Middle Info + Right Control Button */}
+        <div className="flex items-center w-full h-[58px] mt-0.5" data-drag="true">
+          {/* Left Side: Avatar / Pet / Circular Ring according to Theme */}
+          {theme === "pixel" ? (
+            <PixelPet
+              state={petState}
+              size="md"
+              isWalking={isDragging}
+              direction={dragDirection}
+              isPoked={isPetPoked}
+              onPoke={handlePokePet}
+              className="shrink-0 mr-1.5"
+            />
+          ) : theme === "pixel-dog" ? (
+            <PixelDog
+              state={petState}
+              size="md"
+              isWalking={isDragging}
+              direction={dragDirection}
+              isPoked={isPetPoked}
+              onPoke={handlePokePet}
+              className="shrink-0 mr-1.5"
+            />
+          ) : theme === "vector" ? (
+            <VectorPet
+              state={petState}
+              size="md"
+              isWalking={isDragging}
+              direction={dragDirection}
+              isPoked={isPetPoked}
+              onPoke={handlePokePet}
+              className="shrink-0 mr-1.5"
+            />
+          ) : (
           /* Classic Light Circular Ring */
           <div className="relative size-11 flex items-center justify-center shrink-0 mr-1.5">
             <svg className="size-11 -rotate-90" viewBox="0 0 44 44">
@@ -2389,6 +2446,7 @@ export function FocusAssistant() {
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }
