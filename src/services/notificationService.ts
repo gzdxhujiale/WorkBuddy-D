@@ -4,7 +4,7 @@ import {
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 import { invoke } from "@tauri-apps/api/core";
-import { getAppThemeStyle } from "@/lib/preferences";
+import { getAppThemeStyle, getNotificationDisplayOptions } from "@/lib/preferences";
 import { logError } from "@/lib/syncEngine";
 
 export async function requestNotificationPermission(): Promise<boolean> {
@@ -36,6 +36,7 @@ export interface DesktopNotificationOptions {
   themeStyle?: "modern" | "pixel";
   eventType?: "focus_complete" | "rest_complete" | "task_reminder" | "general";
   taskId?: string;
+  forceCenterCard?: boolean;
 }
 
 export async function sendDesktopNotification(
@@ -43,56 +44,57 @@ export async function sendDesktopNotification(
   body: string,
   options?: DesktopNotificationOptions
 ): Promise<void> {
+  const displayOptions = getNotificationDisplayOptions();
   const petType = options?.petType || "cat";
   const themeStyle = options?.themeStyle || (getAppThemeStyle() === "retro-pixel" ? "pixel" : "modern");
   const eventType = options?.eventType || "focus_complete";
   const taskId = options?.taskId || null;
 
-  // 1. Multi-monitor toast overlay windows across all connected displays
-  try {
-    await invoke("show_multi_monitor_notification", {
-      title,
-      body,
-      petType,
-      themeStyle,
-      eventType,
-      taskId,
-    });
-  } catch (error) {
-    logError("notification", "Multi-monitor notification failed", error);
-  }
-
-  // 2. System Toast backup via Tauri notification plugin
-  try {
-    let granted = await isPermissionGranted();
-    if (!granted) {
-      const permission = await requestPermission();
-      granted = permission === "granted";
-    }
-    if (granted) {
-      sendNotification({
+  // 1. Screen Center Interactive Notification Card (HUD modal)
+  if (displayOptions.centerCard || options?.forceCenterCard) {
+    try {
+      await invoke("show_center_interactive_notification", {
         title,
         body,
+        petType,
+        themeStyle,
+        eventType,
+        taskId,
       });
-      return;
+    } catch (error) {
+      logError("notification", "Center interactive notification failed", error);
     }
-  } catch (error) {
-    logError("notification", "System notification failed", error);
   }
 
-  // 3. Browser / Webview standard Web Notification fallback
-  if (typeof window !== "undefined" && "Notification" in window) {
-    if (Notification.permission === "granted") {
-      new Notification(title, { body });
-    } else if (Notification.permission !== "denied") {
+  // 2. Custom Multi-Monitor Bottom-Right Toast Overlay Windows
+  if (displayOptions.systemTray) {
+    try {
+      await invoke("show_multi_monitor_notification", {
+        title,
+        body,
+        petType,
+        themeStyle,
+        eventType,
+        taskId,
+      });
+    } catch (error) {
+      logError("notification", "Multi-monitor notification failed", error);
+      // Fallback to system notification plugin if webview window creation fails
       try {
-        const permission = await Notification.requestPermission();
-        if (permission === "granted") {
-          new Notification(title, { body });
+        let granted = await isPermissionGranted();
+        if (!granted) {
+          const permission = await requestPermission();
+          granted = permission === "granted";
         }
-      } catch (error) {
-        logError("notification", "Browser notification request failed", error);
+        if (granted) {
+          sendNotification({ title, body });
+          return;
+        }
+      } catch (sysErr) {
+        logError("notification", "System notification fallback failed", sysErr);
       }
     }
   }
+
 }
+

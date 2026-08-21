@@ -60,13 +60,24 @@ export const TimeManagementPanel: React.FC = () => {
   }, [tasks]);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenNavigate: (() => void) | undefined;
+    let unlistenComplete: (() => void) | undefined;
     const setupListener = async () => {
       try {
-        unlisten = await listen<{ taskId: string }>("workbuddy:navigate-to-task", (event) => {
+        unlistenNavigate = await listen<{ taskId: string }>("workbuddy:navigate-to-task", (event) => {
           const targetTask = tasksRef.current.find((t) => t.id === event.payload.taskId);
           if (targetTask) {
             handleOpenTaskEditor(targetTask, targetTask.quadrant);
+          }
+        });
+
+        unlistenComplete = await listen<{ taskId: string }>("workbuddy:complete-task-action", (event) => {
+          const targetTask = tasksRef.current.find((t) => t.id === event.payload.taskId);
+          if (targetTask && !targetTask.completed) {
+            updateTask(targetTask.id, {
+              completed: true,
+              completedAt: Date.now(),
+            });
           }
         });
       } catch {
@@ -75,7 +86,8 @@ export const TimeManagementPanel: React.FC = () => {
     };
     void setupListener();
     return () => {
-      if (unlisten) unlisten();
+      if (unlistenNavigate) unlistenNavigate();
+      if (unlistenComplete) unlistenComplete();
     };
   }, []);
 

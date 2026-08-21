@@ -99,6 +99,77 @@ async fn show_multi_monitor_notification(
     Ok(())
 }
 
+#[tauri::command]
+async fn show_center_interactive_notification(
+    app: tauri::AppHandle,
+    title: String,
+    body: String,
+    pet_type: String,
+    theme_style: String,
+    event_type: String,
+    task_id: Option<String>,
+) -> Result<(), String> {
+    let label = "notify-center-modal";
+    if let Some(existing) = app.get_webview_window(label) {
+        let _ = existing.destroy();
+    }
+
+    let toast_w = 440.0;
+    let toast_h = 190.0;
+
+    let monitor = app
+        .primary_monitor()
+        .map_err(|e| e.to_string())?
+        .or_else(|| app.available_monitors().ok().and_then(|m| m.into_iter().next()));
+
+    let (target_x, target_y) = if let Some(m) = monitor {
+        let pos = m.position();
+        let size = m.size();
+        let scale_factor = m.scale_factor();
+        let phys_w = (toast_w * scale_factor) as i32;
+        let phys_h = (toast_h * scale_factor) as i32;
+        (
+            (pos.x + (size.width as i32 - phys_w) / 2) as f64 / scale_factor,
+            (pos.y + (size.height as i32 - phys_h) / 2) as f64 / scale_factor,
+        )
+    } else {
+        (200.0, 200.0)
+    };
+
+    let mut query = format!(
+        "title={}&body={}&pet={}&theme={}&type={}&center=1",
+        urlencode_str(&title),
+        urlencode_str(&body),
+        urlencode_str(&pet_type),
+        urlencode_str(&theme_style),
+        urlencode_str(&event_type),
+    );
+    if let Some(ref tid) = task_id {
+        query.push_str(&format!("&task_id={}", urlencode_str(tid)));
+    }
+    let url = format!("notification-toast.html?{}", query);
+
+    let builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        label,
+        tauri::WebviewUrl::App(url.into()),
+    )
+    .title("WorkBuddy 互动通知")
+    .inner_size(toast_w, toast_h)
+    .position(target_x, target_y)
+    .decorations(false)
+    .transparent(true)
+    .shadow(false)
+    .always_on_top(true)
+    .skip_taskbar(true)
+    .focusable(false);
+
+    if let Ok(win) = builder.build() {
+        let _ = win.set_always_on_top(true);
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -152,8 +223,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             quit_app,
-            show_multi_monitor_notification
+            show_multi_monitor_notification,
+            show_center_interactive_notification
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+

@@ -46,3 +46,44 @@ export function applyAppThemeStyle(style: AppThemeStyle = getAppThemeStyle()): v
   }
 }
 
+export interface NotificationDisplayOptions {
+  centerCard: boolean;      // 屏幕中央互动卡片 (默认 true)
+  assistantBubble: boolean; // 桌面悬浮助手对话气泡 (默认 true)
+  systemTray: boolean;      // 系统托盘通知 (默认 true)
+}
+
+const NOTIFICATION_DISPLAY_OPTIONS_KEY = "workbuddy.notificationDisplayOptions";
+
+export const DEFAULT_NOTIFICATION_DISPLAY_OPTIONS: NotificationDisplayOptions = {
+  centerCard: true,
+  assistantBubble: true,
+  systemTray: true,
+};
+
+export function getNotificationDisplayOptions(): NotificationDisplayOptions {
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_DISPLAY_OPTIONS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return {
+        centerCard: typeof parsed.centerCard === "boolean" ? parsed.centerCard : true,
+        assistantBubble: typeof parsed.assistantBubble === "boolean" ? parsed.assistantBubble : true,
+        systemTray: typeof parsed.systemTray === "boolean" ? parsed.systemTray : true,
+      };
+    }
+  } catch {}
+  return { ...DEFAULT_NOTIFICATION_DISPLAY_OPTIONS };
+}
+
+export function setNotificationDisplayOptions(options: Partial<NotificationDisplayOptions>): void {
+  const current = getNotificationDisplayOptions();
+  const next: NotificationDisplayOptions = { ...current, ...options };
+  localStorage.setItem(NOTIFICATION_DISPLAY_OPTIONS_KEY, JSON.stringify(next));
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("workbuddy:notification-options-change", { detail: next }));
+    if (isTauriEnv()) {
+      void emit("workbuddy:notification-options-change", next).catch(() => {});
+    }
+  }
+}
+

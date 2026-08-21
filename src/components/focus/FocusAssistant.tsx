@@ -46,6 +46,7 @@ import { PixelDog } from "./pets/PixelDog";
 import { VectorPet } from "./pets/VectorPet";
 import { SpeechBubble } from "./pets/SpeechBubble";
 import { getPetDialogue, PetEvent, PetDialogueOptions } from "./pets/petDialogues";
+import { getNotificationDisplayOptions } from "@/lib/preferences";
 
 type Status = "ready" | "running" | "paused";
 type ActiveModal = "none" | "task-selector" | "time-editor" | "menu" | "style-menu";
@@ -377,6 +378,8 @@ export function FocusAssistant() {
   }, []);
 
   const speak = (text: string, durationMs = 4000) => {
+    const { assistantBubble } = getNotificationDisplayOptions();
+    if (!assistantBubble) return;
     if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
     setBubbleText(text);
     bubbleTimerRef.current = window.setTimeout(() => {
@@ -465,6 +468,10 @@ export function FocusAssistant() {
   useEffect(() => {
     let unlistenReminder: (() => void) | undefined;
     let unlistenSelectTask: (() => void) | undefined;
+    let unlistenStartRest: (() => void) | undefined;
+    let unlistenExtendFocus: (() => void) | undefined;
+    let unlistenStartFocus: (() => void) | undefined;
+    let unlistenExtendRest: (() => void) | undefined;
     let glowTimer: number | null = null;
     let knockTimer: number | null = null;
 
@@ -477,26 +484,29 @@ export function FocusAssistant() {
           dateText?: string;
         }>("workbuddy:task-reminder", (event) => {
           const { title } = event.payload;
+          const { assistantBubble } = getNotificationDisplayOptions();
 
-          // 1. Trigger attention-grabbing glow
-          setIsGlowActive(true);
-          if (glowTimer) window.clearTimeout(glowTimer);
-          glowTimer = window.setTimeout(() => {
-            setIsGlowActive(false);
-            glowTimer = null;
-          }, 8000);
+          if (assistantBubble) {
+            // 1. Trigger attention-grabbing glow
+            setIsGlowActive(true);
+            if (glowTimer) window.clearTimeout(glowTimer);
+            glowTimer = window.setTimeout(() => {
+              setIsGlowActive(false);
+              glowTimer = null;
+            }, 8000);
 
-          // 2. Animate pet in knocking / attention state
-          setPetOverrideState("knocking");
-          if (knockTimer) window.clearTimeout(knockTimer);
-          knockTimer = window.setTimeout(() => {
-            setPetOverrideState(null);
-            knockTimer = null;
-          }, 6000);
+            // 2. Animate pet in knocking / attention state
+            setPetOverrideState("knocking");
+            if (knockTimer) window.clearTimeout(knockTimer);
+            knockTimer = window.setTimeout(() => {
+              setPetOverrideState(null);
+              knockTimer = null;
+            }, 6000);
 
-          // 3. Pet speaks customized reminder dialogue
-          const dialogueText = getDialogue("task_reminder", { targetName: title });
-          speak(dialogueText, 7000);
+            // 3. Pet speaks customized reminder dialogue
+            const dialogueText = getDialogue("task_reminder", { targetName: title });
+            speak(dialogueText, 7000);
+          }
 
           // 4. Audio chime
           void playTaskReminderSound(currentThemeStyle === "pixel");
@@ -517,6 +527,36 @@ export function FocusAssistant() {
           const text = getDialogue("focus_start", { targetName: target.name });
           speak(text, 4000);
         });
+
+        unlistenStartRest = await listen<{ durationMinutes?: number }>(
+          "workbuddy:start-rest-action",
+          (event) => {
+            const mins = event.payload?.durationMinutes || restMinutes;
+            void startRest(undefined, undefined, mins);
+          }
+        );
+
+        unlistenExtendFocus = await listen<{ durationMinutes?: number }>(
+          "workbuddy:extend-focus-action",
+          (event) => {
+            const mins = event.payload?.durationMinutes || 15;
+            setFocusMinutes(mins);
+            void startFocus(mins);
+          }
+        );
+
+        unlistenStartFocus = await listen("workbuddy:start-focus-action", () => {
+          void startFocus();
+        });
+
+        unlistenExtendRest = await listen<{ durationMinutes?: number }>(
+          "workbuddy:extend-rest-action",
+          (event) => {
+            const extraSec = (event.payload?.durationMinutes || 3) * 60;
+            remainingRef.current += extraSec;
+            setSecondsLeft((prev) => prev + extraSec);
+          }
+        );
       } catch {
         // Browser fallback
       }
@@ -527,10 +567,14 @@ export function FocusAssistant() {
     return () => {
       if (unlistenReminder) unlistenReminder();
       if (unlistenSelectTask) unlistenSelectTask();
+      if (unlistenStartRest) unlistenStartRest();
+      if (unlistenExtendFocus) unlistenExtendFocus();
+      if (unlistenStartFocus) unlistenStartFocus();
+      if (unlistenExtendRest) unlistenExtendRest();
       if (glowTimer) window.clearTimeout(glowTimer);
       if (knockTimer) window.clearTimeout(knockTimer);
     };
-  }, [currentSpecies, currentThemeStyle]);
+  }, [currentSpecies, currentThemeStyle, restMinutes, focusMinutes]);
 
   // Pet state
   const petState: PetState = useMemo(() => {
@@ -550,9 +594,9 @@ export function FocusAssistant() {
   };
 
   // Actions
-  const startFocus = async () => {
+  const startFocus = async (customMinutes?: number) => {
     isCompletingRef.current = false;
-    const minutes = focusMinutes;
+    const minutes = customMinutes ?? focusMinutes;
     setSessionType("focus");
     sessionTypeRef.current = "focus";
     setSecondsLeft(minutes * 60);
@@ -589,9 +633,9 @@ export function FocusAssistant() {
     }
   };
 
-  const startRest = async (cycleId?: string, taskId?: string | null) => {
+  const startRest = async (cycleId?: string, taskId?: string | null, customMinutes?: number) => {
     isCompletingRef.current = false;
-    const minutes = restMinutes;
+    const minutes = customMinutes ?? restMinutes;
     setSessionType("rest");
     sessionTypeRef.current = "rest";
     setSecondsLeft(minutes * 60);

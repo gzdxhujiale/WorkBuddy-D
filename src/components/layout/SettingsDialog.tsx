@@ -13,6 +13,10 @@ import {
   UserRound,
   X,
   Check,
+  BellRing,
+  MessageSquare,
+  Layers,
+  Bell,
 } from "lucide-react";
 import {
   enable as enableAutostart,
@@ -23,6 +27,9 @@ import { useAuth } from "@/lib/auth";
 import {
   setOpenFocusAssistantOnStart as persistOpenFocusAssistantOnStart,
   shouldOpenFocusAssistantOnStart,
+  getNotificationDisplayOptions,
+  setNotificationDisplayOptions,
+  NotificationDisplayOptions,
   AppThemeStyle,
 } from "@/lib/preferences";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
@@ -50,8 +57,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const { session } = useAuth();
   const [tab, setTab] = useState<Tab>("general");
   const [openFocusAssistantOnStart, setOpenFocusAssistantOnStart] = useState(shouldOpenFocusAssistantOnStart);
+  const [notificationOptions, setNotificationOptionsState] = useState<NotificationDisplayOptions>(getNotificationDisplayOptions);
   const [autostartEnabled, setAutostartEnabled] = useState(false);
   const [autostartLoading, setAutostartLoading] = useState(true);
+
   const { themeStyle, setThemeStyle, isPixelTheme } = useAppThemeStyle();
   const [signingOut, setSigningOut] = useState(false);
   const [signOutError, setSignOutError] = useState<string | null>(null);
@@ -133,6 +142,12 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     }
   };
 
+  const handleToggleNotificationOption = (key: keyof NotificationDisplayOptions) => {
+    const next = { ...notificationOptions, [key]: !notificationOptions[key] };
+    setNotificationOptionsState(next);
+    setNotificationDisplayOptions(next);
+  };
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs"
@@ -182,7 +197,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                     "flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-sm transition-all",
                     isPixelTheme
                       ? isActive
-                        ? "rounded-xs border-2 border-amber-900/60 bg-amber-200/90 dark:bg-amber-900/80 font-mono font-bold text-amber-950 dark:text-amber-100 shadow-[2px_2px_0px_#000] translate-x-0.5"
+                        ? "rounded-xs border-2 border-amber-900/60 bg-amber-200/90 dark:bg-amber-950/80 font-mono font-bold text-amber-950 dark:text-amber-100 shadow-[2px_2px_0px_#000] translate-x-0.5"
                         : "rounded-xs border-2 border-transparent text-muted-foreground hover:bg-amber-100/50 dark:hover:bg-amber-950/50 hover:text-foreground font-mono"
                       : isActive
                       ? "rounded-md border border-border bg-card font-medium text-primary shadow-xs"
@@ -491,6 +506,229 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   </div>
                 </div>
 
+                {/* 通知呈现形式多选配置 */}
+                <div className={cn("pt-6 space-y-3", isPixelTheme ? "border-t-2 border-border/90 font-mono" : "border-t border-border")}>
+                  <div className="flex items-center gap-2.5">
+                    {isPixelTheme ? <PixelSparkle size={18} /> : <BellRing size={18} className="text-primary" />}
+                    <div>
+                      <h3 className={cn("text-foreground", isPixelTheme ? "font-mono font-bold text-sm" : "font-semibold")}>
+                        {isPixelTheme ? "冒险提醒与传讯形式 (多选)" : "通知呈现形式"}
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {isPixelTheme
+                          ? "自由定制专注与任务到期时在桌面的多维传讯（支持多选，默认全部开启）"
+                          : "选择任务与专注到期时在桌面的呈现形式（支持多选，默认全部开启）"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                    {/* 选项 1: 屏幕中央互动卡片 */}
+                    <div
+                      onClick={() => handleToggleNotificationOption("centerCard")}
+                      className={cn(
+                        "relative flex flex-col justify-between p-3.5 cursor-pointer transition-all duration-200 select-none",
+                        isPixelTheme
+                          ? notificationOptions.centerCard
+                            ? "rounded-xs border-2 border-amber-900 bg-amber-200/90 dark:bg-amber-950/90 shadow-[3px_3px_0px_#000] font-mono ring-2 ring-amber-500"
+                            : "rounded-xs border-2 border-border/80 bg-card hover:bg-amber-100/40 dark:hover:bg-amber-950/40 shadow-[1px_1px_0px_rgba(0,0,0,0.1)] font-mono opacity-65"
+                          : notificationOptions.centerCard
+                          ? "rounded-xl border-2 border-primary bg-primary/5 shadow-xs ring-1 ring-primary"
+                          : "rounded-xl border-2 border-border hover:border-muted-foreground/40 bg-card hover:bg-accent/40 opacity-70"
+                      )}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={cn(
+                                "w-7 h-7 flex items-center justify-center",
+                                isPixelTheme
+                                  ? "rounded-xs bg-amber-500/30 text-amber-900 dark:text-amber-200 border border-amber-900/40"
+                                  : "rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                              )}
+                            >
+                              <Layers size={15} />
+                            </div>
+                            <span className={cn("text-xs font-bold text-foreground", isPixelTheme && "font-mono")}>
+                              {isPixelTheme ? "屏幕中央 HUD 卡片" : "屏幕中央互动卡片"}
+                            </span>
+                          </div>
+                          <span
+                            className={cn(
+                              "flex items-center justify-center w-4 h-4 text-[10px]",
+                              notificationOptions.centerCard
+                                ? isPixelTheme
+                                  ? "rounded-xs bg-emerald-600 text-white border border-emerald-800 shadow-[1px_1px_0px_#000]"
+                                  : "rounded-full bg-primary text-primary-foreground"
+                                : "rounded border border-muted-foreground/30 text-transparent"
+                            )}
+                          >
+                            {notificationOptions.centerCard && <Check size={11} className="stroke-[3]" />}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          屏幕正中央弹出即时 HUD 交互卡片，支持一键休息、续战、完成任务及稍后提醒。
+                        </p>
+                      </div>
+                      <div className="mt-2.5 flex items-center gap-1 text-[10px]">
+                        <span
+                          className={cn(
+                            "inline-block px-1.5 py-0.5 bg-muted text-muted-foreground font-medium",
+                            isPixelTheme ? "rounded-xs font-mono" : "rounded"
+                          )}
+                        >
+                          即时操作
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-block px-1.5 py-0.5 bg-muted text-muted-foreground font-medium",
+                            isPixelTheme ? "rounded-xs font-mono" : "rounded"
+                          )}
+                        >
+                          高注意力
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 选项 2: 桌面悬浮助手对话气泡 */}
+                    <div
+                      onClick={() => handleToggleNotificationOption("assistantBubble")}
+                      className={cn(
+                        "relative flex flex-col justify-between p-3.5 cursor-pointer transition-all duration-200 select-none",
+                        isPixelTheme
+                          ? notificationOptions.assistantBubble
+                            ? "rounded-xs border-2 border-amber-900 bg-amber-200/90 dark:bg-amber-950/90 shadow-[3px_3px_0px_#000] font-mono ring-2 ring-amber-500"
+                            : "rounded-xs border-2 border-border/80 bg-card hover:bg-amber-100/40 dark:hover:bg-amber-950/40 shadow-[1px_1px_0px_rgba(0,0,0,0.1)] font-mono opacity-65"
+                          : notificationOptions.assistantBubble
+                          ? "rounded-xl border-2 border-primary bg-primary/5 shadow-xs ring-1 ring-primary"
+                          : "rounded-xl border-2 border-border hover:border-muted-foreground/40 bg-card hover:bg-accent/40 opacity-70"
+                      )}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={cn(
+                                "w-7 h-7 flex items-center justify-center",
+                                isPixelTheme
+                                  ? "rounded-xs bg-emerald-500/30 text-emerald-900 dark:text-emerald-200 border border-emerald-900/40"
+                                  : "rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              )}
+                            >
+                              <MessageSquare size={15} />
+                            </div>
+                            <span className={cn("text-xs font-bold text-foreground", isPixelTheme && "font-mono")}>
+                              {isPixelTheme ? "悬浮精灵动作与气泡" : "桌面悬浮助手对话气泡"}
+                            </span>
+                          </div>
+                          <span
+                            className={cn(
+                              "flex items-center justify-center w-4 h-4 text-[10px]",
+                              notificationOptions.assistantBubble
+                                ? isPixelTheme
+                                  ? "rounded-xs bg-emerald-600 text-white border border-emerald-800 shadow-[1px_1px_0px_#000]"
+                                  : "rounded-full bg-primary text-primary-foreground"
+                                : "rounded border border-muted-foreground/30 text-transparent"
+                            )}
+                          >
+                            {notificationOptions.assistantBubble && <Check size={11} className="stroke-[3]" />}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          桌面悬浮宠物伴随微表情动画（庆祝/敲打/伸懒腰）、金黄色发光光晕与趣味对话气泡。
+                        </p>
+                      </div>
+                      <div className="mt-2.5 flex items-center gap-1 text-[10px]">
+                        <span
+                          className={cn(
+                            "inline-block px-1.5 py-0.5 bg-muted text-muted-foreground font-medium",
+                            isPixelTheme ? "rounded-xs font-mono" : "rounded"
+                          )}
+                        >
+                          情感陪伴
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-block px-1.5 py-0.5 bg-muted text-muted-foreground font-medium",
+                            isPixelTheme ? "rounded-xs font-mono" : "rounded"
+                          )}
+                        >
+                          宠物互动
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 选项 3: 屏幕右下角通知 (多屏幕) */}
+                    <div
+                      onClick={() => handleToggleNotificationOption("systemTray")}
+                      className={cn(
+                        "relative flex flex-col justify-between p-3.5 cursor-pointer transition-all duration-200 select-none",
+                        isPixelTheme
+                          ? notificationOptions.systemTray
+                            ? "rounded-xs border-2 border-amber-900 bg-amber-200/90 dark:bg-amber-950/90 shadow-[3px_3px_0px_#000] font-mono ring-2 ring-amber-500"
+                            : "rounded-xs border-2 border-border/80 bg-card hover:bg-amber-100/40 dark:hover:bg-amber-950/40 shadow-[1px_1px_0px_rgba(0,0,0,0.1)] font-mono opacity-65"
+                          : notificationOptions.systemTray
+                          ? "rounded-xl border-2 border-primary bg-primary/5 shadow-xs ring-1 ring-primary"
+                          : "rounded-xl border-2 border-border hover:border-muted-foreground/40 bg-card hover:bg-accent/40 opacity-70"
+                      )}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className={cn(
+                                "w-7 h-7 flex items-center justify-center",
+                                isPixelTheme
+                                  ? "rounded-xs bg-indigo-500/30 text-indigo-900 dark:text-indigo-200 border border-indigo-900/40"
+                                  : "rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400"
+                              )}
+                            >
+                              <Bell size={15} />
+                            </div>
+                            <span className={cn("text-xs font-bold text-foreground", isPixelTheme && "font-mono")}>
+                              {isPixelTheme ? "多屏幕右下角传讯" : "屏幕右下角通知 (多屏幕)"}
+                            </span>
+                          </div>
+                          <span
+                            className={cn(
+                              "flex items-center justify-center w-4 h-4 text-[10px]",
+                              notificationOptions.systemTray
+                                ? isPixelTheme
+                                  ? "rounded-xs bg-emerald-600 text-white border border-emerald-800 shadow-[1px_1px_0px_#000]"
+                                  : "rounded-full bg-primary text-primary-foreground"
+                                : "rounded border border-muted-foreground/30 text-transparent"
+                            )}
+                          >
+                            {notificationOptions.systemTray && <Check size={11} className="stroke-[3]" />}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                          在所有已连接的显示器右下角弹出多屏同步悬浮小卡片，支持快速查看与开启专注。
+                        </p>
+                      </div>
+                      <div className="mt-2.5 flex items-center gap-1 text-[10px]">
+                        <span
+                          className={cn(
+                            "inline-block px-1.5 py-0.5 bg-muted text-muted-foreground font-medium",
+                            isPixelTheme ? "rounded-xs font-mono" : "rounded"
+                          )}
+                        >
+                          多屏覆盖
+                        </span>
+                        <span
+                          className={cn(
+                            "inline-block px-1.5 py-0.5 bg-muted text-muted-foreground font-medium",
+                            isPixelTheme ? "rounded-xs font-mono" : "rounded"
+                          )}
+                        >
+                          右下角
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
                 <div className={cn("pt-6 space-y-4", isPixelTheme ? "border-t-2 border-border/90 font-mono" : "border-t border-border")}>
                   {/* 开机自启动开关 */}
                   <div className="flex items-center justify-between gap-5">
@@ -543,3 +781,4 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
+

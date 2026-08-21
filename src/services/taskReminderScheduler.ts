@@ -1,11 +1,12 @@
 import dayjs from "dayjs";
-import { emit } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { Task, parseReminder, TaskReminder } from "@/types/timeManagement";
 import { sendDesktopNotification, requestNotificationPermission } from "./notificationService";
 import { playTaskReminderSound } from "@/lib/soundFeedback";
 import { getAppThemeStyle } from "@/lib/preferences";
 
 const notifiedTasks = new Set<string>();
+const snoozedTasks = new Map<string, number>();
 const NOTIFIED_STORAGE_KEY = "workbuddy_task_reminders_v1";
 const NOTIFICATION_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 const MAX_TIMEOUT_MS = 2147483647; // 32-bit signed int max (~24.8 days)
@@ -35,6 +36,27 @@ function markNotified(key: string): void {
   }
 }
 
+export function snoozeTaskReminder(taskId: string, snoozeMinutes = 5): void {
+  const snoozeUntil = Date.now() + snoozeMinutes * 60 * 1000;
+  snoozedTasks.set(taskId, snoozeUntil);
+
+  for (const key of Array.from(notifiedTasks)) {
+    if (key.startsWith(`${taskId}-`)) {
+      notifiedTasks.delete(key);
+    }
+  }
+  try {
+    const raw = localStorage.getItem(NOTIFIED_STORAGE_KEY);
+    const entries = JSON.parse(raw ?? "[]") as Array<[string, number]>;
+    const filtered = entries.filter(([k]) => !k.startsWith(`${taskId}-`));
+    localStorage.setItem(NOTIFIED_STORAGE_KEY, JSON.stringify(filtered));
+  } catch {}
+
+  if (currentGetTasks) {
+    checkTaskReminders(currentGetTasks());
+  }
+}
+
 export function getTaskTargetDate(task: Task): dayjs.Dayjs {
   if (task.scheduledEndAt) return dayjs(task.scheduledEndAt);
   if (task.scheduledStartAt) return dayjs(task.scheduledStartAt);
@@ -43,6 +65,14 @@ export function getTaskTargetDate(task: Task): dayjs.Dayjs {
 
 export function computeTaskReminderTime(task: Task): number | null {
   if (task.completed) return null;
+
+  const snoozedUntil = snoozedTasks.get(task.id);
+  if (snoozedUntil) {
+    if (Date.now() < snoozedUntil) {
+      return snoozedUntil;
+    }
+    snoozedTasks.delete(task.id);
+  }
 
   const rem: TaskReminder | null = parseReminder(task.reminder);
   if (!rem) return null;
@@ -60,6 +90,7 @@ export function computeTaskReminderTime(task: Task): number | null {
 
   return baseRemTime;
 }
+
 
 let nextDueTimer: number | null = null;
 let heartbeatTimer: number | null = null;
@@ -175,6 +206,15 @@ export function startTaskReminderScheduler(getTasks: () => Task[]): () => void {
     }
   };
 
+  let unlistenSnooze: (() => void) | undefined;
+  listen<{ taskId: string; snoozeMinutes?: number }>("workbuddy:snooze-task-reminder", (event) => {
+    if (event.payload?.taskId) {
+      snoozeTaskReminder(event.payload.taskId, event.payload.snoozeMinutes || 5);
+    }
+  }).then((un) => {
+    unlistenSnooze = un;
+  }).catch(() => {});
+
   if (typeof window !== "undefined") {
     window.addEventListener("visibilitychange", onWakeOrFocus);
     window.addEventListener("focus", onWakeOrFocus);
@@ -189,6 +229,9 @@ export function startTaskReminderScheduler(getTasks: () => Task[]): () => void {
       window.clearInterval(heartbeatTimer);
       heartbeatTimer = null;
     }
+    if (unlistenSnooze) {
+      unlistenSnooze();
+    }
     if (typeof window !== "undefined") {
       window.removeEventListener("visibilitychange", onWakeOrFocus);
       window.removeEventListener("focus", onWakeOrFocus);
@@ -196,3 +239,4 @@ export function startTaskReminderScheduler(getTasks: () => Task[]): () => void {
     currentGetTasks = null;
   };
 }
+
