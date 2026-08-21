@@ -118,9 +118,14 @@ export function useProjectActions() {
       });
       return { ...cur, stages: nextStages };
     },
-    syncFn: async ({ projectId }) => {
-      const stages = queryClient.getQueryData<ProjectCenterData>(PROJECTS_KEY)?.stages
-        .filter((stage) => stage.projectId === projectId) ?? [];
+    syncFn: async ({ projectId, stageIds }) => {
+      const current = queryClient.getQueryData<ProjectCenterData>(PROJECTS_KEY);
+      const stageMap = new Map((current?.stages ?? []).filter((stage) => stage.projectId === projectId).map((stage) => [stage.id, stage]));
+      const stages = stageIds.map((id, index) => {
+        const stage = stageMap.get(id);
+        if (!stage) throw new Error("项目阶段不存在，无法调整顺序");
+        return { ...stage, sortOrder: index };
+      });
       const saved = await projectApi.reorderStages(projectId, stages);
       const versions = new Map(saved.map((stage) => [stage.id, stage]));
       queryClient.setQueryData<ProjectCenterData>(PROJECTS_KEY, (old) => old ? {

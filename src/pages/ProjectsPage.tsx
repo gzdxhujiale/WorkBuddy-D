@@ -551,7 +551,13 @@ export function ProjectsPage() {
   }, [filteredProjects, selectedId]);
 
   const selected = useMemo(() => projects.find((item) => item.id === selectedId), [projects, selectedId]);
-  const selectedStages = useMemo(() => allStages.filter((stage) => stage.projectId === selected?.id), [allStages, selected?.id]);
+  const selectedStages = useMemo(
+    () =>
+      allStages
+        .filter((stage) => stage.projectId === selected?.id)
+        .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)),
+    [allStages, selected?.id]
+  );
   const selectedTasks = useMemo(() => allTasks.filter((task) => task.projectId === selected?.id), [allTasks, selected?.id]);
 
   const run = async <T,>(action: () => Promise<T> | T): Promise<T | undefined> => {

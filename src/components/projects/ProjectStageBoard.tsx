@@ -35,7 +35,6 @@ import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { openQuickEditWindow } from "@/services/quickEditWindow";
 import { createTaskId } from "@/lib/entityIds";
-import { PixelScroll, PixelSparkle } from "@/components/pixel/PixelIcons";
 import { cn } from "@/lib/utils";
 import type { ProjectStage, ProjectTask } from "@/types/projects";
 
@@ -620,20 +619,6 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
             {completedTasks.length}/{tasks.length}
           </span>
 
-          {/* Stage Target Achieved Feedback Badge */}
-          {isStageAllDone && (
-            <span
-              className={cn(
-                "inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold animate-in fade-in zoom-in-95 duration-200 select-none",
-                isPixelTheme
-                  ? "rounded-xs bg-emerald-200 dark:bg-emerald-950 text-emerald-950 dark:text-emerald-200 border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b] font-mono"
-                  : "rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-300 border border-emerald-300/40"
-              )}
-            >
-              {isPixelTheme ? <PixelSparkle size={11} /> : <CheckCircle2 size={11} />}
-              <span>{isPixelTheme ? "🏆 阶段征服达成 (+EXP)" : "✓ 阶段目标已达成"}</span>
-            </span>
-          )}
         </div>
 
         <div className="flex items-center gap-1.5">
@@ -691,53 +676,35 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
       {expanded && (
         <>
           <div className="px-3.5 py-2.5 flex flex-col gap-1">
-            {sortedTasks.length === 0 ? (
-              <div
-                onClick={(e) => handleCreateTask(e.currentTarget)}
-                className={cn(
-                  "py-6 flex flex-col items-center justify-center text-muted-foreground/60 hover:text-muted-foreground text-xs gap-1.5 cursor-pointer select-none transition-colors",
-                  isPixelTheme && "font-mono"
-                )}
-                title="点击新建任务"
-              >
-                {isPixelTheme ? <PixelScroll size={24} className="opacity-60 mb-0.5" /> : <span className="text-lg">✨</span>}
-                <span className={cn(isPixelTheme && "font-mono font-bold text-muted-foreground")}>
-                  暂无阶段任务 · 点击添加
-                </span>
-              </div>
-            ) : (
-              <>
-                {expired.length > 0 && (
-                  <CollapsibleGroup title="已过期" count={expired.length} isExpired>
-                    {renderTaskList(expired)}
-                  </CollapsibleGroup>
-                )}
-                {within1Day.length > 0 && (
-                  <CollapsibleGroup title="一天内" count={within1Day.length}>
-                    {renderTaskList(within1Day)}
-                  </CollapsibleGroup>
-                )}
-                {within3Days.length > 0 && (
-                  <CollapsibleGroup title="三天内" count={within3Days.length}>
-                    {renderTaskList(within3Days)}
-                  </CollapsibleGroup>
-                )}
-                {within1Week.length > 0 && (
-                  <CollapsibleGroup title="一周内" count={within1Week.length}>
-                    {renderTaskList(within1Week)}
-                  </CollapsibleGroup>
-                )}
-                {beyond1Week.length > 0 && (
-                  <CollapsibleGroup title="一周外" count={beyond1Week.length}>
-                    {renderTaskList(beyond1Week)}
-                  </CollapsibleGroup>
-                )}
-                {noDate.length > 0 && (
-                  <CollapsibleGroup title="无日期" count={noDate.length}>
-                    {renderTaskList(noDate)}
-                  </CollapsibleGroup>
-                )}
-              </>
+            {expired.length > 0 && (
+              <CollapsibleGroup title="已过期" count={expired.length} isExpired>
+                {renderTaskList(expired)}
+              </CollapsibleGroup>
+            )}
+            {within1Day.length > 0 && (
+              <CollapsibleGroup title="一天内" count={within1Day.length}>
+                {renderTaskList(within1Day)}
+              </CollapsibleGroup>
+            )}
+            {within3Days.length > 0 && (
+              <CollapsibleGroup title="三天内" count={within3Days.length}>
+                {renderTaskList(within3Days)}
+              </CollapsibleGroup>
+            )}
+            {within1Week.length > 0 && (
+              <CollapsibleGroup title="一周内" count={within1Week.length}>
+                {renderTaskList(within1Week)}
+              </CollapsibleGroup>
+            )}
+            {beyond1Week.length > 0 && (
+              <CollapsibleGroup title="一周外" count={beyond1Week.length}>
+                {renderTaskList(beyond1Week)}
+              </CollapsibleGroup>
+            )}
+            {noDate.length > 0 && (
+              <CollapsibleGroup title="无日期" count={noDate.length}>
+                {renderTaskList(noDate)}
+              </CollapsibleGroup>
             )}
 
             {/* Inline Quick Add Input */}
