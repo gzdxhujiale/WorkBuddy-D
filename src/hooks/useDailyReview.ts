@@ -76,6 +76,13 @@ export function useReviewActions() {
       const existing = prev.find((r) => r.date === date);
       const isEmpty = isReviewEmpty(content);
 
+      // Editors can emit their current document while being rehydrated after a
+      // Realtime refetch.  Treat an identical value as a true no-op so that
+      // event cannot create a write -> Broadcast -> refetch feedback loop.
+      if (existing && existing.content === content) {
+        return existing;
+      }
+
       if (isEmpty) {
         if (existing) {
           const clearedReview: DailyReviewItem = {
