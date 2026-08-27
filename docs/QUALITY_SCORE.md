@@ -1,43 +1,65 @@
-# Quality score
+# QUALITY_SCORE.md
 
-## Purpose and scoring model
+## Quality Summary
 
-This scorecard tracks evidence-based gaps in the current repository. It is not a coding-standard checklist or a claim about production service quality.
+本评分卡记录 WorkBuddy-D 仓库基于客观事实的工程质量基线与差距分析。它不是非黑即白的代码规范清单，而是指导系统持续演进的确定性事实评估矩阵：
 
-| Score | Meaning |
-| ---: | --- |
-| 5 | Strongly evidenced, mechanically supported, and well documented. |
-| 4 | Healthy with limited, known gaps. |
-| 3 | Functional and understandable, but important safeguards or consistency work remain. |
-| 2 | Material inconsistency or missing safeguards. |
-| 1 | Very limited verification or high fragility. |
-| 0 | Absent or not assessable from repository evidence. |
+| 评估维度 | 当前评分 (0-5) | 事实依据 | 核心改进差距 |
+| :--- | :---: | :--- | :--- |
+| **系统架构 (Architecture)** | **4** | React / Supabase / Tauri 边界清晰，SQL 迁移完整，数据流单向解耦。 | 缺乏自动化架构边界门禁测试以防止架构腐化。 |
+| **数据一致性与同步 (Data & Sync)** | **4** | 数据库 RLS、原子 RPC、乐观锁 `lock_version`、私有广播失效提示及离线队列完备。 | 缺乏跨窗口数据同步与高并发冲突的自动化用例。 |
+| **文档规范性 (Documentation)** | **5** | 严谨对齐 `@hujiale2609/ai-harness` 规范体系，0 占位符，事实可验证。 | 需持续随功能演进同步主规约。 |
+| **视觉与交互设计 (Design & UI)** | **4** | 5 级 Elevation 架构，双主题（现代极简 / 复古像素）自适应与原子组件完备。 | 需进一步推进全站组件纯语义 Token 化消费。 |
+| **前端工程模式 (Frontend Engineering)** | **3** | TypeScript 严格类型检查，TanStack Query 与 Zustand 状态分离，服务层封装。 | 缺少 ESLint / Prettier 自动化 Lint/Format 工作流与单元测试。 |
+| **产品判断与边界 (Product Sense)** | **3** | 核心业务路由与产品职责清晰，各功能模块边界分明。 | 产品验收标准主要依赖人工核验，缺少自动化端到端行为验收。 |
+| **运行可靠性 (Reliability)** | **3** | 支持关键领域离线重放、乐观锁冲突捕获、防抖保存与 Supabase 521 防风暴保护。 | 缺少显式的单操作超时与熔断退避策略，无自动化故障注入测试。 |
+| **安全策略 (Security)** | **3** | PostgreSQL 全表 RLS 强隔离、私有广播主题权限、Tauri Capabilities 最小化控制。 | Tauri CSP 当前配置为 `null`；缺乏自动化权限渗透与 RLS 单元测试。 |
+| **测试与验证置信度 (Verification)** | **1** | 提供 `pnpm build`（`tsc && vite build`）与 Cargo 编译检查。 | 仓库未配置自动化测试套件（Unit/Integration/E2E）或 CI 持续集成流水线。 |
+| **可观测性 (Observability)** | **0** | 仅依赖本地浏览器控制台日志（`console.warn`/`error`）与轻量调试输出。 | 无服务端日志聚合、分布式链路追踪、性能指标采集或健康检查探针。 |
 
-## Current scorecard
+## Scoring Model
 
-| Area | Score | Evidence | Main gap |
-| --- | ---: | --- | --- |
-| System architecture | 4 | Clear React/Supabase/Tauri boundaries, migrations, architecture docs, typed build. | No structural tests enforce the intended seams. |
-| Product clarity | 3 | Shipped-domain index and route/component structure identify the core workspace. | Product specs are an index, not detailed acceptance behavior. |
-| Design consistency | 2 | Semantic light/dark tokens and reusable primitives exist. | Shell/features still mix hard-coded Slate values; the consistency proposal is not implemented. |
-| Frontend engineering | 3 | Strict TypeScript, lazy routes, Query/Zustand split, domain services/hooks. | No frontend test/lint/format workflow. |
-| Data integrity and sync | 4 | RLS, RPCs, database-owned facts, optimistic locking, private Broadcast migrations, offline queue. | No automated migration/RLS/Realtime or cross-window coverage. |
-| Reliability | 3 | Offline replay in supported domains, conflict retention, request-storm controls, scoped invalidation. | No retry/timeout policy beyond current safeguards and no automated failure tests. |
-| Security | 3 | RLS, authenticated grants, ownership-aware RPCs, private-topic policy, capability files. | CSP is `null`; dashboard channel setting and security automation are unverified. |
-| Verification confidence | 1 | `pnpm build` and Cargo manifest are available. | No configured tests, lint, formatter, or root CI workflow. |
-| Observability | 0 | Local console diagnostics exist. | No repository-owned metrics, tracing, central logging, alerts, or health checks. |
-| Documentation legibility | 4 | System docs, design decisions, product index, migration history, generated live snapshot, and skills are present. | Some legacy schema terminology needs reconciliation. |
+质量评分模型采用基于可验证事实的 6 级量化阶梯（0 至 5 分）：
 
-## Priority gaps
+| 评分等级 | 等级定义 | 判定准则与证据要求 |
+| :---: | :--- | :--- |
+| **5 分** | **卓越健壮 (Exemplary)** | 具备强有力的事实支撑、自动化工具链机械约束、详尽规范文档且在演进中持续自我验证。 |
+| **4 分** | **健康良好 (Healthy)** | 整体架构健全，核心逻辑具备强防护，仅存在已知的、受控的微小改进缺口。 |
+| **3 分** | **可用达标 (Functional)** | 业务功能完整且结构清晰可理解，但仍需补充关键防护网、自动化保障或一致性收敛。 |
+| **2 分** | **存在缺陷 (At Risk)** | 存在实质性设计不一致、架构泄漏或明显缺失关键安全/可靠性防护机制。 |
+| **1 分** | **脆弱受限 (Fragile)** | 验证手段极其有限，依赖脆弱的人工假设，系统改动极易引发非预期破坏。 |
+| **0 分** | **完全缺失 (Absent)** | 在仓库现有事实中完全未建立对应维度的防护、规范或技术实践。 |
 
-1. Establish focused automated coverage for services, RLS/RPC behavior, offline replay, and main/secondary-window synchronization.
-2. Define and validate a restrictive Tauri CSP; verify private Broadcast dashboard settings with two authenticated windows.
-3. Add focused regression coverage for versioned knowledge structural moves, reorders, and atomic folder cloning.
-4. Resolve reviewed migration-history drift; do not rewrite applied history while doing so.
-5. Adopt semantic theme roles across the shell and feature surfaces instead of widening hard-coded color usage.
+## Architecture Quality
 
-## Update policy
+系统架构质量的核心事实与工程实践：
 
-Reassess affected rows after a major feature, migration/security incident, reliability work, test/CI addition, architecture change, or a deliberate debt cleanup. Change a score only with current repository evidence; record detailed implementation work in an execution plan, not this table.
+1. **分层严格解耦**：所有 UI 视图通过 `src/hooks/` 和 `src/services/` 消费数据，严禁在组件内直连数据库；服务端状态（TanStack Query）与客户端 UI 状态（Zustand）界限分明。
+2. **单一真值源**：PostgreSQL 数据库为审计时间戳、完成状态、排序位次及软删除标记的绝对权威，前端禁止使用客户端时钟做逻辑决策。
+3. **私有广播失效提示**：Supabase Realtime Broadcast（`user:<id>:sync`）仅发送轻量元数据通知，不发送数据行，强制通过 RLS 重新拉取以确保安全。
+4. **双视觉风格无缝切换**：基于 `useAppThemeStyle` 驱动原子组件（`src/components/ui/`），在「现代极简」与「复古 8-Bit 像素」风格间自适应适配。
 
-See [Architecture](/architecture), [RELIABILITY.md](RELIABILITY.md), [SECURITY.md](SECURITY.md), and [the technical-debt tracker](exec-plans/tech-debt-tracker.md) for source material.
+## Quality Risks
+
+当前仓库已验证的关键质量风险与技术负债：
+
+- **自动化测试缺失**：全仓库目前未集成 Vitest/Jest、Playwright 等自动化测试框架，回归验证高度依赖人工操作与 `pnpm build` 类型检查。
+- **Tauri CSP 未收紧**：`src-tauri/tauri.conf.json` 中 `app.security.csp` 设为 `null`，存在跨站脚本注入防御短板。
+- **可观测性空白**：缺乏集中式遥测、错误上报或性能监控，桌面端运行时异常无法在生产环境中自动化捕获。
+
+## Improvement Priorities
+
+基于当前风险与收益评估，制定以下阶段性改进优先级：
+
+1. **P0 - 补充核心服务自动化测试**：优先针对 `src/services/`、RPC 存储过程、`lock_version` 并发冲突处理与离线重放队列编写自动化单元与集成测试。
+2. **P1 - 收紧 Tauri CSP 与安全策略**：在 `tauri.conf.json` 中配置严格的 Content Security Policy，收紧 Webview 资源加载白名单。
+3. **P2 - 建立 Lint 与 CI 检查工作流**：引入 ESLint / Prettier 自动化检查工具链，配置 GitHub Actions CI 构建与类型校验流水线。
+4. **P3 - 知识库结构移动回归防护**：为笔记跨容器移动（`move_and_reorder_notes_v3`）、拖拽重排与原子复制建立完备的回归用例。
+5. **P4 - 渐进式引入桌面端错误日志与指标**：设计轻量级本地与上报日志通道，捕获未处理的 Promise Rejection 与桌面异常。
+
+## Score History
+
+| 评估日期 | 评估范围 | 综合评分变动说明 | 评估证据与提交 |
+| :---: | :--- | :--- | :--- |
+| 2026-08-14 | 全系统初始基线评估 | 初始架构基线确立，识别测试与可观测性短板。 | 完成 Supabase 迁移快照与文档基线建立。 |
+| 2026-08-27 | 规范体系重构与精简 | 文档规范性提升至 5 分；视觉一致性与架构清晰度提升至 4 分；清理 VitePress 冗余。 | 适配 `@hujiale2609/ai-harness` 全套中文章程规范。 |

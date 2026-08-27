@@ -1,90 +1,255 @@
-# Design
+# DESIGN.md
 
-## Purpose
+## Design Principles
 
-This document records durable interaction and visual principles for the desktop workspace. It is not a component API or a feature mock-up; implementation rules are in [FRONTEND.md](FRONTEND.md), and feature-specific decisions belong in `design-docs/`.
+WorkBuddy-D 的 UI/UX 设计基于以下六大核心交互与视觉原则：
 
-## Design model
+1. **清晰的工作空间定位 (Make the Current Workspace Obvious)**：通过统一常驻的左侧导航轨道（Tool Rail）、顶部窗口栏、选中态游标以及明确的路由层级，让用户时刻清楚当前所处的功能区域与上下文，杜绝竞争性的全局导航模式。
+2. **局部行动与就近原则 (Keep Action Hierarchy Local)**：主要操作必须紧邻其影响的列表、卡片、笔记或复盘模块；次要操作与破坏性操作在视觉上收敛，不得喧宾夺主。
+3. **显式表达异步状态 (Represent Asynchronous State in the Initiating Surface)**：所有异步操作在触发源处均需提供明确的加载（Loading）、空数据（Empty）、错误（Error）、成功（Success）或禁用（Disabled）状态反馈，杜绝无响应或单纯依赖控制台输出。
+4. **保持创作与编辑的连续性 (Preserve Editing Continuity)**：知识库与富文本编辑器维持本地草稿状态与防抖持久化。网络重试或缓存失效不得中断用户正在进行的输入，关闭或切换视图前确保草稿被暂存或提交。
+5. **语义化设计令牌驱动 (Semantic Design Tokens)**：全站基于语义化 Token（背景、前景、卡片、边框、主色、破坏色、半径等）进行样式构建，支撑全局 5 级层级架构与主题切换。
+6. **双视觉风格无缝兼收 (Dual Theme Cohesion)**：系统提供「现代简洁风」与「复古像素 8-Bit 风」双套完备的视觉体系，所有组件在保持业务逻辑一致的前提下实现自适应外观与动效流转。
 
-The authenticated workspace uses a compact desktop chrome: a persistent tool rail, a top window bar, and a focused route canvas. Current navigation exposes daily tasks, task management, habits, knowledge, daily review, and settings. Secondary windows are reserved for quick task editing and focus assistance.
+## Visual Language
 
-The interface should support fast personal planning without hiding consequential state. It is primarily a desktop Tauri experience; no repository evidence defines a mobile or tablet product strategy.
+系统原生内置双套完整的视觉风格体系，支持在「设置 - 通用设置」中全局无缝切换（`app_theme_style`）：
 
-## Principles
+### 1. 现代简洁风 (Modern Clean)
+- **视觉基调**：现代办公、清爽极简、低视觉干扰。
+- **圆角与边框**：采用柔和圆角（`rounded-lg` / `rounded-xl` / `rounded-2xl`），低对比度精致细边框（`border border-border/50`）。
+- **阴影与光效**：采用平滑高斯模糊弥散投影（`shadow-sm` / `shadow-md`）。
+- **图标与材质**：现代平滑矢量 Lucide 图标与半透明亚克力磨砂质感。
 
-### Make the current workspace obvious
+### 2. 复古像素 8-Bit 风 (Retro Pixel 8-Bit，系统默认)
+- **视觉基调**：复古掌机游戏质感、极客趣味、高对比度与实体操作感。
+- **外壳与边框**：8-Bit 像素硬朗直角外壳（`rounded-xs` / `border-2 border-border`）。
+- **硬边下落阴影**：纯黑下落实体硬阴影（`shadow-[2px_2px_0px_#000]` / `shadow-[3px_3px_0px_#000]` / `shadow-[4px_4px_0px_#000]`）。
+- **字体与微光标**：经典等宽像素代码字体搭配专属 8-Bit 游标（`▶`）。
+- **按压实体感**：按钮与卡片在激活时触发物理下压动效（`active:translate(1.5px, 1.5px)` 与 `active:shadow-none`）。
 
-Use the existing navigation, page title/context, selected states, and route structure to show where the user is. Do not create competing global navigation patterns for a feature.
+## Layout and Spacing
 
-### Keep action hierarchy local
+界面布局采用紧凑高效的桌面 Chrome 容器与严格的 5 级 Elevation 层级架构：
 
-Primary actions belong close to the list, task, note, or review they affect. Secondary and destructive actions should not visually compete with normal progress actions. Reuse the existing dialog and confirmation primitives when explicit intent is needed.
+### 1. 桌面容器结构
+- **左侧常驻导航轨 (Tool Rail)**：紧凑宽度（约 64px），展示主功能图标、状态游标与设置入口。
+- **顶部窗口控制栏 (Window Bar)**：集成窗口拖拽区、全局搜索及窗口最小化/最大化/关闭按钮。
+- **主体内容画布 (Route Canvas)**：承载当前激活路由的主内容视图。
 
-### Represent asynchronous state in the surface that initiated it
+### 2. 5 级色彩深度与层级架构 (5-Level Elevation)
+全站统一采用 5 级色彩深度架构，确保深浅色模式与双主题下具备一致的视觉层次与沉浸感：
 
-Existing routes show loading fallbacks, while components use local messages, toasts, and error text in selected flows. New asynchronous UI must have an intentional loading, empty, error, success, or disabled state rather than relying on console output.
+| 视觉层级 | 层级名称 | 核心语义职责 | 适用组件与容器 |
+| :--- | :--- | :--- | :--- |
+| **Level 0 (L0)** | **应用窗口外壳 (Chrome Shell)** | 承载桌面应用全局基底与导航外壳 | 侧边栏 Toolbar、顶部 MenuBar 统一外壳基底 |
+| **Level 1 (L1)** | **主视图画布 (Viewport Canvas)** | 主工作区内容画布，提供全局视口底色 | `<main>` 主内容容器，视口内切圆角（12px）与主分割边界 |
+| **Level 2 (L2)** | **卡片/容器表面 (Surface Card)** | 业务功能模块的主体承载容器 | 任务卡片、四象限区块、统计面板、项目看板列、笔记列表面板 |
+| **Level 3 (L3)** | **嵌套子组件/交互块 (Sub-Card)** | 卡片内部更深层的子条目与交互反馈表面 | 卡片内部项、悬浮态 (Hover)、激活态高亮块、已完成项背景 |
+| **Level 4 (L4)** | **浮层弹窗/高级容器 (Popover & Overlay)** | 高海拔脱离文档流的交互表面 | 下拉菜单、快捷任务编辑浮窗、Tooltip、对话框、Modal 弹窗 |
 
-### Preserve editing continuity
+### 3. 表面组合模型 (Surface Composition Model)
+全站各功能页面（今日待办、任务四象限、项目中心、知识库、习惯打卡、每日复盘）均严格遵循统一的表面组合规则，禁止在业务组件内发明非标视觉层级：
+- **画布装载**：所有路由页面统一坐落于 L1 主画布之上，继承全局背景设计令牌；
+- **容器归一**：各模块内的主要信息载体均使用 L2 Surface / `Card` 通用原子组件承载，确保边框、圆角与阴影在双主题下自动保持一致；
+- **交互收敛**：条目悬浮、高亮与选中反馈统一使用 L3 交互 Token，禁止模块间使用冲突的高亮色。
 
-The knowledge editor keeps local draft state and debounced persistence. Do not reset editor content on cache noise, re-emit equivalent updates, or make closing a relevant editing surface lose a pending draft. See [sync-and-editor consistency](design-docs/sync-and-editor-consistency.md).
+### 4. 间距系统
+严格采用 Tailwind 标准 4px 阶梯间距（`gap-1` 4px, `gap-2` 8px, `gap-3` 12px, `gap-4` 16px, `gap-6` 24px）。模块之间的间距始终大于模块内部子元素的间距。
 
-### Use semantic visual roles
 
-`src/index.css` defines semantic background, foreground, card, popover, border, sidebar, primary, destructive, radius, animation, and quadrant tokens for light and dark themes. Use those roles or an established component pattern when they express the required meaning.
 
-### Dual Visual Themes (现代简洁风 vs 复古像素风)
+## Typography
 
-WorkBuddy-D 默认采用「复古像素风」，并支持在「设置 - 通用设置」中全局切换视觉风格体系（`app_theme_style`）：
-- **现代简洁风（Modern Clean）**：现代极简圆角（`rounded-xl` / `rounded-2xl`）、柔和高斯模糊阴影、低对比度线条与生动平滑矢量图标。
-- **复古像素风（Retro Pixel 8-Bit，系统默认）**：8-Bit 像素直角外壳（`rounded-xs` / `border-2 border-border`）、硬边纯黑下落阴影（`shadow-[2px_2px_0px_#000]` / `shadow-[3px_3px_0px_#000]` / `shadow-[4px_4px_0px_#000]`）、经典等宽像素代码字体（`ui-monospace, "Cascadia Code"`）、按键下压回弹动效（`active:translate(1.5px,1.5px)` 与 `active:shadow-none`）与点阵金黄进度条。
-- **像素交互与全屏转场系统（P0/P1/P2）**：
-  - **一级主导航游标（Selection Cursor `▶`）**：在当前激活项左侧展示经典 8-bit 微型光标 `▶`，配合 `steps(2)` 定格两帧水平跳跃（`animate-pixel-hop`），完美垂直居中；
-  - **二级侧边栏逐帧步进展开/折叠**：知识库与项目侧边栏在像素模式下采用 `steps(4, jump-none)` 阶梯式动画，文件夹折叠采用 `steps(2, jump-none)`，再现复古掌机逐帧渲染的质感；
-  - **列表项选中刻印**：知识库清单、项目中心列表、习惯打卡列表在选中时统一在左侧呈现精准居中的 `▶` 游标与加深边框投影；
-  - **主舞台 8-Bit 翻页微步进转场（Route Step-In）**：切页时触发 100ms 的 8-bit 日志翻页阶梯淡入（`animate-pixel-page-in` 搭配 `steps(3, jump-none)`），极速流畅。
-- **底层 UI 组件库自适应与浮层层级规范**：
-  - 全站基础组件（`Dialog`, `Modal`, `Drawer`, `DatePicker`, `DateRangePicker`, `Popconfirm`, `Toast`, `Button`, `Input`, `Badge`, `Card`, `Item`, `Select`, `DropdownMenu`, `InputTag`, `Switch`）内置 `useAppThemeStyle` 驱动，在双风格间自动切换设计 Token；
-  - **全局浮层与弹窗层级**：所有 Arco 浮层（`.arco-trigger`、`.arco-select-popup`、`.arco-picker-popup`、`.arco-dropdown`）统一定义为 `z-index: 1100 !important`，置于 Modal 弹窗容器（`1001`）之上；`Modal` 内部显式配置 `getChildrenPopupContainer={() => document.body}`，确保弹窗内所有下拉选择器突破内容区边界正常展开。
-- **全窗口无缝协同**：风格切换通过 Tauri 全局 IPC 事件广播（`workbuddy:theme-style-change`）同步至主窗口、快捷任务编辑浮层（`quick-edit.html`）与悬浮专注助手（`focus-assistant.html`）。
+文字排版系统通过字阶与字重清晰传递信息层级：
 
-## Information hierarchy and surfaces
+- **字体族 (Font Family)**：
+  - 现代模式与常规文本：系统默认无衬线字体栈（`system-ui, -apple-system, sans-serif`）。
+  - 像素模式与代码区域：等宽像素字体栈（`ui-monospace, "Cascadia Code", "Courier New", monospace`）。
+- **字阶规范**：
+  - **页面主标题 (Page Title)**：`text-xl` 至 `text-2xl`，`font-bold`，用于各模块顶部概览。
+  - **区块标题 (Section Heading)**：`text-base`，`font-semibold`，用于看板列名、卡片组头部。
+  - **正文与列表项 (Body & Item)**：`text-sm`，`font-normal` 或 `font-medium`，保障紧凑的信息阅读效率。
+  - **辅助与元数据 (Caption & Meta)**：`text-xs`，搭配 `text-muted-foreground`，用于时间戳、标签与辅助提示。
 
-| Surface | Intended role | Existing evidence |
-| --- | --- | --- |
-| Desktop chrome | Window controls and persistent tool navigation with retro pixel cursor and physical press feedback | `src/components/layout/AppLayout.tsx` |
-| Route canvas | Active task, habit, knowledge, or review work with 8-bit step-in page transitions | `src/router.tsx`, `src/pages/`, `src/components/layout/AppLayout.tsx` |
-| Today Panel | 2-tier daily workspace: Top (Compact Focus Hub: Action Stream `[🕒 时间流/🗂️ 象限]` + Filter Pills `[全部/仅项目/仅独立]` + Habit Streaks + In-situ Review Wrap-up) and Bottom (Full-width Project Gantt Timeline with bidirectional hover glow linkage and unified scroll engine) | `src/components/today/TodayPanel.tsx`, `ProjectTimeline.tsx` |
-| Task Center | 4 Quadrants (`🔥 紧急讨伐`, `🌿 核心修炼`, `⚡ 突发委托`, `💧 支线见闻`) and period grouping | `src/components/time-management/DailyQuadrants.tsx`, `TimeManagementPanel.tsx` |
-| Project Center | Priority- and progress-sorted projects list with left selection cursor, smart status badge, compact 2x2 properties bar, Linear-style view bar, stage cards, and Arco Modal pixel project creation dialog (`发起冒险项目`) | `src/pages/ProjectsPage.tsx`, `ProjectStageBoard.tsx`, `ProjectTemplateManager.tsx` |
-| Knowledge Base | 3-pane knowledge workspace: Sidebar with `steps(4)` collapse transition & list selection cursor, Note List, and Resizable Rich-Text Drawer (`ReactjsTiptapEditor`) | `src/pages/KnowledgePage.tsx`, `KnowledgePanel.tsx` |
-| Cards and panels | Group related information and actions with dual-theme tokens | `src/components/ui/card.tsx`, `src/components/ui/item.tsx`, feature panels |
-| Dialogs, modals, and drawers | Focused editing, settings, and standard dialogs with dual-theme border/shadow tokens and `document.body` popup container escape | `src/components/ui/dialog.tsx`, `src/components/ui/modal.tsx` (Arco Modal), `src/components/ui/drawer.tsx`, `popconfirm.tsx` |
-| Floating menus and toasts | Transient actions, date picker popovers, high z-index (1100) selects, and global feedback | `src/components/ui/dropdown-menu.tsx`, `src/components/ui/select.tsx`, `src/components/ui/date-picker.tsx`, `src/components/ui/toast.tsx` |
-| Secondary webviews | Quick task editing (with priority flag switcher) and focus assistant companions (with 3-tab target binding & tree picker) | `quick-edit.html`, `focus-assistant.html` |
+## Color
 
-## Interaction and accessibility expectations
+色彩系统以语义化 Token 为核心，兼具办公清晰度与 RPG 冒险氛围：
 
-- Use semantic controls where available. Existing UI uses native buttons plus `aria-label`, `aria-checked`, `aria-expanded`, dialogs, alerts, navigation labels, and polite live regions.
-- **Task item action switching & height stability**:
-  - The right action slot is statically dimensioned at `24×24px` (`size-6`);
-  - When a task has description content, the detail indicator (`AlignLeft`) is displayed statically; when hovering, it smoothly transitions into the destructive delete button (`X`);
-  - When a task has no description content, an invisible `size-6` placeholder element occupies the slot, ensuring row height remains rock-solid without layout jitter on hover.
-- **Priority Flag Switcher**: In the Task Quick Edit window, clicking the top-right flag icon opens a dropdown to switch among the 4 priority quadrants (`urgent`/`high`/`medium`/`low`), immediately updating both quadrant and priority.
-- Preserve keyboard focus and accessible labels when composing or replacing an existing dialog, toolbar, switch, listbox, or navigation control.
-- Reuse the Lucide icon system already used by the shell or the dedicated `PixelIcons` system in pixel mode; an icon-only control needs a text label for assistive technology.
-- Do not claim a formal accessibility conformance level: none is configured or audited in this repository.
+### 1. 基础语义色彩 Token
+- `--background` & `--foreground`：主背景与主要文本。
+- `--card` & `--card-foreground`：卡片背景与卡片文本。
+- `--popover` & `--popover-foreground`：浮层背景与文本。
+- `--primary` & `--primary-foreground`：主要行动色（品牌主色）。
+- `--secondary` & `--secondary-foreground`：次要行动色与辅助背景。
+- `--muted` & `--muted-foreground`：弱化背景与弱化文本。
+- `--destructive` & `--destructive-foreground`：破坏性操作（危险警告色）。
+- `--border`：通用的边框与分割线颜色。
 
-## Visual consistency limits
+### 2. 任务四象限色彩映射
+- **`🔥 紧急讨伐` (Urgent & Important)**：Red 红色语义，代表高紧迫性与最高优先级。
+- **`🌿 核心修炼` (Important & Not Urgent)**：Emerald / Green 绿色语义，代表长期重要价值。
+- **`⚡ 突发委托` (Urgent & Not Important)**：Amber / Yellow 黄色语义，代表临时插入事务。
+- **`💧 支线见闻` (Not Urgent & Not Important)**：Sky / Blue 蓝色语义，代表低优先级杂项。
 
-The token source is `src/index.css`, but parts of the current shell and feature UI still use hard-coded Slate colors. [全局背景配色与视觉层级规范](design-docs/color-scheme.md) defines the authoritative 5-level elevation architecture and surface tokens across modules. Prefer semantic tokens and the 5-level elevation system for new UI and avoid spreading additional ad-hoc page-surface colors.
+## Components
 
-## Related material
+系统组件基于统一的抽象层进行选择、组合与封装：
 
-- Frontend implementation: [FRONTEND.md](FRONTEND.md)
-- Color scheme & elevation specification: [design-docs/color-scheme.md](design-docs/color-scheme.md)
-- Focus Assistant & Pets specification: [product-specs/focus.md](product-specs/focus.md)
-- Product trade-offs: [PRODUCT_SENSE.md](PRODUCT_SENSE.md)
-- Detailed design decisions: [design-docs/](design-docs/index.md)
-- Visual design & aesthetic direction: `.agents/skills/frontend-design/SKILL.md`
-- Shared Tailwind changes: `.agents/skills/tailwind-design-system/SKILL.md`
+### 1. 基础 UI 原子组件 (`src/components/ui/`)
+- 包含 `Button`, `Card`, `Item`, `Dialog`, `Modal`, `Drawer`, `DatePicker`, `DateRangePicker`, `Select`, `DropdownMenu`, `Toast`, `Badge`, `Switch`, `InputTag`, `Popconfirm` 等。
+- 所有基础组件内部通过 `useAppThemeStyle` 驱动，在「现代极简」与「复古像素」之间自动切换边框、圆角、阴影及交互动效。
 
+### 2. Arco Design 深度定制与浮层穿透
+- 针对复杂选择器、高级日期拾取与通用模态框，深度集成 `@arco-design/web-react`。
+- **全局浮层穿透规范**：所有 Arco 浮层（`.arco-trigger`, `.arco-select-popup`, `.arco-picker-popup`, `.arco-dropdown`）统一赋予 `z-index: 1100 !important`，高于 Modal 容器层级（`1001`）。
+- 弹窗内嵌选择器时显式声明 `getChildrenPopupContainer={() => document.body}`，确保下拉菜单突破弹窗物理边界正常展现。
+
+### 3. 组件复用与扩展准则
+- 优先复用已有原子组件与组合模式，严禁为微小视觉变体复制代码创建平行组件。
+- 业务逻辑与纯展示组件保持隔离，展示组件内不硬编码领域特定数据请求。
+
+## Interaction Patterns
+
+系统定义了高一致性、符合直觉的桌面端交互模式：
+
+### 1. 列表选中刻印与游标
+- 在一级主导航、知识库目录树、项目列表与习惯清单中，当前激活项左侧统一呈现精准垂直居中的 `▶` 像素游标。
+- 像素模式下，游标伴随 `steps(2)` 定格两帧水平微跳跃（`animate-pixel-hop`），同时激活项边框投影加深。
+
+### 2. 任务行操作槽位防抖切换 (Zero-Jitter Action Slot)
+- 任务列表项右侧的操作槽位固定为 `24×24px` (`size-6`)。
+- 当任务存在描述内容时，槽位默认静态展示对齐图标（`AlignLeft`）；鼠标 Hover 时平滑切换为删除按钮（`X`）。
+- 当任务无描述内容时，槽位由不可见的占位元素占据，确保无论鼠标是否悬停，整行高度与布局均绝对稳定不产生抖动。
+
+### 3. 实体物理按压反馈
+- 在复古像素模式下，按钮与交互卡片在被点击时触发 `active:translate(1.5px, 1.5px)` 与 `active:shadow-none`，模拟街机与掌机按键下压的物理回弹质感。
+
+### 4. 破坏性操作与二次确认
+- 对于删除任务、废弃项目、清空数据等破坏性操作，使用 `Popconfirm` 或专属 `Modal` 进行阻断式确认；日常状态标记（如完成任务）则即时生效并提供撤销支持。
+
+## Navigation
+
+系统提供直观清晰的信息架构与多窗口导航机制：
+
+### 1. 一级主导航 (Primary Rail Navigation)
+- 常驻左侧工具栏，支持单键快速切换核心业务视图：
+  - `今日工作台 (/)`：时间流、四象限视图、习惯打卡条与甘特图联动。
+  - `任务中心 (/tasks)`：任务全景四象限管理与周期视图。
+  - `项目中心 (/projects)`：按优先级与状态聚合的冒险项目看板。
+  - `知识库 (/knowledge)`：三栏式知识库与富文本创作。
+  - `习惯打卡 (/habits)`：习惯管理与 Streaks 记录。
+  - `每日复盘 (/review)`：复盘问答与日结统计。
+  - `系统设置 (/settings)`：主题风格切换与通用配置。
+
+### 2. 二级侧边栏与折叠导航 (Secondary Navigation)
+- 项目中心与知识库配备二级侧边栏，支持按分类与目录树过滤。
+- 像素模式下展开/折叠采用 `steps(4, jump-none)` 阶梯式动画，展现复古逐帧展开质感。
+
+### 3. 辅助独立 Webview 窗口 (Secondary Windows)
+- **快捷任务编辑窗 (`quick-edit.html`)**：无边框轻量级弹窗，支持全局快捷键快速唤起，提供右上角优先级旗帜切换与快速提交。
+- **悬浮专注助手 (`focus-assistant.html`)**：轻量级桌面置顶小窗口，集成番茄钟与桌宠伴侣。
+
+## Forms and Input
+
+表单与输入交互设计规范：
+
+- **标签与提示**：所有表单输入项均具备清晰的标签（Label）或直观的前缀图标；Placeholder 仅用于格式举例或占位说明，不可替代标签。
+- **校验与错误就近展示**：字段格式错误或必填校验在输入框正下方就近显示，提交失败时不重置用户已填写的有效内容。
+- **键盘快捷交互**：单行输入框支持 Enter 直接提交，多行文本框支持 `Ctrl+Enter` / `Cmd+Enter` 快速提交，Esc 取消。
+- **快速编辑窗旗帜切换**：在快捷任务窗口中，点击右上角象限旗帜图标可直接呼出下拉菜单快速变更象限与优先级属性。
+
+## Feedback and Status
+
+操作结果与系统状态传达规范：
+
+- **轻量即时反馈 (Toast)**：对于保存成功、复制链接、快速完成等常规操作，使用右上角轻量 Toast 提示，不阻断主流程。
+- **持久状态标记 (Badges & Streaks)**：
+  - 任务与项目状态通过语义化 Badge 呈现（如「进行中」、「已封印」）；
+  - 习惯打卡使用火焰连续天数（Streaks）徽章激发用户成就感。
+- **浮层层级隔离**：确保各类 Popover、Select Dropdown 和 Tooltip 位于视口最上层（`z-index: 1100`），避免被卡片或 Modal 边缘裁切。
+
+## Loading States
+
+异步数据加载与等待体验规范：
+
+- **局部骨架屏优先 (Skeleton First)**：在各模块初次加载或切换目录时，优先使用与真实组件骨架一致的 Skeleton 占位，避免整屏白屏。
+- **乐观更新零延迟 (Optimistic Update)**：针对打卡、勾选完成、拖拽排序等高频交互，前端立即执行乐观 UI 变更，后台异步提交；若网络异常则自动回滚并弹出警示。
+- **知识库分级按需加载**：侧边栏目录优先秒级呈现，笔记正文采用单独的加载指示器异步拉取。
+
+## Empty States
+
+数据为空时的界面指引规范：
+
+- **友好引导而非空白**：在今日无待办、项目为空或知识库无笔记时，展示对应的像素插画/图标、鼓励性文案及明确的行动按钮（如「新建任务」、「发起新冒险」）。
+- **区分“全量无数据”与“筛选无结果”**：当因过滤器或搜索词导致无结果时，提示「未找到匹配内容」，并提供「清除筛选条件」操作。
+
+## Error States
+
+异常与故障处理规范：
+
+- **人类可读的错误说明**：将后端返回的数据库异常或网络断连转换为通俗易懂的语言，严禁向普通用户直接暴露原始堆栈或技术错误码。
+- **提供恢复路径**：在网络错误或并发冲突时，提供「重试」或「刷新」按钮；富文本编辑失败时自动保留本地输入，防止用户数据丢失。
+
+## Responsive Design
+
+桌面端视口与多分辨率自适应：
+
+- **桌面基准视口**：以 1280×800 及以上桌面分辨率为主力设计场景。
+- **多栏自适应折叠**：在窄屏窗口下，知识库与项目的二级侧边栏支持平滑收起，主内容区域自适应伸缩。
+- **独立辅助微窗口排版**：快捷编辑窗（约 400×500）与悬浮专注窗（紧凑卡片）专门排版，去除非核心装饰，专注核心操作。
+
+## Accessibility
+
+无障碍与可用性保障：
+
+- **语义化结构**：全站优先使用语义化 HTML5 元素（`nav`, `main`, `aside`, `button`, `input`）。
+- **键盘导航支持**：所有可交互元素支持 Tab 键聚焦与操作，弹窗支持 Esc 键快捷关闭。
+- **视觉对比度**：无论是现代极简模式还是复古像素模式，文字与背景均维持符合 WCAG AA 级别的良好色彩对比度。
+
+## Motion and Animation
+
+动效系统在双风格下提供不同质感的视觉反馈：
+
+### 1. 复古像素模式动效 (8-Bit Step Animations)
+- **主舞台切页转场 (Route Step-In)**：切页时触发 100ms 的 8-bit 阶梯淡入（`animate-pixel-page-in` 搭配 `steps(3, jump-none)`）。
+- **二级侧边栏折叠展开**：侧边栏采用 `steps(4, jump-none)` 阶梯式伸缩动画，重现复古掌机逐帧渲染的质感。
+- **游标微动跳跃**：激活光标 `▶` 采用 `steps(2)` 定格两帧水平微跳跃（`animate-pixel-hop`）。
+
+### 2. 现代极简模式动效 (Smooth Transitions)
+- 采用平滑贝塞尔曲线（150ms - 200ms），用于抽屉滑出、淡入淡出与颜色过渡，保持专业严谨。
+
+## Content and Microcopy
+
+文案与微文案风格规范：
+
+- **行动导向动词**：按钮文案清晰表达操作意图（如「发起冒险项目」、「保存笔记」、「开始专注」而非模糊的「确定」）。
+- **四象限趣味 RPG 微文案**：
+  - 第一象限：`🔥 紧急讨伐`
+  - 第二象限：`🌿 核心修炼`
+  - 第三象限：`⚡ 突发委托`
+  - 第四象限：`💧 支线见闻`
+- **用词一致性**：跨页面统一术语（如统一使用“项目”、“任务”、“知识库”，不混用“工单”、“事务”等）。
+
+## Design Consistency
+
+设计一致性维护准则：
+
+- **设计令牌单一真值源**：所有新页面与新组件必须使用 `src/index.css` 声明的语义变量（如 `--background`, `--card`, `--border`, `--accent` 等）与 Tailwind 语义工具类，严禁直接内联硬编码孤立色值。
+- **严格遵循 5 级 Elevation 架构**：从外壳（L0）、画布（L1）、卡片（L2）、交互层（L3）到顶层弹窗（L4）层级分明，禁止在组件内部违背层级逻辑引入混乱的自制容器。
+- **色彩纯度与对比度保障**：根容器与核心主画布禁止滥用非标透明度修饰，确保颜色纯正无混浊感，防止暗色模式下对比度倒挂与文字辨识度下降。
+- **跨窗口无缝联动**：任何主题风格或全局视觉配置变更，必须通过 Tauri IPC 广播保证所有独立桌面窗口同步响应，维持全系统一致性。
+
+
+
+## Design Review Criteria
+
+在交付重大 UI/UX 功能时，必须通过以下设计评审清单：
+
+1. **[ ] 视觉层级清晰**：符合 5 级 Elevation 规范，无背景色混淆或边框冲突。
+2. **[ ] 双主题完美兼容**：在「现代极简」与「复古像素」风格下均经过实际验证，无样式错乱或硬编码色彩。
+3. **[ ] 交互与动效合规**：悬停防抖、选中游标 `▶`、实体按压反馈与转场动效符合规范。
+4. **[ ] 状态覆盖完整**：已完整设计并实现正常、加载（Skeleton）、空数据、错误与成功状态。
+5. **[ ] 浮层层级正确**：Arco 浮层（Select, DatePicker, Popover）正确穿透并置于顶层（`z-index: 1100`），无遮挡截断。
+6. **[ ] 辅助窗口适配**：快捷编辑浮窗与悬浮专注窗排版紧凑、功能完整。
+7. **[ ] 微文案与微交互一致**：按钮动词具体、四象限 RPG 术语准确统一。

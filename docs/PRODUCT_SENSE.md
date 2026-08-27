@@ -1,57 +1,43 @@
-# Product sense
+# PRODUCT_SENSE.md
 
-## Purpose
+## Product Principles
 
-This document guides product judgment when a request leaves room for interpretation. It does not replace exact behavior in [product specifications](product-specs/index.md).
+WorkBuddy-D 作为面向个人高效规划与专注的现代化桌面工作空间，其产品交互与功能演化遵循以下五大核心原则：
 
-## Product purpose
+1. **用户成果优先于实现便利性 (Preserve User Work Over Implementation Convenience)**：
+   - 乐观编辑、防抖落库、离线操作排队、冲突可见性以及数据库乐观锁版本单调递增，核心目标是永久保全用户的创作意图与输入成果。
+   - 严禁为了简化代码实现而静默丢弃、粗暴覆盖、随意伪造或清空正在进行中的用户编辑数据。
+2. **保持活动工作区专注克制 (Keep the Active Surface Focused)**：
+   - 界面采用极简紧凑的桌面工具导航轨（Tool Rail）与高内聚的独立功能路由。
+   - 坚持按需加载当前激活视图所需的数据；严禁将每个功能屏幕无节制膨胀为塞满无关指标的复杂仪表盘。
+3. **状态转换与操作后果显式易懂 (Make State and Consequences Understandable)**：
+   - 涉及任务完成、四象限排期、选区变更、草稿保存或账户切换的交互，均需在触发源就近提供明确的视觉反馈与状态解释。
+   - 任何异步操作链路必须完整覆盖加载中（Loading）、空数据（Empty）、失败提示（Error）与禁用态（Disabled）。
+4. **实用默认值优先于冗余配置 (Prefer Useful Defaults to Configuration)**：
+   - 系统开箱即用，审计时间戳、四象限初始位次、默认专注周期均由系统与数据库权威决定。
+   - 仅在配置能够产生实质性用户价值时才引入偏好项，严禁将数据库或基础设施技术细节转嫁为用户设置项。
+5. **个人数据强隔离与容错可恢复 (Treat Personal Data as Private and Recoverable)**：
+   - 用户隐私基于 PostgreSQL RLS 强行隔离，而非前端客户端约定。
+   - 破坏性操作（如删除任务、清空清单）必须提供明确的二次确认阻断；网络短暂中断时必须自动保留支持离线重放的数据。
 
-WorkBuddy-D is an authenticated personal desktop workspace for turning intentions into daily action. The shipped modules combine four-quadrant tasks, schedules and reminders, habits, knowledge capture, daily review, and focus sessions.
+## Product Evidence
 
-The repository supports an individual workspace, not collaboration or enterprise workflow assumptions. User data is private to the authenticated owner through Supabase RLS.
+系统当前已验证上线且稳定运行的核心业务功能与产品事实：
 
-## Core user jobs
+- **今日工作台 (`/`)**：高效汇聚当日核心事务，联动全天时间流（TimeStream）、四象限看板、习惯打卡条与甘特图概览。
+- **任务管理中心 (`/tasks`)**：基于艾森豪威尔四象限法则（紧急讨伐、核心修炼、突发委托、支线见闻）进行优先级规划与周期调度。
+- **项目冒险中心 (`/projects`)**：支持多阶段、多看板列与模板化的长期项目生命周期追踪。
+- **知识库与笔记创作 (`/knowledge`)**：三栏式目录树导航与 Tiptap 富文本编辑器，支持分级按需加载与草稿防丢。
+- **习惯打卡与成就 (`/habits`)**：支持周期性习惯管理、连续打卡天数（Streaks）记录与热力图统计。
+- **每日深度复盘 (`/review`)**：结构化复盘问答与日结统计，支持按天生成与回顾。
+- **桌面专注伴侣 (`focus-assistant.html`)**：独立的置顶桌面悬浮窗，集成番茄钟计时器、桌宠伴侣互动与全显示器同步通知。
 
-- See and act on today’s tasks, habits, and review work.
-- Capture and organize task and knowledge content without losing in-progress edits.
-- Plan tasks by urgency/importance and schedule them when useful.
-- Build a dated habit history and complete one daily review per date.
-- Run and record focus sessions, including through the focus-assistant window.
+## Product Decision Criteria
 
-## Product principles
+当面临多种技术实现或产品形态选择且产生歧义时，遵循以下权衡标准：
 
-### Preserve user work over implementation convenience
-
-Optimistic edits, debounced saves, offline replay, conflict visibility, and database versions exist to preserve intent. Do not silently discard, overwrite, or duplicate work to simplify a change.
-
-### Keep the active surface focused
-
-The app exposes a compact desktop tool rail and distinct routes for daily work, tasks, habits, knowledge, and review. Load and present the content needed for the active surface; avoid expanding every screen into a dashboard of unrelated data.
-
-### Make state and consequences understandable
-
-Actions that change completion, schedules, selection, saving, or account state should give a visible, local explanation. New asynchronous flows need loading, empty, failure, and disabled behavior appropriate to their surface.
-
-### Prefer useful defaults to configuration
-
-Existing flows create scoped records, derive database-owned timestamps/order, and keep preferences user-scoped. Add configuration only when it changes a meaningful user outcome; do not surface infrastructure details as settings.
-
-### Treat personal data as private and recoverable
-
-Privacy is implemented through RLS, not client convention. Deletion and state transitions must use the existing constrained paths, and transient network failure should retain recoverable work where the domain already supports replay.
-
-## Decision heuristics
-
-When several choices are technically valid:
-
-- Prefer an existing domain workflow over a new cross-cutting abstraction.
-- Prefer a reversible or explicitly confirmed destructive action when intent is ambiguous.
-- Prefer precise updates to the active list, note, task, or review over broad refreshes or hidden global effects.
-- Prefer keeping advanced controls out of the default path until a real product requirement needs them.
-- Prefer database-confirmed results over client-generated timestamps, sort order, or conflict versions.
-
-## Feature acceptance
-
-A user-visible feature is ready only when it fits the current navigation model, explains its state during asynchronous work, preserves relevant user input, and respects the user and data boundaries documented in [Security](SECURITY.md) and [Reliability](RELIABILITY.md).
-
-Use [DESIGN.md](DESIGN.md) for interaction and visual choices. If a specification conflicts with this document, the more specific file in `product-specs/` wins.
+1. **成熟领域工作流优先于通用跨层抽象**：优先复用已验证的领域服务与数据通道，不引入过度设计的跨模块大一统抽象。
+2. **可逆与显式确认优先于静默破坏**：意图模糊或破坏性操作时，优先提供可撤销机制或阻断式确认弹窗。
+3. **精准局部更新优先于全量宽泛重刷**：优先失效并刷新受影响的单条笔记、单个列表或当前激活视图，严禁因单个微小改动触发全局大重拉。
+4. **核心路径保持极简，高级控件按需展开**：保持默认交互流顺畅无阻，高级筛选与配置收敛至抽屉或次级菜单中。
+5. **数据库权威事实优先于前端客户端猜测**：所有时间戳、排序顺序、版本锁号以数据库提交结果为唯一真值，前端不得依赖本地时钟做决策。

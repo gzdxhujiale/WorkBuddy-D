@@ -13,4 +13,6 @@ This directory holds versioned reference snapshots derived from external or live
 - Keep narrative architecture/design guidance outside this directory. If a generated fact changes an invariant, update the relevant durable document separately.
 - Never hand-edit a table/policy/function fact merely to match frontend expectations; resolve the source discrepancy first.
 
-For database changes, read [Security](/SECURITY), [Architecture](/architecture), and the relevant Supabase skill before changing migrations or snapshots.
+For database changes, read [Security](../SECURITY.md), [ARCHITECTURE.md](../../ARCHITECTURE.md), and the relevant Supabase skill before changing migrations or snapshots.
+
+

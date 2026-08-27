@@ -45,7 +45,8 @@ The main window’s private Broadcast listener invalidates matching Query keys. 
 
 WorkBuddy-D's application editor is **`reactjs-tiptap-editor`**, not a direct Tiptap integration. Tiptap packages are its underlying editor engine and extension API; business surfaces must reuse `src/components/ui/reactjs-tiptap-editor.tsx` rather than creating another `useEditor` composition. See the [reactjs-tiptap-editor integration reference](references/reactjs-tiptap-editor.md) for supported props, extensions, and usage by surface.
 
-The knowledge module first loads its shell, then the selected list’s contents, note body, and templates on demand. Rich-text content is serialized JSON. Editor changes must be deduplicated, debounced, and written back with `emitUpdate: false` only when external content actually changed. Preserve the unmount-save and optimistic-version rules in [sync-and-editor consistency](design-docs/sync-and-editor-consistency.md).
+The knowledge module first loads its shell, then the selected list’s contents, note body, and templates on demand. Rich-text content is serialized JSON. Editor changes must be deduplicated, debounced, and written back with `emitUpdate: false` only when external content actually changed. Preserve the unmount-save and optimistic-version rules in [ARCHITECTURE.md](../ARCHITECTURE.md).
+
 
 Task descriptions use the same serialized Tiptap-document format while remaining a database `text` column. The task editor must accept legacy plain text, but compact task lists must render extracted plain text rather than the serialized JSON.
 

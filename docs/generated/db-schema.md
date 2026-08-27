@@ -14,7 +14,8 @@ This is a compact live-state reference, not a replacement for migration SQL. Rea
 | What was installed and observed on the verification date? | This snapshot. |
 | What database behavior is proposed and versioned in the repository? | `supabase/migrations/`. |
 | Exact current columns, policies, functions, grants, indexes, and triggers after later work? | A new verified live inspection plus the applied migration history. |
-| Frontend mapping and loading behavior? | `src/services/`, `src/hooks/`, and [Frontend](/FRONTEND). |
+| Frontend mapping and loading behavior? | `src/services/`, `src/hooks/`, and [Frontend](../FRONTEND.md). |
+
 
 This snapshot does not prove Supabase Dashboard-only settings, such as the global public-channel toggle, or whether every subsequently committed migration has already been applied.
 
@@ -215,7 +216,9 @@ The payload is:
 { table, operation, id, folder_id, previous_folder_id }
 ```
 
-It deliberately excludes note bodies and complete row values. The main client converts the hint into a narrow Query-key invalidation and refetches with ordinary RLS-protected queries. See [the synchronization decision](/design-docs/sync-and-editor-consistency) for constraints.
+It deliberately excludes note bodies and complete row values. The main client converts the hint into a narrow Query-key invalidation and refetches with ordinary RLS-protected queries. See [ARCHITECTURE.md](../../ARCHITECTURE.md) for synchronization constraints.
+
+
 
 ## Timestamp ownership, locking, and ordering
 
