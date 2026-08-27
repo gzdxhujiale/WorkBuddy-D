@@ -12,6 +12,9 @@ import {
   Sparkles,
   Flame,
   CheckCircle2,
+  AlertTriangle,
+  RotateCcw,
+  CalendarCheck,
 } from "lucide-react";
 import { useTimeManagementData, useTaskActions } from "@/hooks/useTimeManagement";
 import { Task, QuadrantType } from "@/types/timeManagement";
@@ -21,16 +24,21 @@ import { useDailyReviewData, useReviewActions, isReviewEmpty } from "@/hooks/use
 import { DailyReviewItem } from "@/types/dailyReview";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { openQuickEditWindow, prewarmQuickEditWindow } from "@/services/quickEditWindow";
-import { taskIntersectsDay, sortTasksByQuadrantAndDeadline } from "@/lib/taskSchedule";
+import {
+  taskBelongsToToday,
+  isTaskOverdue,
+  getOverdueDurationLabel,
+  sortTasksByQuadrantAndDeadline,
+} from "@/lib/taskSchedule";
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { useProjectsData } from "@/hooks/useProjects";
 import { useUiStore } from "@/stores/uiStore";
 import { ProjectTimeline } from "./ProjectTimeline";
+import { TodayQuickAdd } from "./TodayQuickAdd";
 import { cn } from "@/lib/utils";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import {
   PixelSparkle,
-  PixelSword,
   PixelScroll,
   PixelFlame,
 } from "@/components/pixel/PixelIcons";
@@ -81,9 +89,7 @@ function dueLabel(scheduledEndAt: number, now: number): { text: string; overdue:
   const d = new Date(scheduledEndAt);
   const isOverdue = scheduledEndAt < now;
   if (isOverdue) {
-    const mins = Math.floor((now - scheduledEndAt) / 60000);
-    const text = mins >= 60 ? `已逾期 ${Math.floor(mins / 60)}h` : `已逾期 ${Math.max(1, mins)}m`;
-    return { text, overdue: true, isToday: true };
+    return { text: getOverdueDurationLabel(scheduledEndAt, now), overdue: true, isToday: false };
   }
   const hh = String(d.getHours()).padStart(2, "0");
   const mm = String(d.getMinutes()).padStart(2, "0");
@@ -243,17 +249,20 @@ export const TodayPanel: React.FC = () => {
 
   const now = Date.now();
   const today = todayYMD();
+  const todayDate = useMemo(() => new Date(`${today}T00:00:00`), [today]);
+  const todayEndTimestamp = useMemo(() => new Date(`${today}T23:59:59`).getTime(), [today]);
 
-  // Filter tasks due today sorted by quadrant & deadline
+  // Filter tasks belonging to today (today scheduled + overdue uncompleted)
   const dueTasks = useMemo(
     () =>
       sortTasksByQuadrantAndDeadline(
-        tasks.filter((task) => taskIntersectsDay(task, new Date(`${today}T00:00:00`)))
+        tasks.filter((task) => taskBelongsToToday(task, todayDate)),
+        now
       ),
-    [tasks, today]
+    [tasks, todayDate, now]
   );
   const pendingTasks = useMemo(() => dueTasks.filter((t) => !t.completed), [dueTasks]);
-  const completedTasks = useMemo(() => dueTasks.filter((t) => t.completed), [dueTasks]);
+  const overdueTasks = useMemo(() => dueTasks.filter((t) => !t.completed && isTaskOverdue(t, now)), [dueTasks, now]);
 
   const projectTasksCount = useMemo(() => dueTasks.filter((t) => Boolean(t.projectId)).length, [dueTasks]);
   const standaloneTasksCount = useMemo(() => dueTasks.filter((t) => !t.projectId).length, [dueTasks]);
@@ -274,13 +283,18 @@ export const TodayPanel: React.FC = () => {
       if (a.completed !== b.completed) {
         return a.completed ? 1 : -1;
       }
+      const aOverdue = isTaskOverdue(a, now);
+      const bOverdue = isTaskOverdue(b, now);
+      if (aOverdue !== bOverdue) {
+        return aOverdue ? -1 : 1;
+      }
       const aEnd = a.scheduledEndAt ?? a.scheduledStartAt ?? Number.MAX_SAFE_INTEGER;
       const bEnd = b.scheduledEndAt ?? b.scheduledStartAt ?? Number.MAX_SAFE_INTEGER;
       return aEnd - bEnd;
     });
-  }, [filteredDueTasks]);
+  }, [filteredDueTasks, now]);
 
-  // Group due tasks by quadrant with uncompleted first
+  // Group due tasks by quadrant with uncompleted and overdue first
   const tasksByQuadrant = useMemo(() => {
     const map: Record<QuadrantType, Task[]> = {
       Q1: [],
@@ -300,11 +314,16 @@ export const TodayPanel: React.FC = () => {
         if (a.completed !== b.completed) {
           return a.completed ? 1 : -1;
         }
+        const aOverdue = isTaskOverdue(a, now);
+        const bOverdue = isTaskOverdue(b, now);
+        if (aOverdue !== bOverdue) {
+          return aOverdue ? -1 : 1;
+        }
         return (a.scheduledEndAt ?? Number.MAX_SAFE_INTEGER) - (b.scheduledEndAt ?? Number.MAX_SAFE_INTEGER);
       });
     }
     return map;
-  }, [filteredDueTasks]);
+  }, [filteredDueTasks, now]);
 
   // Today habits
   const todayHabits = useMemo(() => getHabitsForDate(habits, today), [habits, today]);
@@ -348,9 +367,31 @@ export const TodayPanel: React.FC = () => {
     [updateTask]
   );
 
+  const handleRescheduleToToday = useCallback(
+    (task: Task, e: React.MouseEvent) => {
+      e.stopPropagation();
+      updateTask(task.id, {
+        scheduledEndAt: todayEndTimestamp,
+        scheduleMode: task.scheduleMode || "point",
+      });
+    },
+    [updateTask, todayEndTimestamp]
+  );
+
+  const handleRescheduleAllOverdue = useCallback(() => {
+    for (const task of overdueTasks) {
+      updateTask(task.id, {
+        scheduledEndAt: todayEndTimestamp,
+        scheduleMode: task.scheduleMode || "point",
+      });
+    }
+  }, [overdueTasks, updateTask, todayEndTimestamp]);
+
   const openTaskQuickEdit = (task: Task, anchor: HTMLElement) => {
     void openQuickEditWindow({
       task,
+      projects,
+      stages,
       anchorEl: anchor,
       onCommit: (taskId, updates) => updateTask(taskId, updates),
       onClosed: () => {},
@@ -358,6 +399,7 @@ export const TodayPanel: React.FC = () => {
   };
 
   const renderTaskItem = (task: Task) => {
+    const overdue = !task.completed && isTaskOverdue(task, now);
     const due = !task.completed && task.scheduledEndAt ? dueLabel(task.scheduledEndAt, now) : null;
     const project = task.projectId ? projects.find((p) => p.id === task.projectId) : undefined;
     const stage = task.projectStageId ? stages.find((s) => s.id === task.projectStageId) : undefined;
@@ -385,7 +427,8 @@ export const TodayPanel: React.FC = () => {
               ? "bg-amber-100/70 dark:bg-amber-950/60 font-semibold"
               : "bg-muted/60"
             : "hover:bg-muted/30",
-          task.completed && "opacity-70 bg-muted/10"
+          task.completed && "opacity-70 bg-muted/10",
+          overdue && "border-l-2 border-l-rose-500 bg-rose-50/30 dark:bg-rose-950/20"
         )}
       >
         {/* Left Side: Circular Checkbox & Task Title & Project Badge */}
@@ -450,8 +493,25 @@ export const TodayPanel: React.FC = () => {
           </span>
         </div>
 
-        {/* Right Side: Due Time & Calendar Icon */}
-        <div className="flex items-center gap-1.5 shrink-0">
+        {/* Right Side: Due Time, Reschedule Action & Description */}
+        <div className="flex items-center gap-2 shrink-0">
+          {overdue && (
+            <button
+              type="button"
+              onClick={(e) => handleRescheduleToToday(task, e)}
+              className={cn(
+                "inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium transition-all cursor-pointer",
+                isPixelTheme
+                  ? "bg-amber-100 hover:bg-amber-200 text-amber-900 dark:bg-amber-950/80 dark:hover:bg-amber-900 dark:text-amber-200 border border-amber-800/40 rounded-xs shadow-[1px_1px_0px_#000]"
+                  : "bg-amber-50 hover:bg-amber-100 text-amber-700 dark:bg-amber-950/60 dark:hover:bg-amber-900/80 dark:text-amber-300 border border-amber-200 dark:border-amber-800 rounded-md shadow-2xs"
+              )}
+              title="将截止时间更新为今日 23:59"
+            >
+              <CalendarCheck size={10} className="shrink-0" />
+              <span>顺延至今日</span>
+            </button>
+          )}
+
           {due && (
             <span
               className={cn(
@@ -551,13 +611,16 @@ export const TodayPanel: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-full w-full max-w-[1240px] mx-auto px-4 py-5 md:px-7 overflow-y-auto select-none space-y-5">
+    <div className="flex flex-col h-full w-full max-w-[1240px] mx-auto px-4 py-5 md:px-7 overflow-y-auto select-none space-y-4">
+      {/* ===== 顶部极速规划录入栏 ===== */}
+      <TodayQuickAdd />
+
       {/* ===== 上屏：微观聚焦台 (紧凑高度 ~290px，双栏布局) ===== */}
       <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.3fr)_minmax(320px,0.9fr)] gap-5 items-stretch">
         {/* 左栏：今日行动心流 (时间序 / 象限切换) */}
         <div
           className={cn(
-            "flex flex-col h-[290px] bg-card overflow-hidden",
+            "flex flex-col h-[300px] bg-card overflow-hidden",
             isPixelTheme
               ? "border-2 border-border/90 rounded-xl shadow-[3px_3px_0px_rgba(0,0,0,0.1)] font-mono"
               : "border border-border rounded-xl shadow-2xs"
@@ -674,29 +737,51 @@ export const TodayPanel: React.FC = () => {
             </div>
           </div>
 
+          {/* Overdue Alert Banner if any overdue tasks exist */}
+          {overdueTasks.length > 0 && (
+            <div
+              className={cn(
+                "flex items-center justify-between px-3 py-1.5 text-xs border-b shrink-0 transition-colors",
+                isPixelTheme
+                  ? "bg-red-100/90 dark:bg-red-950/80 text-red-900 dark:text-red-200 border-red-800/40 font-mono"
+                  : "bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border-rose-200/80 dark:border-rose-800/60"
+              )}
+            >
+              <div className="flex items-center gap-1.5 font-semibold">
+                <AlertTriangle size={13} className="text-rose-500 shrink-0" />
+                <span>发现 {overdueTasks.length} 项历史逾期待办</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleRescheduleAllOverdue}
+                className={cn(
+                  "px-2 py-0.5 text-[10px] font-medium transition-colors cursor-pointer flex items-center gap-1",
+                  isPixelTheme
+                    ? "bg-red-200 dark:bg-red-900 text-red-950 dark:text-red-100 border border-red-950 rounded-none shadow-[1px_1px_0px_#000]"
+                    : "bg-white dark:bg-rose-900/60 text-rose-700 dark:text-rose-200 border border-rose-300 dark:border-rose-700 rounded-md hover:bg-rose-100 dark:hover:bg-rose-800/80"
+                )}
+                title="将所有逾期任务的截止时间顺延至今日 23:59"
+              >
+                <RotateCcw size={10} />
+                <span>全部顺延至今日</span>
+              </button>
+            </div>
+          )}
+
           {/* List Content (Scrollable Hub) */}
           <div className="flex-1 overflow-y-auto p-1 divide-y divide-border/60">
             {filteredDueTasks.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center p-4 text-xs text-muted-foreground">
-                <p className="font-semibold mb-1">
-                  {dueTasks.length === 0
-                    ? isPixelTheme
-                      ? "✨ 今日委托已全数通关！"
-                      : "今日没有到期任务"
-                    : taskFilter === "project"
-                    ? "今日没有属于项目的到期任务"
-                    : "今日没有独立的日常待办"}
-                </p>
-                <p className="text-[11px] opacity-75">
-                  {completedTasks.length > 0
-                    ? `已累计结算 ${completedTasks.length} 项完成任务`
-                    : "可点击下方时间线或任务中心添加安排"}
+                <div className="p-2.5 rounded-full bg-muted/40 mb-2 border border-border/40">
+                  <CheckCircle2 size={20} className="text-muted-foreground/60" />
+                </div>
+                <p className="font-semibold text-foreground">今日暂无待办事项</p>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  可在上方快速记录，或前往「任务中心」规划日程
                 </p>
               </div>
             ) : viewMode === "timeline" ? (
-              <div className="divide-y divide-border/50">
-                {chronologicalTasks.map(renderTaskItem)}
-              </div>
+              chronologicalTasks.map(renderTaskItem)
             ) : (
               <div className="space-y-2 p-1">
                 {QUADRANTS.map(renderQuadrantSection)}
@@ -705,208 +790,125 @@ export const TodayPanel: React.FC = () => {
           </div>
         </div>
 
-        {/* 右栏：今日修行 + 原地复盘结印卡 (两段式高度锁定) */}
-        <div className="flex flex-col h-[290px] gap-3">
-          {/* 上半卡片：今日习惯修行 */}
+        {/* 右栏：习惯打卡条与复盘小组件 (紧凑上下双卡片) */}
+        <div className="flex flex-col gap-3.5 h-[300px]">
+          {/* 上卡片：习惯进度条 */}
           <div
             className={cn(
-              "flex flex-col h-[132px] bg-card overflow-hidden p-3",
+              "flex-1 bg-card p-3 flex flex-col justify-between overflow-hidden",
               isPixelTheme
                 ? "border-2 border-border/90 rounded-xl shadow-[3px_3px_0px_rgba(0,0,0,0.1)] font-mono"
                 : "border border-border rounded-xl shadow-2xs"
             )}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between gap-1 mb-1.5 shrink-0 text-xs">
-              <div className="flex items-center gap-1.5 font-bold text-foreground">
-                {isPixelTheme ? <PixelSword size={13} /> : <span className="size-2 rounded-2xs bg-emerald-500 shrink-0" />}
-                <span>{isPixelTheme ? "每日修行" : "习惯修行"}</span>
-                <span className="text-[11px] font-semibold text-muted-foreground tabular-nums">
-                  {checkedHabits.length}/{todayHabits.length}
-                </span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                {isPixelTheme ? <PixelFlame size={14} /> : <Flame size={14} className="text-amber-500" />}
+                <span>{isPixelTheme ? "每日修行历练" : "习惯追踪打卡"}</span>
               </div>
-
-              {maxHabitStreak > 0 && (
-                <div
-                  className={cn(
-                    "inline-flex items-center gap-1 px-1.5 py-0.2 text-[10px] font-semibold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/60 border border-amber-500/40",
-                    isPixelTheme ? "rounded-xs font-mono shadow-[1px_1px_0px_#000]" : "rounded-full"
-                  )}
-                >
-                  {isPixelTheme ? <PixelFlame size={10} /> : <Flame size={10} className="text-amber-500" />}
-                  <span>连击 {maxHabitStreak} 天</span>
-                </div>
-              )}
+              <span className="text-[11px] font-medium text-muted-foreground tabular-nums">
+                {todayHabits.length > 0
+                  ? `${checkedHabits.length}/${todayHabits.length} 已完成`
+                  : "今日无习惯"}
+              </span>
             </div>
 
-            {/* Micro Progress Bar */}
-            {todayHabits.length > 0 && (
-              <div
-                className={cn(
-                  "w-full overflow-hidden mb-1.5 shrink-0",
-                  isPixelTheme
-                    ? "h-2 rounded-xs border border-border/90 bg-muted/60 p-[0.5px] shadow-[1px_1px_0px_#000]"
-                    : "h-1 bg-muted rounded-full"
-                )}
-              >
-                <div
-                  className={cn(
-                    "h-full transition-all duration-300",
-                    isPixelTheme ? "bg-amber-500 rounded-xs" : "bg-emerald-500 rounded-full"
-                  )}
-                  style={{
-                    width: `${todayHabits.length > 0 ? (checkedHabits.length / todayHabits.length) * 100 : 0}%`,
-                  }}
-                />
-              </div>
-            )}
-
-            {/* Habit Items Scroll Area */}
-            <div className="flex-1 overflow-y-auto divide-y divide-border/50 text-xs pr-0.5">
+            {/* Habit Items Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none">
               {todayHabits.length === 0 ? (
-                <div className="h-full flex items-center justify-center text-[11px] text-muted-foreground">
-                  今日暂无修行指标
-                </div>
+                <span className="text-xs text-muted-foreground italic py-1">暂无打卡习惯</span>
               ) : (
                 todayHabits.map((habit) => {
-                  const isChecked = getCheckInStatus(checkIns, habit.id, today);
-                  const streak = getHabitStreak(checkIns, habit.id);
-
+                  const isDone = getCheckInStatus(checkIns, habit.id, today);
                   return (
-                    <div
+                    <button
                       key={habit.id}
+                      type="button"
+                      onClick={() => toggleCheckIn(habit.id, today, !isDone)}
                       className={cn(
-                        "flex items-center justify-between gap-2 py-1 transition-opacity",
-                        isChecked && "opacity-60"
+                        "flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium transition-all cursor-pointer shrink-0 border select-none",
+                        isPixelTheme ? "rounded-xs" : "rounded-lg",
+                        isDone
+                          ? isPixelTheme
+                            ? "bg-emerald-100/90 text-emerald-900 border-emerald-700/60 shadow-[1px_1px_0px_#064e3b] dark:bg-emerald-950 dark:text-emerald-300"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-300 dark:border-emerald-800/60 shadow-2xs"
+                          : isPixelTheme
+                            ? "bg-muted/40 text-muted-foreground border-border hover:border-emerald-600 hover:text-foreground"
+                            : "bg-muted/30 text-muted-foreground border-border hover:border-emerald-500 hover:text-foreground"
                       )}
                     >
-                      <span
-                        className={cn(
-                          "truncate text-xs font-medium flex-1",
-                          isChecked && "line-through text-muted-foreground"
-                        )}
-                      >
-                        {habit.name}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground/80 tabular-nums shrink-0">
-                        {streak > 0 ? `${streak}天` : ""}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => toggleCheckIn(habit.id, today, !isChecked)}
-                        className={cn(
-                          "size-5 flex items-center justify-center text-[10px] font-bold cursor-pointer transition-all shrink-0",
-                          isPixelTheme ? "rounded-xs" : "rounded-full",
-                          isChecked
-                            ? "bg-emerald-500 text-white shadow-2xs"
-                            : isPixelTheme
-                            ? "border border-border bg-muted/80 hover:bg-emerald-100 hover:text-emerald-700 shadow-[1px_1px_0px_#000]"
-                            : "border border-border bg-background hover:bg-emerald-50 hover:text-emerald-600"
-                        )}
-                      >
-                        {isChecked ? "✓" : "+"}
-                      </button>
-                    </div>
+                      <span className={cn("size-2 rounded-full", isDone ? "bg-emerald-500" : "bg-slate-300 dark:bg-slate-600")} />
+                      <span>{habit.name}</span>
+                    </button>
                   );
                 })
               )}
             </div>
+
+            {/* Continuous Streak Indicator */}
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/50 pt-1.5">
+              <span>最高连续打卡</span>
+              <span className="font-bold text-amber-600 dark:text-amber-400 tabular-nums">
+                🔥 {maxHabitStreak} 天连胜
+              </span>
+            </div>
           </div>
 
-          {/* 下半卡片：今日原地复盘结印卡 */}
+          {/* 下卡片：每日复盘快速记录 */}
           <div
             className={cn(
-              "flex flex-col flex-1 bg-card overflow-hidden p-3",
+              "flex-1 bg-card p-3 flex flex-col justify-between overflow-hidden",
               isPixelTheme
                 ? "border-2 border-border/90 rounded-xl shadow-[3px_3px_0px_rgba(0,0,0,0.1)] font-mono"
                 : "border border-border rounded-xl shadow-2xs"
             )}
           >
-            {/* Header */}
-            <div className="flex items-center justify-between gap-1 mb-1.5 shrink-0 text-xs">
-              <div className="flex items-center gap-1.5 font-bold text-foreground">
-                {isPixelTheme ? <PixelScroll size={13} /> : <span className="size-2 rounded-2xs bg-amber-500 shrink-0" />}
-                <span>{isPixelTheme ? "冒险日志结印" : "今日原地复盘"}</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                {isPixelTheme ? <PixelScroll size={14} /> : <Sparkles size={14} className="text-purple-500" />}
+                <span>{isPixelTheme ? "今日冒险日志" : "今日深度复盘"}</span>
               </div>
-
               <button
                 type="button"
                 onClick={() => navigate({ to: "/daily-review" })}
-                className={cn(
-                  "text-[10px] text-primary hover:underline flex items-center gap-0.5 cursor-pointer font-medium",
-                  isPixelTheme && "font-mono font-bold"
-                )}
-                title="进入完整复盘日志与复利图表"
+                className="text-[11px] text-primary hover:underline flex items-center gap-0.5 font-medium cursor-pointer"
               >
-                <span>完整日志</span>
+                <span>完整复盘</span>
                 <ChevronRight size={11} />
               </button>
             </div>
 
-            {/* In-situ Input Body */}
-            <div className="flex-1 flex flex-col min-h-0 relative">
-              <textarea
+            {/* Quick Review Input */}
+            <div className="my-1">
+              <input
+                type="text"
                 value={reviewInput}
                 onChange={(e) => setReviewInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                    handleSaveReview();
-                  }
+                  if (e.key === "Enter") handleSaveReview();
                 }}
-                placeholder={
-                  reviewWritten
-                    ? "✨ 今日心得已结印，可在此继续补充感悟 (Ctrl+Enter 保存)..."
-                    : "记录今日收获与心得，一键结印完成今日复盘..."
-                }
+                placeholder={reviewWritten ? "今日已完成复盘，点此追加回顾..." : "记录今日的心得与收获，回车保存..."}
                 className={cn(
-                  "w-full flex-1 p-2 text-xs outline-none resize-none transition-colors border text-foreground placeholder:text-muted-foreground/60",
+                  "w-full px-2.5 py-1 text-xs bg-muted/40 border border-border/70 text-foreground placeholder:text-muted-foreground/60 outline-hidden transition-colors",
                   isPixelTheme
-                    ? "rounded-xs border-border bg-muted/40 focus:bg-background focus:border-amber-600 font-mono shadow-[1px_1px_0px_#000]"
-                    : "rounded-lg border-border/70 bg-background/50 focus:border-primary focus:bg-background"
+                    ? "rounded-xs focus:border-amber-600 font-mono"
+                    : "rounded-lg focus:border-primary focus:ring-1 focus:ring-primary/20"
                 )}
               />
+            </div>
 
-              {/* Action Bar */}
-              <div className="flex items-center justify-between pt-1.5 shrink-0">
-                <span className="text-[10px] text-muted-foreground/80 truncate">
-                  {isSavedFeedback ? (
-                    <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
-                      <CheckCircle2 size={11} />
-                      <span>已成功结印存档</span>
-                    </span>
-                  ) : reviewWritten ? (
-                    <span className="text-emerald-600 dark:text-emerald-400">已沉淀今日日志</span>
-                  ) : (
-                    <span>完成度 {Math.round((completedTasks.length / Math.max(1, dueTasks.length)) * 100)}%</span>
-                  )}
-                </span>
-
-                <button
-                  type="button"
-                  disabled={!reviewInput.trim()}
-                  onClick={handleSaveReview}
-                  className={cn(
-                    "px-2.5 py-1 text-[11px] font-bold transition-all flex items-center gap-1 cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed",
-                    isPixelTheme
-                      ? "rounded-xs border-2 border-amber-900 bg-amber-500 hover:bg-amber-400 text-amber-950 shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
-                      : "rounded-md bg-primary text-primary-foreground hover:bg-primary/90 shadow-2xs"
-                  )}
-                >
-                  <Sparkles size={11} />
-                  <span>{reviewWritten ? "更新结印" : "结印存档"}</span>
-                </button>
-              </div>
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/50 pt-1.5">
+              <span>{reviewWritten ? "✅ 今日日志已就绪" : "⏳ 尚未提交复盘"}</span>
+              <span className={cn("text-[10px]", isSavedFeedback ? "text-emerald-500 font-bold" : "text-muted-foreground/50")}>
+                {isSavedFeedback ? "✓ 已保存" : "按 Enter 保存"}
+              </span>
             </div>
           </div>
         </div>
       </div>
 
-      {/* ===== 下屏：项目宏观全景甘特时间线 ===== */}
-      <div className="w-full pt-1">
-        <ProjectTimeline />
-      </div>
+      {/* ===== 下屏：项目全景时间轴与甘特图联动 ===== */}
+      <ProjectTimeline />
     </div>
   );
 };
-
-

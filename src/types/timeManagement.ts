@@ -42,6 +42,8 @@ export interface TaskDraft {
   scheduledStartAt?: number;
   scheduledEndAt?: number;
   reminder?: string;
+  projectId?: string;
+  projectStageId?: string;
 }
 
 export interface TimeManagementData {

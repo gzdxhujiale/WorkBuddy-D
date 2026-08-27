@@ -570,6 +570,8 @@ export const ProjectTimeline: React.FC = () => {
 
     void openQuickEditWindow({
       task: dummyTask,
+      projects,
+      stages,
       anchorEl,
       onCommit: (_id, updates) => {
         void saveTask({ ...dummyTask, ...updates });
@@ -988,6 +990,8 @@ export const ProjectTimeline: React.FC = () => {
                                             e.stopPropagation();
                                             void openQuickEditWindow({
                                               task,
+                                              projects,
+                                              stages,
                                               anchorEl: e.currentTarget,
                                               onCommit: (taskId, updates) => {
                                                 void saveTask({ ...task, ...updates, id: taskId });
@@ -1307,6 +1311,8 @@ export const ProjectTimeline: React.FC = () => {
                                               e.stopPropagation();
                                               void openQuickEditWindow({
                                                 task,
+                                                projects,
+                                                stages,
                                                 anchorEl: e.currentTarget,
                                                 onCommit: (taskId, updates) => {
                                                   void saveTask({ ...task, ...updates, id: taskId });

@@ -1,113 +1,112 @@
-# Frontend engineering
+# 前端工程规范 (Frontend Engineering)
 
-## Overview
+## Frontend Overview
 
-The frontend is React 19 + TypeScript + Vite + Tailwind CSS. TanStack Router provides the main route tree, TanStack Query owns remote state, and Zustand holds UI-only state. `pnpm build` runs strict TypeScript checking and the Vite production build.
+WorkBuddy-D 前端基于 React 19、TypeScript、Vite 7、Tailwind CSS 与 Arco Design 构建。系统采用多 Webview 架构，主窗口与辅助弹窗（任务极速编辑 `quick-edit.html`、专注助手 `focus-assistant.html`、通知浮层 `notification-toast.html`）共享状态与主题规范。前端以 TanStack Router 承载路由，TanStack Query 驱动服务端异步状态，Zustand 掌控纯客户端 UI 状态。
 
-The application has three HTML/webview entry points:
+## Source Structure
 
-| Entry point | Role |
-| --- | --- |
-| `src/main.tsx` | Main authenticated application and router. |
-| `src/quick-edit-window.tsx` | Lightweight task quick-edit webview. |
-| `src/focus-assistant-window.tsx` | Authenticated focus-assistant webview with Query support. |
+前端源码统一组织在 `src/` 目录下：
+- `src/main.tsx`：主窗口入口，初始化认证上下文、QueryClient、路由与主题注入。
+- `src/pages/`：路由级页面组件（`TodayPage`、`FourQuadrantsPage`、`ProjectsPage`、`HabitPage`、`KnowledgePage`、`DailyReviewPage`）。
+- `src/components/`：业务功能组件目录（`today/`、`time-management/`、`habit/`、`knowledge/`、`focus/`）及基础原子组件库（`src/components/ui/`）。
+- `src/hooks/`：领域数据 Hook，封装 TanStack Query 的加载、乐观更新与突变操作。
+- `src/services/`：Supabase 数据访问层，隔离 PostgREST 查询与 RPC 写入。
+- `src/stores/`：Zustand 客户端 UI 状态（选区、抽屉展开、双主题切换等）。
+- `src/lib/`：认证上下文、Query Keys、实时同步引擎、离线重放队列与日期/排期算法。
+- `src/types/`：TypeScript 领域与数据模型类型定义。
 
-## Structure and routing
+## Component Design
 
-- `src/router.tsx` defines `/today`, `/four-quadrants`, `/habit`, `/lists`, and `/daily-review`; route components are lazily imported.
-- `src/components/layout/AppLayout.tsx` supplies the desktop shell and route fallback.
-- `src/pages/` composes the route-level feature panels.
-- `src/components/` contains feature UI, layout, focus UI, and reusable primitives in `components/ui/`.
-- `src/types/` is the frontend type boundary; `@/*` resolves to `src/*`.
+组件划分严格遵循单一职责与高内聚原则：
+- **容器与页面组件 (`src/pages/`)**：负责路由参数解析、页面骨架编排与领域 Hook 绑定。
+- **业务领域组件 (`src/components/`)**：封装特定领域的交互逻辑与组合呈现，通过 Props 接收数据或消费领域 Hook。
+- **基础原子组件 (`src/components/ui/`)**：无业务侵入的通用 UI 基座（如 Button、Dialog、Modal、Drawer、Input 等），集成 `useAppThemeStyle` 支持双主题样式穿透。
 
-The root app resolves the Supabase session before rendering an authenticated route. On auth changes it clears query state and UI user state so a previous account’s cache cannot render for the next account. Secondary windows use `WindowSessionGate`; they must not assume the main app has already supplied React context.
+## Design System Usage
 
-## State and data model
+项目内置「现代极简（Modern Clean）」与「复古像素 8-Bit（Retro Pixel 8-Bit）」双套完整设计系统：
+- 基础组件优先采用 `src/components/ui/` 中的封装组件。
+- 业务涉及复杂弹层、下拉菜单与表格时，使用 `@arco-design/web-react` 配合 `getChildrenPopupContainer={() => document.body}` 防止弹层溢出截断。
+- 像素风组件采用 `src/components/pixel/` 中的专用像素图标与像素容器，保持整体 8-Bit 艺术一致性。
 
-| State kind | Owner | Use it for |
-| --- | --- | --- |
-| Server/cache state | TanStack Query | User-scoped records, refetching, invalidation, and optimistic cache updates. |
-| UI-only shared state | Zustand in `src/stores/` (`useUiStore.ts`) | Selection, drawer/modal state, per-user UI preferences, transient timeline hover linkage (`hoveredStageId`), and cross-route active project selection (`activeProjectId`). |
-| Local component state | React hooks | Drafts, transient interaction state, and surface-local feedback. |
-| Database access | `src/services/` and feature hooks | Mapping Supabase rows, RPC calls, reads, and domain mutations. |
+## Styling
 
-Query keys are defined in `src/lib/syncEngine.ts`. Use the narrowest matching key for an invalidation. Do not add a second global store for data already owned by Query.
+- 样式系统采用 Tailwind CSS 配合 CSS 变量（`src/index.css`）驱动。
+- 色彩与层级定义遵循 [docs/DESIGN.md](DESIGN.md) 的语义化 Token 体系（`bg-background`、`bg-card`、`text-foreground`、`text-muted-foreground`、`border-border` 等）。
+- 严禁在业务组件中硬编码十六进制色值，所有主题色必须映射至 Tailwind 语义类或设计系统 Token。
 
-## Reads, writes, and synchronization
+## State Management
 
-Domain hooks compose Query with services. Services perform Supabase reads and RPC writes; `useTimeManagement.ts` is an existing hook-level read exception. Follow the closest established domain pattern instead of calling Supabase from new presentation components.
+前端严格贯彻状态所有权清晰分离原则：
+- **服务端异步持久化状态**：由 TanStack Query 独占管理，包括任务、项目、习惯、笔记、复盘等。
+- **客户端全局 UI 状态**：由 Zustand (`src/stores/uiStore.ts`) 管理，包括选区高亮、折叠状态、双主题切换及时间轴联动悬停 ID。
+- **本地瞬时交互状态**：由组件内部 `useState` / `useReducer` 管理（如输入框 Draft、悬停浮层、局部展开等）。
 
-Optimistic writes are immediate and may be debounced by `useDebouncedMutation` or `useOptimisticSync`. `useOptimisticSync` owns one pending token and one latest dirty payload for each SyncKey, so high-frequency edits serialize as `idle -> pending -> syncing -> idle` without leaving a query permanently pending. Writes for the list, task, habit, and daily-review domains use `runOrQueue` where their service supports offline replay. A queued operation replaces an older pending operation for the same entity key; non-network errors are not silently queued.
+## Data Fetching
 
-The main window’s private Broadcast listener invalidates matching Query keys. It does not merge Broadcast payloads into authoritative records. Note writes keep the affected knowledge scope pending until their serialized RPC chain settles, so a writer does not refetch its own Broadcast hint mid-save.
+- 所有服务端数据查询均通过 `src/hooks/` 封装的 TanStack Query Hook 获取。
+- Query Key 统一由 `src/lib/syncEngine.ts` 中的 `queryKeys` 工厂方法生成（严格带有 `userId` 作用域）。
+- 页面与组件严禁直接调用 Supabase 客户端执行数据读取。
 
-## Rich-text editor boundary
+## Routing and Navigation
 
-WorkBuddy-D's application editor is **`reactjs-tiptap-editor`**, not a direct Tiptap integration. Tiptap packages are its underlying editor engine and extension API; business surfaces must reuse `src/components/ui/reactjs-tiptap-editor.tsx` rather than creating another `useEditor` composition. See the [reactjs-tiptap-editor integration reference](references/reactjs-tiptap-editor.md) for supported props, extensions, and usage by surface.
+- 路由由 TanStack Router 驱动，在 `src/router.tsx` 中定义路由表。
+- 页面路由采用动态懒加载导入，确保主应用包体积精简与首屏秒开。
+- 导航跳转统一使用 TanStack Router 的 `useNavigate` 或 `<Link />` 组件，保证类型安全。
 
-The knowledge module first loads its shell, then the selected list’s contents, note body, and templates on demand. Rich-text content is serialized JSON. Editor changes must be deduplicated, debounced, and written back with `emitUpdate: false` only when external content actually changed. Preserve the unmount-save and optimistic-version rules in [ARCHITECTURE.md](../ARCHITECTURE.md).
+## Forms and Validation
 
+- 轻量表单与就地录入（如 `TodayQuickAdd`）采用受控输入配合键盘事件监听（Enter 提交、Escape 取消）。
+- 复杂表单使用受控状态结合即时类型校验，提交前进行有效性检查并提供明确的错误反馈。
 
-Task descriptions use the same serialized Tiptap-document format while remaining a database `text` column. The task editor must accept legacy plain text, but compact task lists must render extracted plain text rather than the serialized JSON.
+## Loading
 
-## Styling and accessibility
+- **加载态 (Loading)**：数据获取中展示骨架屏或呼吸动画指示器，避免布局大幅抖动。
+- **空态 (Empty)**：当列表为空时，展示图文结合的引导性空状态面板（如今日无待办时提供快捷录入引导）。
+- **错误态 (Error)**：捕获 PostgREST 异常并通过全局 Toast 或边界 Fallback 给予用户可恢复的操作提示。
 
-Tailwind 4 is configured through `src/index.css`; it is the application's Tailwind CSS-first entry point, not a second styling system. That file owns semantic light/dark tokens, radius, shared animation definitions, and narrowly scoped global rules. `src/components/ui/` provides standard primitives; compose them before creating another parallel primitive.
+## Effects and Side Effects
 
-Key reusable primitives in `src/components/ui/` (all integrated with `useAppThemeStyle` for dual-theme token support):
-- `dialog.tsx` — accessible modal dialogs with dual-theme border, shadow, and title tokens.
-- `modal.tsx` — bridges the official `@arco-design/web-react` Modal component with theme style penetration and `getChildrenPopupContainer={() => document.body}` escape to guarantee child dropdowns and date pickers are not clipped by modal boundaries.
-- `drawer.tsx` — slide-over panels for knowledge details and focus sessions with theme tokens.
-- `date-picker.tsx` — standalone (`DatePicker`) and range (`DateRangePicker`) picker with dual-month grid, time modes, and theme tokens.
-- `select.tsx` — bridges the official `@arco-design/web-react` Select dropdown component with `getPopupContainer={() => document.body}`, `triggerProps.zIndex: 1100`, and pixel theme tokens.
-- `input-tag.tsx` — bridges the official `@arco-design/web-react` InputTag component with theme-aware tag rendering.
-- `dropdown-menu.tsx` — accessible floating dropdown menu with 3px solid black shadow in pixel mode.
-- `toast.tsx` — application-wide toast notification system with dual-theme badge styling.
-- `popconfirm.tsx` — inline confirmation popovers for destructive and critical actions with dual-theme tokens.
-- `button.tsx` — foundation button primitive with dual-theme variants, active press translation (`active:translate(1.5px, 1.5px)`), and shadow tokens.
-- `input.tsx` — foundation single-line text input with dual-theme border, focus glow, and shadow tokens.
-- `badge.tsx` — status and priority badges with theme-aware border and monospace tokens.
-- `card.tsx` & `item.tsx` — universal card and list-item containers with dual-theme background, border, active selection cursor indicators, and shadow tokens.
-- `switch.tsx` — accessible switch toggle primitive with dual-theme track, border, and precision thumb positioning preventing misalignment/overflow in pixel mode.
+- 副作用严格限制在 `useEffect` 或事件处理函数中，严禁在渲染流程中直接触发状态更新。
+- 定时器、广播订阅与窗口事件监听器必须在 Effect 清理函数中完整注销，防止内存泄漏。
 
-### Route transitions and animations
+## Hooks and Reusable Logic
 
-- **Main Route Canvas Transition**: In `src/components/layout/AppLayout.tsx`, the route canvas `<Outlet />` is wrapped in a dynamic container keyed by `useLocation().pathname`. Route switching triggers:
-  - **Pixel mode**: `animate-pixel-page-in` (`100ms steps(3, jump-none)` 8-bit logbook page step-in fade);
-  - **Modern mode**: `animate-fade-in` (`100ms ease-out` smooth subtle fade).
-- **Navigation and Item Cursor Hop**: Selection cursors (`▶`) use `animate-pixel-hop` (`0.8s steps(2) infinite` horizontal step hop), centered vertically via an absolute flex container.
-- **Secondary Sidebar Transition**: Knowledge base sidebar collapsing/expanding in pixel mode applies `[transition-timing-function:steps(4,jump-none)]`.
+- 通用交互逻辑与外部系统抽象（如主题感知 `useAppThemeStyle`、防抖突变 `useDebouncedMutation`、乐观同步 `useOptimisticSync`）沉淀于 `src/hooks/`。
+- 自定义 Hook 严格遵循以 `use` 开头的命名规范并保持高内聚性。
 
-### Theme style system and multi-window IPC synchronization
+## TypeScript
 
-The application supports dual design systems: `default` (现代简洁风 / Modern Clean) and `retro-pixel` (复古像素风 / Retro Pixel 8-Bit，系统默认), coordinated through:
-- **Hook & Preferences API**: `useAppThemeStyle()` in `src/hooks/useAppThemeStyle.ts` and `getAppThemeStyle()`, `setAppThemeStyle()`, `applyAppThemeStyle()` in `src/lib/preferences.ts` (defaults to `"retro-pixel"` when unconfigured).
-- **Tauri IPC Global Broadcast**: Setting the theme emits `emit("workbuddy:theme-style-change", { style })`. All independent Webviews (`main`, `task-quick-edit`, `focus-assistant`) listen to this event and call `applyAppThemeStyle(style)` to synchronously toggle `.theme-retro-pixel` on `document.documentElement`.
-- **Pixel Icons System**: `src/components/pixel/PixelIcons.tsx` provides hand-crafted 8-bit SVG icons (`PixelSword`, `PixelScroll`, `PixelSparkle`, `PixelCalendar`, `PixelFlame`, `PixelLeaf`, `PixelBolt`, `PixelDrop`, `PixelBadge`, etc.) for rich retro game aesthetics.
+- 全局开启 TypeScript 严格模式（`strict: true`、`noUnusedLocals: true`、`noUnusedParameters: true`）。
+- 领域实体类型统一定义在 `src/types/` 中，严禁使用 `any` 绕过类型检查。
 
-### Drag and drop coordination
+## Performance
 
-Drag and drop across the application (including knowledge-base sidebar ordering, note sorting/moving across knowledge folders and groups in `src/components/knowledge/KnowledgePanel.tsx`, and project task boards) is centrally coordinated via `@dnd-kit`. Do not implement custom HTML5 drag listeners or parallel drag libraries.
+- 对高频重计算的过滤、排序与象限分组使用 `useMemo` 进行记忆化。
+- 跨多组件传递的回调函数使用 `useCallback` 稳定引用。
+- 富文本编辑器采用按需加载策略，避免在非激活状态下全量初始化重型编辑器引擎。
 
-### Tailwind and CSS boundary
+## Accessibility Implementation
 
-| Need | Preferred location | Rationale |
-| --- | --- | --- |
-| A screen- or component-local layout, spacing, color, state, or responsive rule | Tailwind utility classes in the TSX component | Keeps visual intent next to the rendered element and uses semantic theme tokens. |
-| A reusable primitive's variants or internal styling | The owning component in `src/components/ui/` | Prevents page-level copies of the same component contract. |
-| Semantic tokens, dark-theme values, global base styles, shared keyframes, or Tauri window-root styling | `src/index.css` | These rules intentionally apply outside one component and are Tailwind v4 configuration. |
-| A third-party element mounted outside React's component tree, such as a portal directly under `body` | A narrowly scoped rule in `src/index.css`, with a comment explaining the external DOM contract | Utility classes cannot reach an element the application does not render. |
+- 交互按钮与复选框均提供标准语义标签（`role="checkbox"`、`aria-checked`）与 `title` 属性。
+- 关键表单支持全键盘操作（Tab 切换焦点、Enter 提交、Escape 退出）。
 
-Do not add broad element selectors or unscoped `!important` rules for normal component styling. The `/` command menu rule is an intentional exception: `reactjs-tiptap-editor` mounts it directly under `body`, while the Tauri task quick-edit layers use fixed z-indexes. The selector is scoped to `html.tqe-window` and raises only that third-party floating menu above those layers.
+## Testing
 
-Use semantic HTML and the existing accessibility conventions: labelled icon buttons, real dialog semantics, stateful ARIA attributes, labelled navigation, and local alerts/live regions. Accessibility is implemented in many components but has no configured automated audit.
+- 构建与类型门禁以 `pnpm build`（`tsc && vite build`）为基准执行严格校验。
+- 关键排期与逾期计算逻辑（如 `taskBelongsToToday`、`isTaskOverdue`）具备确定性的输入输出边界。
 
-For visual design direction, aesthetic choices, typography pairing, and anti-template UI design when creating or reshaping screens, read `.agents/skills/frontend-design/SKILL.md`. For shared token, theme, reusable-component, or cross-screen visual work, read `.agents/skills/tailwind-design-system/SKILL.md`. Do not load that workflow for an isolated utility-class edit.
+## Frontend Invariants
 
-## Errors, loading, and performance
+1. **UI 与数据访问严格解耦**：组件严禁直接调用 Supabase 客户端，必须通过 Hook 与 Service 层操作。
+2. **状态所有权分离**：TanStack Query 拥有服务端状态，Zustand 仅掌控客户端 UI 状态，严禁在 Zustand 中伪造服务端真值。
+3. **实时广播为无状态失效提示**：接收到 Broadcast 广播后仅失效对应 Query Key 重新拉取，禁止直接覆盖本地缓存。
+4. **主题样式统一穿透**：所有新增组件必须同时适配现代极简风与复古像素 8-Bit 风。
 
-The Query client disables automatic retry/reconnect/mount refetching to avoid request bursts during Supabase incidents. Failures must be surfaced by the relevant feature; `logSilent` is diagnostic only. `AppErrorBoundary` protects the main webview from render-time blank screens, and persistence/export actions show a Toast after logging their failure and reconciling stale optimistic state. Routes are lazy-loaded and the app shell provides a Suspense fallback. No repository-owned error-monitoring, metrics, tracing, or performance budget is configured.
+## Frontend Review Criteria
 
-## Verification
-
-There is no configured frontend test, lint, or formatter script. Run `pnpm build` for frontend changes and manually exercise the affected authenticated route or secondary window. For Tiptap work use the `tiptap` skill; for substantial React implementation, refactoring, review, or performance work use `vercel-react-best-practices`; for distinctive visual design and aesthetic direction use `frontend-design`.
+- [ ] 是否通过 `pnpm build` 且无任何 TypeScript 报错与未使用的变量？
+- [ ] 数据流向是否符合 Hook -> Service -> Supabase 的单向分层？
+- [ ] 新增交互是否同时支持键盘快捷操作与双主题视觉呈现？
+- [ ] 是否正确处理了加载态、空状态与异常回滚？

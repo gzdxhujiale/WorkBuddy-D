@@ -16,6 +16,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { useTimeManagementData, useTaskActions } from "@/hooks/useTimeManagement";
+import { useProjectsData } from "@/hooks/useProjects";
 import { Task, QuadrantType } from "@/types/timeManagement";
 import { DailyQuadrants } from "./DailyQuadrants";
 import { DayView } from "./DayView";
@@ -51,6 +52,10 @@ export const TimeManagementPanel: React.FC = () => {
 
   const { data: tmData } = useTimeManagementData();
   const tasks = tmData?.tasks ?? [];
+
+  const { data: projectsData } = useProjectsData();
+  const projects = projectsData?.projects ?? [];
+  const stages = projectsData?.stages ?? [];
 
   const { addTask, updateTask, deleteTask, moveAndReorderTask } = useTaskActions();
 
@@ -101,6 +106,8 @@ export const TimeManagementPanel: React.FC = () => {
     void openQuickEditWindow({
       task,
       quadrant,
+      projects,
+      stages,
       anchorEl: targetEl,
       onCommit: (taskId, updates) => {
         updateTask(taskId, updates);
@@ -112,6 +119,8 @@ export const TimeManagementPanel: React.FC = () => {
           scheduledStartAt: draft.scheduledStartAt,
           scheduledEndAt: draft.scheduledEndAt,
           reminder: draft.reminder,
+          projectId: draft.projectId,
+          projectStageId: draft.projectStageId,
         });
       },
       onClosed: () => {},

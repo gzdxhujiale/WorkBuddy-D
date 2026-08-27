@@ -32,6 +32,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { DateRangePicker } from "@/components/ui/date-picker";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { useProjectsData } from "@/hooks/useProjects";
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { openQuickEditWindow } from "@/services/quickEditWindow";
 import { createTaskId } from "@/lib/entityIds";
@@ -213,6 +214,9 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
   onDeleteTask,
 }) => {
   const { isPixelTheme } = useAppThemeStyle();
+  const { data: pData } = useProjectsData();
+  const allProjects = pData?.projects ?? [];
+  const allStages = pData?.stages ?? [];
   const [expanded, setExpanded] = useState(true);
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(stage.name);
@@ -252,6 +256,8 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
     void openQuickEditWindow({
       anchorEl,
       quadrant: "Q2",
+      projects: allProjects,
+      stages: allStages,
       onCreate: (_quadrant, draftData) => {
         void onSaveTask({
           id: createTaskId(),
@@ -268,8 +274,8 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
               ? "low"
               : "high"),
           completed: false,
-          projectId: stage.projectId,
-          projectStageId: stage.id,
+          projectId: draftData.projectId || stage.projectId,
+          projectStageId: draftData.projectStageId || stage.id,
           scheduleMode: draftData.scheduleMode,
           scheduledStartAt: draftData.scheduledStartAt,
           scheduledEndAt: draftData.scheduledEndAt,
@@ -307,6 +313,8 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
     e.stopPropagation();
     void openQuickEditWindow({
       task,
+      projects: allProjects,
+      stages: allStages,
       anchorEl: e.currentTarget,
       onCommit: (taskId, updates) => {
         void onSaveTask({

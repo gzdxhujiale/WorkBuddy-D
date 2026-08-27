@@ -15,6 +15,7 @@ import {
   Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useProjectsData } from "@/hooks/useProjects";
 import { openQuickEditWindow } from "@/services/quickEditWindow";
 import { createTaskId } from "@/lib/entityIds";
 import { formatDateYMD } from "@/lib/dateUtils";
@@ -78,6 +79,9 @@ export function ProjectTableView({
   onDeleteTask,
 }: ProjectTableViewProps) {
   const { isPixelTheme } = useAppThemeStyle();
+  const { data: pData } = useProjectsData();
+  const allProjects = pData?.projects ?? [];
+  const allStages = pData?.stages ?? [];
 
   // Search & Filter
   const [searchQuery, setSearchQuery] = useState("");
@@ -475,6 +479,8 @@ export function ProjectTableView({
                         onClick={(e) => {
                           void openQuickEditWindow({
                             task,
+                            projects: allProjects,
+                            stages: allStages,
                             anchorEl: e.currentTarget,
                             onCommit: (taskId, updates) => {
                               void onSaveTask({ ...task, ...updates, id: taskId });

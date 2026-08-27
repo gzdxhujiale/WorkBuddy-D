@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { useProjectsData } from "@/hooks/useProjects";
+import { useTaskActions } from "@/hooks/useTimeManagement";
 import { PixelScroll, PixelShield } from "@/components/pixel/PixelIcons";
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { openQuickEditWindow } from "@/services/quickEditWindow";
@@ -40,6 +42,10 @@ export const StageTaskPopover: React.FC<StageTaskPopoverProps> = ({
   onNavigateToProject,
 }) => {
   const { isPixelTheme } = useAppThemeStyle();
+  const { data: projectsData } = useProjectsData();
+  const allProjects = projectsData?.projects ?? [];
+  const allStages = projectsData?.stages ?? [];
+  const { updateTask } = useTaskActions();
   const [quickTitle, setQuickTitle] = useState("");
   const [isAdding, setIsAdding] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -83,9 +89,11 @@ export const StageTaskPopover: React.FC<StageTaskPopoverProps> = ({
     e.stopPropagation();
     void openQuickEditWindow({
       task: task as Task,
+      projects: allProjects,
+      stages: allStages,
       anchorEl: e.currentTarget,
-      onCommit: (_taskId, _updates) => {
-        // Query invalidation takes care of sync
+      onCommit: (taskId, updates) => {
+        updateTask(taskId, updates);
       },
       onClosed: () => {},
     });

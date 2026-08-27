@@ -25,6 +25,7 @@ import {
   CalendarDays,
   Check,
   X,
+  FolderKanban,
 } from "lucide-react";
 import dayjs from "dayjs";
 import {
@@ -36,12 +37,14 @@ import {
   reminderLabel,
   TaskDraft,
 } from "@/types/timeManagement";
+import { Project, ProjectStage } from "@/types/projects";
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { ReactjsTiptapEditor } from "@/components/ui/reactjs-tiptap-editor";
 import { DateRangePicker } from "@/components/ui/date-picker";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { applyAppThemeStyle } from "@/lib/preferences";
 import { PixelScroll } from "@/components/pixel/PixelIcons";
+import { cn } from "@/lib/utils";
 
 // ==========================================
 // TaskQuickEdit — Tailwind v4 规范精简 3-Layer 快捷编辑浮层
@@ -105,6 +108,8 @@ export interface AnchorRect {
 interface TaskQuickEditPopoverProps {
   task?: Task;
   quadrant?: QuadrantType;
+  projects?: Project[];
+  stages?: ProjectStage[];
   anchorRect?: AnchorRect;
   /** Called once when the editor closes with the complete draft delta. */
   onCommit?: (taskId: string, updates: Partial<Task>) => void;
@@ -120,7 +125,7 @@ export interface TaskQuickEditHandle {
 
 export const TaskQuickEditPopover = memo(
   forwardRef<TaskQuickEditHandle, TaskQuickEditPopoverProps>(
-    ({ task, quadrant, anchorRect, onCommit, onCreate, onClose }, handleRef) => {
+    ({ task, quadrant, projects = [], stages = [], anchorRect, onCommit, onCreate, onClose }, handleRef) => {
       const { isPixelTheme } = useAppThemeStyle();
       const isCreate = !task;
       const [selectedQuadrant, setSelectedQuadrant] = useState<QuadrantType>(
@@ -130,6 +135,26 @@ export const TaskQuickEditPopover = memo(
       const flagRef = useRef<HTMLButtonElement>(null);
       const flagMenuRef = useRef<HTMLDivElement>(null);
       const meta = QUADRANT_META[selectedQuadrant];
+
+      // ---------- 项目 / 阶段 ----------
+      const [selectedProjectId, setSelectedProjectId] = useState<string | null>(
+        task?.projectId ?? null
+      );
+      const [selectedProjectStageId, setSelectedProjectStageId] = useState<string | null>(
+        task?.projectStageId ?? null
+      );
+      const [projectMenuOpen, setProjectMenuOpen] = useState(false);
+      const projectRef = useRef<HTMLButtonElement>(null);
+      const projectMenuRef = useRef<HTMLDivElement>(null);
+
+      const activeProject = useMemo(
+        () => projects.find((p) => p.id === selectedProjectId),
+        [projects, selectedProjectId]
+      );
+      const activeStage = useMemo(
+        () => stages.find((s) => s.id === selectedProjectStageId),
+        [stages, selectedProjectStageId]
+      );
 
       // ---------- 标题 / 描述 ----------
       const [title, setTitle] = useState(task?.title ?? "");
@@ -273,6 +298,8 @@ export const TaskQuickEditPopover = memo(
         rangeAllDay,
         appliedReminder,
         selectedQuadrant,
+        selectedProjectId,
+        selectedProjectStageId,
       });
       useEffect(() => {
         draftRef.current = {
@@ -286,6 +313,8 @@ export const TaskQuickEditPopover = memo(
           rangeAllDay,
           appliedReminder,
           selectedQuadrant,
+          selectedProjectId,
+          selectedProjectStageId,
         };
       }, [
         dateSel,
@@ -298,6 +327,8 @@ export const TaskQuickEditPopover = memo(
         rangeAllDay,
         appliedReminder,
         selectedQuadrant,
+        selectedProjectId,
+        selectedProjectStageId,
       ]);
 
       const submitCreate = () => {
@@ -316,6 +347,9 @@ export const TaskQuickEditPopover = memo(
             : undefined;
         if (isRange && (!scheduledStartAt || !scheduledEndAt || scheduledEndAt <= scheduledStartAt)) return;
         const q = draft.selectedQuadrant;
+        const effectiveStageId = draft.selectedProjectId
+          ? draft.selectedProjectStageId || stages.find((s) => s.projectId === draft.selectedProjectId)?.id
+          : undefined;
         onCreate?.({
           title: t,
           description: hasTaskDescription(finalDesc) ? finalDesc : undefined,
@@ -325,6 +359,8 @@ export const TaskQuickEditPopover = memo(
           scheduledStartAt,
           scheduledEndAt,
           reminder: draft.appliedReminder ? serializeReminder(draft.appliedReminder) : undefined,
+          projectId: draft.selectedProjectId || undefined,
+          projectStageId: effectiveStageId,
         });
       };
 
@@ -343,6 +379,9 @@ export const TaskQuickEditPopover = memo(
         if (isRange && (!scheduledStartAt || !scheduledEndAt || scheduledEndAt <= scheduledStartAt)) return;
 
         const q = draft.selectedQuadrant;
+        const effectiveStageId = draft.selectedProjectId
+          ? draft.selectedProjectStageId || stages.find((s) => s.projectId === draft.selectedProjectId)?.id
+          : undefined;
         const next: Partial<Task> = {
           title: latestTitle.current.trim() || task.title,
           description: hasTaskDescription(latestDescription.current)
@@ -354,6 +393,8 @@ export const TaskQuickEditPopover = memo(
           scheduledStartAt,
           scheduledEndAt,
           reminder: draft.appliedReminder ? serializeReminder(draft.appliedReminder) : undefined,
+          projectId: draft.selectedProjectId || undefined,
+          projectStageId: effectiveStageId,
         };
         const updates = Object.fromEntries(
           Object.entries(next).filter(([key, value]) => !Object.is(task[key as keyof Task], value)),
@@ -443,6 +484,10 @@ export const TaskQuickEditPopover = memo(
 
       // ---------- 分层关闭 ----------
       const closeOneLayer = (isEscape = false) => {
+        if (projectMenuOpen) {
+          setProjectMenuOpen(false);
+          return;
+        }
         if (flagMenuOpen) {
           setFlagMenuOpen(false);
           return;
@@ -485,6 +530,11 @@ export const TaskQuickEditPopover = memo(
             setFlagMenuOpen(false);
           }
 
+          if (projectMenuRef.current?.contains(t) || projectRef.current?.contains(t)) return;
+          if (projectMenuOpen) {
+            setProjectMenuOpen(false);
+          }
+
           if (timePopRef.current?.contains(t) || remindPopRef.current?.contains(t)) return;
           if (third) {
             setThird(null);
@@ -519,7 +569,7 @@ export const TaskQuickEditPopover = memo(
           window.removeEventListener("mousedown", onMouseDown, true);
           window.removeEventListener("keydown", onKeyDown);
         };
-      }, [third, dateOpen, flagMenuOpen, task?.id]);
+      }, [third, dateOpen, flagMenuOpen, projectMenuOpen, task?.id]);
 
       // ---------- 辅助计算 ----------
       const fieldText = useMemo(() => {
@@ -618,8 +668,8 @@ export const TaskQuickEditPopover = memo(
                 : "fixed z-[1050] bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-t-2xl rounded-b-none shadow-2xl text-slate-900 dark:text-slate-100 animate-in fade-in duration-100 select-none overflow-hidden"
             }
           >
-            {/* 顶栏：日期与提醒入口 + 象限 / 优先级 Flag */}
-            <div className={`flex items-center gap-2.5 px-3.5 py-3 border-b ${isPixelTheme ? "border-border bg-muted/30" : "border-slate-200/60 dark:border-slate-800/80"}`}>
+            {/* 顶栏：日期与提醒入口 + 项目/阶段选择器 + 象限 / 优先级 Flag + 完成按钮 */}
+            <div className={`flex items-center gap-2 px-3.5 py-3 border-b ${isPixelTheme ? "border-border bg-muted/30" : "border-slate-200/60 dark:border-slate-800/80"}`}>
               <button
                 ref={dateFieldRef}
                 type="button"
@@ -637,12 +687,169 @@ export const TaskQuickEditPopover = memo(
                 onClick={() => {
                   setThird(null);
                   setFlagMenuOpen(false);
+                  setProjectMenuOpen(false);
                   setDateOpen((v) => !v);
                 }}
               >
                 {isPixelTheme ? <PixelScroll size={16} className="flex-shrink-0" /> : <CalendarDays size={17} className="flex-shrink-0" />}
                 <span className="truncate">{fieldText}</span>
               </button>
+
+              {/* 项目 / 阶段选择器 (位于象限选择器左边) */}
+              <div className="relative">
+                <button
+                  ref={projectRef}
+                  type="button"
+                  onClick={() => {
+                    setDateOpen(false);
+                    setThird(null);
+                    setFlagMenuOpen(false);
+                    setProjectMenuOpen((v) => !v);
+                  }}
+                  className={cn(
+                    "flex items-center gap-1 px-2 py-1 text-xs transition-colors cursor-pointer shrink-0 max-w-[130px] select-none",
+                    activeProject
+                      ? isPixelTheme
+                        ? "bg-sky-100/90 text-sky-900 border border-sky-800/60 font-bold dark:bg-sky-950/80 dark:text-sky-300 shadow-[1px_1px_0px_#000] rounded-xs"
+                        : "bg-sky-50 text-sky-700 dark:bg-sky-950/60 dark:text-sky-300 border border-sky-200 dark:border-sky-800 rounded-lg font-medium"
+                      : isPixelTheme
+                        ? "text-muted-foreground hover:bg-muted border border-border/60 rounded-xs shadow-[1px_1px_0px_#000]"
+                        : "text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border border-transparent hover:border-slate-200 dark:hover:border-slate-700"
+                  )}
+                  title={activeProject ? `所属项目：${activeProject.name}${activeStage ? ` · ${activeStage.name}` : ''}` : "关联项目/阶段"}
+                >
+                  <FolderKanban size={15} className={activeProject ? "text-sky-500 shrink-0" : "text-muted-foreground shrink-0"} />
+                  <span className="truncate">
+                    {activeProject ? (
+                      <>
+                        {activeProject.name}
+                        {activeStage && <span className="opacity-70 text-[10px]"> · {activeStage.name}</span>}
+                      </>
+                    ) : (
+                      "项目"
+                    )}
+                  </span>
+                </button>
+
+                {/* 项目与阶段下拉菜单 */}
+                {projectMenuOpen && (
+                  <div
+                    ref={projectMenuRef}
+                    className={cn(
+                      "absolute right-0 top-full mt-1.5 z-50 min-w-56 max-h-72 overflow-y-auto p-1.5 shadow-xl animate-in fade-in zoom-in-95",
+                      isPixelTheme
+                        ? "bg-card border-2 border-border rounded-xs shadow-[3px_3px_0px_#000] font-mono"
+                        : "bg-popover border border-border rounded-xl shadow-lg"
+                    )}
+                  >
+                    <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground select-none">
+                      所属项目 (可选)
+                    </div>
+
+                    {/* 不关联项目选项 */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedProjectId(null);
+                        setSelectedProjectStageId(null);
+                        setProjectMenuOpen(false);
+                      }}
+                      className={cn(
+                        "w-full flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs text-left cursor-pointer transition-colors my-0.5",
+                        isPixelTheme ? "rounded-xs" : "rounded-lg",
+                        !selectedProjectId
+                          ? isPixelTheme
+                            ? "bg-muted font-bold text-foreground border border-border/60"
+                            : "bg-accent font-semibold text-foreground"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      <span className="truncate">不关联项目 (独立待办)</span>
+                      {!selectedProjectId && <Check size={12} className="text-primary shrink-0" />}
+                    </button>
+
+                    {projects.length > 0 && (
+                      <div className="h-px bg-border my-1 -mx-1" />
+                    )}
+
+                    {projects.map((p) => {
+                      const isCurrentProject = selectedProjectId === p.id;
+                      const pStages = stages.filter((s) => s.projectId === p.id);
+                      return (
+                        <div key={p.id} className="space-y-0.5 my-1">
+                          {/* 项目标题栏 */}
+                          <div
+                            className={cn(
+                              "flex items-center justify-between gap-1.5 px-2 py-1 text-[11px] font-semibold select-none",
+                              isCurrentProject
+                                ? "text-primary font-bold"
+                                : "text-muted-foreground"
+                            )}
+                          >
+                            <div className="flex items-center gap-1.5 truncate">
+                              <FolderKanban size={13} className="text-sky-500 shrink-0" />
+                              <span className="truncate">{p.name}</span>
+                            </div>
+                            {pStages.length === 0 && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setSelectedProjectId(p.id);
+                                  setSelectedProjectStageId(null);
+                                  setProjectMenuOpen(false);
+                                }}
+                                className={cn(
+                                  "text-[10px] px-1.5 py-0.5 rounded cursor-pointer transition-colors",
+                                  isCurrentProject
+                                    ? "bg-primary/20 text-primary font-bold"
+                                    : "bg-muted hover:bg-accent text-muted-foreground hover:text-foreground"
+                                )}
+                              >
+                                选择项目
+                              </button>
+                            )}
+                          </div>
+
+                          {/* 必须选择阶段：列出该项目下的所有阶段 */}
+                          {pStages.length > 0 && (
+                            <div className="pl-3.5 pr-1 space-y-0.5 border-l-2 border-border/60 ml-2.5 my-0.5">
+                              {pStages.map((stg) => {
+                                const isStageSelected =
+                                  isCurrentProject && selectedProjectStageId === stg.id;
+                                return (
+                                  <button
+                                    key={stg.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setSelectedProjectId(p.id);
+                                      setSelectedProjectStageId(stg.id);
+                                      setProjectMenuOpen(false);
+                                    }}
+                                    className={cn(
+                                      "w-full flex items-center justify-between gap-1.5 px-2 py-1.5 text-xs text-left cursor-pointer transition-colors",
+                                      isPixelTheme ? "rounded-xs" : "rounded-md",
+                                      isStageSelected
+                                        ? isPixelTheme
+                                          ? "bg-muted font-bold text-foreground border border-border/80"
+                                          : "bg-accent font-semibold text-foreground"
+                                        : "text-foreground hover:bg-muted"
+                                    )}
+                                  >
+                                    <span className="truncate">{stg.name}</span>
+                                    {isStageSelected && (
+                                      <Check size={12} className="text-primary shrink-0" />
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               <div className="relative">
                 <button
@@ -651,6 +858,7 @@ export const TaskQuickEditPopover = memo(
                   onClick={() => {
                     setDateOpen(false);
                     setThird(null);
+                    setProjectMenuOpen(false);
                     setFlagMenuOpen((v) => !v);
                   }}
                   className={`p-1 flex-shrink-0 grid place-items-center cursor-pointer transition-colors ${
@@ -1376,11 +1584,13 @@ interface TqeInitPayload {
   session: string;
   task: Task | null;
   quadrant: QuadrantType | null;
+  projects?: Project[];
+  stages?: ProjectStage[];
   anchor: AnchorRect;
 }
 
 function toWire(updates: Partial<Task>): Record<string, unknown> {
-  return Object.fromEntries(
+return Object.fromEntries(
     Object.entries(updates).map(([k, v]) => [k, v === undefined ? null : v])
   );
 }
@@ -1434,6 +1644,8 @@ export function TaskQuickEditWindow() {
       key={session}
       task={init.task ?? undefined}
       quadrant={init.quadrant ?? undefined}
+      projects={init.projects ?? []}
+      stages={init.stages ?? []}
       anchorRect={init.anchor}
       onCommit={(taskId, updates) => {
         void emit("tqe:commit", {

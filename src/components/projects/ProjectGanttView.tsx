@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { formatDateYMD, parseYMD, todayYMD } from "@/lib/dateUtils";
 import { cn } from "@/lib/utils";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
+import { useProjectsData } from "@/hooks/useProjects";
 import { openQuickEditWindow } from "@/services/quickEditWindow";
 import { createTaskId } from "@/lib/entityIds";
 import type { Project, ProjectStage, ProjectTask } from "@/types/projects";
@@ -85,6 +86,9 @@ export function ProjectGanttView({
   onSaveTask,
 }: ProjectGanttViewProps) {
   const { isPixelTheme } = useAppThemeStyle();
+  const { data: pData } = useProjectsData();
+  const allProjects = pData?.projects ?? [];
+  const allStages = pData?.stages ?? [];
   const todayStr = useMemo(() => todayYMD(), []);
 
   const [scale, setScale] = useState<GanttViewScale>("biweekly");
@@ -221,6 +225,8 @@ export function ProjectGanttView({
     void openQuickEditWindow({
       anchorEl: el,
       quadrant: "Q2",
+      projects: allProjects,
+      stages: allStages,
       onCreate: (_quadrant, draftData) => {
         void onSaveTask({
           id: createTaskId(),
@@ -416,6 +422,8 @@ export function ProjectGanttView({
                           onClick={(e) => {
                             void openQuickEditWindow({
                               task,
+                              projects: allProjects,
+                              stages: allStages,
                               anchorEl: e.currentTarget,
                               onCommit: (taskId, updates) => {
                                 void onSaveTask({ ...task, ...updates, id: taskId });
@@ -640,6 +648,8 @@ export function ProjectGanttView({
                                   e.stopPropagation();
                                   void openQuickEditWindow({
                                     task,
+                                    projects: allProjects,
+                                    stages: allStages,
                                     anchorEl: e.currentTarget,
                                     onCommit: (taskId, updates) => {
                                       void onSaveTask({ ...task, ...updates, id: taskId });

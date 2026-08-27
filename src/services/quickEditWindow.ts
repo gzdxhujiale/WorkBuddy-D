@@ -2,6 +2,7 @@ import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { getCurrentWindow, currentMonitor, PhysicalPosition } from '@tauri-apps/api/window';
 import { emitTo, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { Task, QuadrantType, TaskDraft } from '@/types/timeManagement';
+import type { Project, ProjectStage } from '@/types/projects';
 
 export function isTauriEnv(): boolean {
   return typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
@@ -16,6 +17,8 @@ const POOL_LABEL = 'task-quick-edit';
 export interface QuickEditWindowOptions {
   task?: Task;
   quadrant?: QuadrantType;
+  projects?: Project[];
+  stages?: ProjectStage[];
   anchorEl: HTMLElement;
   onCommit?: (taskId: string, updates: Partial<Task>) => void;
   onCreate?: (quadrant: QuadrantType, draft: TaskDraft) => void;
@@ -283,6 +286,8 @@ export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise
     session,
     task: opts.task ?? null,
     quadrant: opts.quadrant ?? null,
+    projects: opts.projects ?? [],
+    stages: opts.stages ?? [],
     anchor: localAnchor,
   });
 }
