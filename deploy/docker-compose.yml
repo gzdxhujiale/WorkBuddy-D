@@ -1,0 +1,41 @@
+version: "3.8"
+
+services:
+  workbuddy-db:
+    image: postgres:16-alpine
+    container_name: workbuddy-postgres-prod
+    environment:
+      POSTGRES_USER: ${DB_USER:-workbuddy}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-workbuddy_secure_pass}
+      POSTGRES_DB: ${DB_NAME:-workbuddy}
+    volumes:
+      - pgdata_prod:/var/lib/postgresql/data
+      - ../db/migrations/000001_init_schema.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    ports:
+      - "5432:5432"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-workbuddy} -d ${DB_NAME:-workbuddy}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  workbuddy-server:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: workbuddy-server-prod
+    restart: unless-stopped
+    env_file:
+      - ../.env
+    environment:
+      PORT: "8080"
+      GIN_MODE: release
+      DB_DSN: ${DB_DSN:-postgres://${DB_USER:-workbuddy}:${DB_PASSWORD:-workbuddy_secure_pass}@workbuddy-db:5432/${DB_NAME:-workbuddy}?sslmode=disable}
+      JWT_SECRET: ${JWT_SECRET:-workbuddy-desktop-default-jwt-secret-key-prod}
+    ports:
+      - "8080:8080"
+
+volumes:
+  pgdata_prod:
+    driver: local

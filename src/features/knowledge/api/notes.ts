@@ -1,0 +1,243 @@
+import { apiClient } from "@/lib/apiClient";
+import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
+import type { Note, NoteGroup } from "../types";
+import {
+  requireLockVersion,
+  type ListNotePatch,
+  type SavedKnowledgeEntity,
+  type SavedKnowledgeOrderEntity,
+  type SavedNote,
+  type SavedNoteVersion,
+  type VersionedEntity,
+  type VersionedOrderItem,
+} from "./types";
+
+export type NoteStructuralMove = Pick<
+  Note,
+  "id" | "folderId" | "groupId" | "title" | "content" | "contentLoaded" | "lockVersion"
+> & {
+  items?: VersionedOrderItem[];
+};
+
+function asTimestamp(val: unknown): number {
+  if (!val) return Date.now();
+  if (typeof val === "number") return val;
+  return new Date(val as string).getTime();
+}
+
+// ---------------------------------------------------------------------------
+// Remote helpers
+// ---------------------------------------------------------------------------
+
+async function remoteUpsertGroup(group: NoteGroup): Promise<SavedKnowledgeEntity> {
+  const saved = await apiClient.post<any>(`/api/v1/folders/${group.folderId}/groups`, {
+    id: group.id,
+    folder_id: group.folderId,
+    name: group.name,
+    sort_order: group.sortOrder ?? 0,
+    lock_version: group.lockVersion ?? 1,
+  });
+  return {
+    updatedAt: asTimestamp(saved.updated_at || saved.updatedAt),
+    lockVersion: Number(saved.lock_version || saved.lockVersion || 1),
+    sortOrder: saved.sort_order ?? saved.sortOrder ?? 0,
+  };
+}
+
+async function remoteDeleteGroup(entity: VersionedEntity): Promise<void> {
+  requireLockVersion(entity, "删除分组");
+  await apiClient.delete(`/api/v1/groups/${entity.id}`);
+}
+
+async function remoteReorderNotes(
+  items: VersionedOrderItem[]
+): Promise<Array<{ id: string; updatedAt: number; lockVersion: number; sortOrder: number }>> {
+  const updated = await apiClient.post<any[]>("/api/v1/notes/reorder", {
+    items: items.map(({ id, sortOrder }) => ({ id, sort_order: sortOrder })),
+  });
+  return (updated ?? []).map((item) => ({
+    id: item.id,
+    updatedAt: asTimestamp(item.updated_at || item.updatedAt),
+    lockVersion: Number(item.lock_version || item.lockVersion || 1),
+    sortOrder: item.sort_order ?? item.sortOrder ?? 0,
+  }));
+}
+
+async function remoteMoveNote(note: NoteStructuralMove): Promise<SavedKnowledgeOrderEntity[]> {
+  requireLockVersion(note, "移动笔记");
+  await apiClient.post<any>(`/api/v1/notes/${note.id}/move`, {
+    folder_id: note.folderId,
+    group_id: note.groupId ?? null,
+    sort_order: 0,
+  });
+
+  if (note.items && note.items.length > 0) {
+    const updated = await apiClient.post<any[]>("/api/v1/notes/reorder", {
+      items: note.items.map(({ id, sortOrder }) => ({ id, sort_order: sortOrder })),
+    });
+    return (updated ?? []).map((item) => ({
+      id: item.id,
+      updatedAt: asTimestamp(item.updated_at || item.updatedAt),
+      lockVersion: Number(item.lock_version || item.lockVersion || 1),
+      sortOrder: Number(item.sort_order ?? item.sortOrder ?? 0),
+    }));
+  }
+
+  return [];
+}
+
+async function remoteSaveNote(note: Note): Promise<SavedNote> {
+  if (note.lockVersion !== undefined && note.contentLoaded !== true) {
+    throw new Error("笔记正文尚未加载，已阻止空内容覆盖");
+  }
+  let saved: any;
+  if (!note.isNew && note.lockVersion !== undefined) {
+    saved = await apiClient.put<any>(`/api/v1/notes/${note.id}`, {
+      title: note.title,
+      content: note.content,
+      group_id: note.groupId ?? null,
+      sort_order: note.sortOrder ?? 0,
+      lock_version: note.lockVersion,
+    });
+  } else {
+    saved = await apiClient.post<any>("/api/v1/notes", {
+      id: note.id,
+      folder_id: note.folderId,
+      group_id: note.groupId ?? null,
+      title: note.title,
+      content: note.content,
+      sort_order: note.sortOrder ?? 0,
+      lock_version: null,
+    });
+  }
+  return {
+    updatedAt: asTimestamp(saved.updated_at || saved.updatedAt),
+    lockVersion: Number(saved.lock_version || saved.lockVersion || 1),
+    sortOrder: saved.sort_order ?? saved.sortOrder ?? 0,
+  };
+}
+
+async function remotePatchNote(patch: ListNotePatch): Promise<SavedNoteVersion> {
+  if (patch.lockVersion === undefined) throw new Error("缺少笔记版本，已阻止非条件更新");
+  const saved = await apiClient.patch<any>(`/api/v1/notes/${patch.id}`, {
+    title: patch.title,
+    content: patch.content,
+    sort_order: patch.sortOrder,
+    folder_id: patch.folderId,
+    group_id: patch.groupId,
+    lock_version: patch.lockVersion,
+  });
+  return {
+    updatedAt: asTimestamp(saved.updated_at || saved.updatedAt),
+    lockVersion: Number(saved.lock_version || saved.lockVersion || 1),
+  };
+}
+
+async function remoteDeleteNote(entity: VersionedEntity): Promise<void> {
+  requireLockVersion(entity, "删除笔记");
+  await apiClient.delete(`/api/v1/notes/${entity.id}`);
+}
+
+// ---------------------------------------------------------------------------
+// Offline executor registrations
+// ---------------------------------------------------------------------------
+
+registerOfflineExecutor("list-group:save", async (p) => {
+  await remoteUpsertGroup(p as NoteGroup);
+});
+registerOfflineExecutor("list-group:delete", async (p) => remoteDeleteGroup(p as VersionedEntity));
+
+registerOfflineExecutor("note:save", async (p) => {
+  await remoteSaveNote(p as Note);
+});
+registerOfflineExecutor("note:patch", async (p) => {
+  await remotePatchNote(p as ListNotePatch);
+});
+registerOfflineExecutor("note:delete", async (p) => remoteDeleteNote(p as VersionedEntity));
+registerOfflineExecutor("note:reorder", async (p) => {
+  await remoteReorderNotes(p as VersionedOrderItem[]);
+});
+registerOfflineExecutor("note:move", async (p) => {
+  await remoteMoveNote(p as NoteStructuralMove);
+});
+
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
+
+export async function loadNote(id: string): Promise<Note | null> {
+  try {
+    const data = await apiClient.get<any>(`/api/v1/notes/${id}`);
+    if (!data) return null;
+    return {
+      id: data.id,
+      folderId: data.folder_id || data.folderId,
+      groupId: data.group_id ?? data.groupId ?? null,
+      title: data.title ?? "",
+      content: data.content ?? "",
+      contentLoaded: true,
+      sortOrder: data.sort_order ?? data.sortOrder ?? 0,
+      createdAt: asTimestamp(data.created_at || data.createdAt),
+      updatedAt: asTimestamp(data.updated_at || data.updatedAt),
+      lockVersion: Number(data.lock_version ?? data.lockVersion ?? 1),
+    };
+  } catch (err: any) {
+    if (err?.status === 404) return null;
+    throw err;
+  }
+}
+
+export function upsertGroup(group: NoteGroup): Promise<SavedKnowledgeEntity | undefined> {
+  return runOrQueue(
+    { kind: "list-group:save", key: "list-group:" + group.id, payload: group },
+    () => remoteUpsertGroup(group)
+  );
+}
+
+export function deleteGroup(entity: VersionedEntity): Promise<void | undefined> {
+  return runOrQueue(
+    { kind: "list-group:delete", key: "list-group:" + entity.id, payload: entity },
+    () => remoteDeleteGroup(entity)
+  );
+}
+
+export function upsertNote(note: Note): Promise<SavedNote | undefined> {
+  return runOrQueue(
+    { kind: "note:save", key: "note:" + note.id, payload: note },
+    () => remoteSaveNote(note)
+  );
+}
+
+export function patchNote(patch: ListNotePatch): Promise<SavedNoteVersion | undefined> {
+  return runOrQueue(
+    { kind: "note:patch", key: "note:" + patch.id, payload: patch },
+    () => remotePatchNote(patch)
+  );
+}
+
+export async function deleteNote(entity: VersionedEntity): Promise<void> {
+  await runOrQueue(
+    { kind: "note:delete", key: "note:" + entity.id, payload: entity },
+    () => remoteDeleteNote(entity)
+  );
+}
+
+export function reorderNotes(
+  items: VersionedOrderItem[]
+): Promise<Array<{ id: string; updatedAt: number; lockVersion: number; sortOrder: number }> | undefined> {
+  return runOrQueue(
+    {
+      kind: "note:reorder",
+      key: "note:reorder:" + items.map((i) => i.id).join(","),
+      payload: items,
+    },
+    () => remoteReorderNotes(items)
+  );
+}
+
+export function moveNote(note: NoteStructuralMove): Promise<SavedKnowledgeOrderEntity[] | undefined> {
+  return runOrQueue(
+    { kind: "note:move", key: "note:move:" + note.id, payload: note },
+    () => remoteMoveNote(note)
+  );
+}

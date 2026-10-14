@@ -1,112 +1,95 @@
-# 前端工程规范 (Frontend Engineering)
+# Frontend Engineering Guide
 
-## Frontend Overview
+## Baseline & Tech Stack
 
-WorkBuddy-D 前端基于 React 19、TypeScript、Vite 7、Tailwind CSS 与 Arco Design 构建。系统采用多 Webview 架构，主窗口与辅助弹窗（任务极速编辑 `quick-edit.html`、专注助手 `focus-assistant.html`、通知浮层 `notification-toast.html`）共享状态与主题规范。前端以 TanStack Router 承载路由，TanStack Query 驱动服务端异步状态，Zustand 掌控纯客户端 UI 状态。
+WorkBuddy-D 的前端运行于 Tauri Webview，也可由 Vite 开发服务器启动。Vite 使用 React 插件构建 React 19 与 TypeScript 应用；当前工具链和依赖范围以 `package.json` 与 `pnpm-lock.yaml` 为准。
 
-## Source Structure
+- **语言与编译**：TypeScript `strict`、`noUnusedLocals`、`noUnusedParameters` 与 `noFallthroughCasesInSwitch` 已启用；路径别名 `@/*` 指向 `src/*`。
+- **界面和路由**：React 19、TanStack Router、React Hook Form、Zod、Arco Design、Tailwind CSS 4 与 CSS variables。
+- **服务端状态**：TanStack Query 负责异步请求、缓存和失效。
+- **客户端全局状态**：Zustand 管理共享 UI 状态。
+- **富文本**：Tiptap 与 `reactjs-tiptap-editor` 支持知识库内容编辑。
+- **桌面集成**：`@tauri-apps/api` 连接 Tauri 2 的窗口与事件接口。
+- **构建命令**：`pnpm dev` 启动 Vite；`pnpm build` 执行 `tsc && vite build`；`pnpm lint:boundaries` 校验特性间单向架构边界；`pnpm tauri` 启动桌面开发环境。
 
-前端源码统一组织在 `src/` 目录下：
-- `src/main.tsx`：主窗口入口，初始化认证上下文、QueryClient、路由与主题注入。
-- `src/pages/`：路由级页面组件（`TodayPage`、`FourQuadrantsPage`、`ProjectsPage`、`HabitPage`、`KnowledgePage`、`DailyReviewPage`）。
-- `src/components/`：业务功能组件目录（`today/`、`time-management/`、`habit/`、`knowledge/`、`focus/`）及基础原子组件库（`src/components/ui/`）。
-- `src/hooks/`：领域数据 Hook，封装 TanStack Query 的加载、乐观更新与突变操作。
-- `src/services/`：Supabase 数据访问层，隔离 PostgREST 查询与 RPC 写入。
-- `src/stores/`：Zustand 客户端 UI 状态（选区、抽屉展开、双主题切换等）。
-- `src/lib/`：认证上下文、Query Keys、实时同步引擎、离线重放队列与日期/排期算法。
-- `src/types/`：TypeScript 领域与数据模型类型定义。
+## Source Structure & Ownership
 
-## Component Design
+代码采用 Bulletproof React 的特性驱动架构（Feature-based Architecture），按业务领域聚合实现、强化模块物理内聚与单向依赖流向，将组件、API 访问与状态逻辑放在最接近使用点的位置。参见 [Bulletproof React: Project Structure](https://github.com/alan2207/bulletproof-react/blob/master/docs/project-structure.md)。
 
-组件划分严格遵循单一职责与高内聚原则：
-- **容器与页面组件 (`src/pages/`)**：负责路由参数解析、页面骨架编排与领域 Hook 绑定。
-- **业务领域组件 (`src/components/`)**：封装特定领域的交互逻辑与组合呈现，通过 Props 接收数据或消费领域 Hook。
-- **基础原子组件 (`src/components/ui/`)**：无业务侵入的通用 UI 基座（如 Button、Dialog、Modal、Drawer、Input 等），集成 `useAppThemeStyle` 支持双主题样式穿透。
+- `src/app/` — 应用组合层：包含应用级 Provider 装配（`AppProviders.tsx`）、路由导出（`routes/`）、桌面多 Webview 窗口组件（`windows/`）与主应用编排（`App.tsx`）。
+- `src/config/` — 全局配置与环境声明：`env.ts`（基于 Zod 校验运行时环境变量）与 `paths.ts`（集中式类型安全路由路径常量）。
+- `src/features/<domain>/` — 垂直特性模块，聚合领域内聚资产：
+  - 核心特性涵盖 `projects/`、`habit/`、`knowledge/`、`daily-review/`、`time-management/`、`focus/`、`auth/`、`settings/`。
+  - 每个特性内部视需要收敛其 `api/`（Supabase 数据读写与 TanStack Query v5 `queryOptions`）、`components/`（领域专有 UI）、`hooks/`（领域逻辑）、`schemas/`（领域表单 Zod 校验）、`types/`（契约类型）与 `utils/`（领域纯计算）。
+- `src/pages/` — 页面级路由与组合看板视图（如 `TodayPage.tsx` 装配各 Feature 导出的 Section 组件；`ProjectsPage.tsx` 组合 `ProjectSidebar` 与 `ProjectHeaderToolbar`），并包裹局部 `SectionErrorBoundary`。
+- `src/components/ui/` 与 `src/components/pixel/` — 跨特性通用基础 UI（包括 `form.tsx` 声明式表单基建）、像素图标及局部容错边界组件（`SectionErrorBoundary.tsx`）。
+- `src/components/layout/` — 桌面主布局与侧边栏导航组件（`AppLayout.tsx`）。
+- `src/lib/` — 核心基础设施：Supabase 客户端、认证会话管理、查询键工厂（`syncEngine.ts`）、私有 Realtime 广播管理、离线队列与通用工具函数。
+- `src/stores/` — 跨特性的全局客户端 UI 状态（纯净会话 UI 状态，如 `uiStore.ts`）。
+- `src/types/` — 共享领域核心实体与数据库 Schema 类型（如 `task.ts`、`project.ts`、`database.ts`）。
+- `src/hooks/` — 跨领域通用共享客户端 Hooks（如 `useAppThemeStyle.ts`、`useDebouncedMutation.ts`、`useOptimisticSync.ts`）。
+- `src-tauri/` — 多 Webview 原生壳；入口页面分别由仓库根目录 HTML 与 `src/` 下窗口入口承接。
 
-## Design System Usage
+### Domain locality and dependency direction
 
-项目内置「现代极简（Modern Clean）」与「复古像素 8-Bit（Retro Pixel 8-Bit）」双套完整设计系统：
-- 基础组件优先采用 `src/components/ui/` 中的封装组件。
-- 业务涉及复杂弹层、下拉菜单与表格时，使用 `@arco-design/web-react` 配合 `getChildrenPopupContainer={() => document.body}` 防止弹层溢出截断。
-- 像素风组件采用 `src/components/pixel/` 中的专用像素图标与像素容器，保持整体 8-Bit 艺术一致性。
+新增功能优先将只服务一个领域的组件、Hook、类型和工具放在 `src/features/<domain>/` 对应目录内；多个领域确有复用时，再提升至 `components/ui/`、`lib/`、`types/` 或 `config/`。
 
-## Styling
+依赖保持严格的单向流向：`shared (config/lib/types/ui) → features → app/pages`。特性之间禁止直接穿透导入（No cross-feature imports），跨特性的数据组合通过 App 页面层（Composition Pattern）或共享核心契约协调，并由 ESLint `import-x/no-restricted-paths` 自动化门禁保障。模块通过明确导出的函数与类型通信，保持职责内聚并杜绝相互穿透。Bulletproof React 关于按功能分组和单向依赖的建议见 [Project Structure](https://github.com/alan2207/bulletproof-react/blob/master/docs/project-structure.md)。
 
-- 样式系统采用 Tailwind CSS 配合 CSS 变量（`src/index.css`）驱动。
-- 色彩与层级定义遵循 [docs/DESIGN.md](DESIGN.md) 的语义化 Token 体系（`bg-background`、`bg-card`、`text-foreground`、`text-muted-foreground`、`border-border` 等）。
-- 严禁在业务组件中硬编码十六进制色值，所有主题色必须映射至 Tailwind 语义类或设计系统 Token。
+## UI System & Styling Ownership
 
-## State Management
+- `src/components/ui/` 是项目通用基础组件的所有者；优先复用其中的 Button、Dialog、Drawer、Input、Select、Form 等组件。
+- Arco Design 为已有复杂控件提供实现；应用侧在业务需要时包装第三方交互，使设计样式和调用方式保持一致。
+- `src/components/pixel/` 与 `src/index.css` 共同承载 8-Bit 像素表现和全局主题令牌；业务组件基于语义类和变量组合界面。
+- Tailwind CSS 4 管理常规布局和语义化工具类；`src/index.css` 定义 CSS 变量、组件全局规则和主题基线。
+- 新增通用组件时先确认跨领域复用场景，再抽象 API；领域专属呈现留在相应业务目录。这个“先识别重复再抽象、封装第三方库”的边界与 [Bulletproof React: Components and Styling](https://github.com/alan2207/bulletproof-react/blob/master/docs/components-and-styling.md) 一致。
+- 具体视觉层级、双主题令牌与设计判断以 [DESIGN.md](DESIGN.md) 和 `src/index.css` 为准。
 
-前端严格贯彻状态所有权清晰分离原则：
-- **服务端异步持久化状态**：由 TanStack Query 独占管理，包括任务、项目、习惯、笔记、复盘等。
-- **客户端全局 UI 状态**：由 Zustand (`src/stores/uiStore.ts`) 管理，包括选区高亮、折叠状态、双主题切换及时间轴联动悬停 ID。
-- **本地瞬时交互状态**：由组件内部 `useState` / `useReducer` 管理（如输入框 Draft、悬停浮层、局部展开等）。
+## State Classification & Data Fetching
 
-## Data Fetching
+先判断状态的所有者，再选择状态工具；同一份持久化远端事实保持一个权威来源。以下类别用于新增需求归属，项目当前各能力按实际使用情况落地：
 
-- 所有服务端数据查询均通过 `src/hooks/` 封装的 TanStack Query Hook 获取。
-- Query Key 统一由 `src/lib/syncEngine.ts` 中的 `queryKeys` 工厂方法生成（严格带有 `userId` 作用域）。
-- 页面与组件严禁直接调用 Supabase 客户端执行数据读取。
+1. **远端服务端状态**：任务、项目、习惯、笔记、复盘等由 TanStack Query 管理缓存、请求生命周期与失效；定义通过 `src/features/*/api/*Queries.ts` 中声明的 `queryOptions` 标准化封装。
+2. **URL/导航状态**：可分享或需在刷新后恢复的导航选择属于 Router。当前路由表在 `src/app/routes/router.tsx`；项目视图模式与过滤条件等通过 TanStack Router search params 管理。
+3. **全局客户端 UI 状态**：跨页面共享的展开、选择和主题交互放在 `src/stores/uiStore.ts` 等 Zustand Store。
+4. **局部交互状态**：仅当前组件生命周期需要的开合、悬停和临时选择使用 React `useState`/`useReducer`。
+5. **表单与编辑草稿**：采用 React Hook Form 与 Zod（基于 `src/components/ui/form.tsx` 声明式基建与 `schemas/` 驱动校验）；未提交输入由表单/编辑器本地状态所有；成功持久化后以 Query 返回或失效后的数据为准。Tiptap 文档正文按选中的笔记加载。
 
-## Routing and Navigation
+数据读取和写入采用 `component/page → hook → service → supabase client → PostgreSQL/RPC`。组件只消费领域 Hook 暴露的状态和动作；Service 封装表名、列、RPC 和结果适配。`src/types/database.ts` 维护数据库契约类型，领域核心实体位于 `src/types/`。
 
-- 路由由 TanStack Router 驱动，在 `src/router.tsx` 中定义路由表。
-- 页面路由采用动态懒加载导入，确保主应用包体积精简与首屏秒开。
-- 导航跳转统一使用 TanStack Router 的 `useNavigate` 或 `<Link />` 组件，保证类型安全。
+Realtime 由 `RealtimeProvider` 和 `src/lib/realtimeManager.ts` 管理。私有 `user:<id>:sync` 通道只提供变化提示；订阅事件映射至 Query Key 失效，远端查询重新按 RLS 获取记录。离线写入通过 `src/lib/offlineSyncQueue.ts` 支持的服务流程恢复；其具体适用范围以 `src/lib/sync.ts` 和各 Service 调用为准。
 
-## Forms and Validation
+Bulletproof React 将可从服务器取得的远端数据与客户端 UI 状态分开处理，并建议把请求封装在功能/API 模块中；本仓库对应层为 Query Hook 与领域 Service。参考 [State Management](https://github.com/alan2207/bulletproof-react/blob/master/docs/state-management.md) 和 [API Layer](https://github.com/alan2207/bulletproof-react/blob/master/docs/api-layer.md)。
 
-- 轻量表单与就地录入（如 `TodayQuickAdd`）采用受控输入配合键盘事件监听（Enter 提交、Escape 取消）。
-- 复杂表单使用受控状态结合即时类型校验，提交前进行有效性检查并提供明确的错误反馈。
+## Routing & Data Lifecycle
 
-## Loading
+- 路由树在 `src/app/routes/router.tsx` 定义，`/` 重定向到 `/today`；页面使用 `React.lazy` 延迟导入。
+- `src/main.tsx` 装配 QueryClient Provider 与 `AppErrorBoundary`；`App.tsx` 检测 Supabase Session 后显示登录视图或带 Auth/Realtime Provider 的应用路由。
+- 登录用户变化时清理 Query 缓存和 UI 用户作用域，再使用新 Session 渲染已认证区域，避免上一个账户的缓存展示给下一个账户。
+- 页面与领域组件通过 Hook 访问查询状态；Query Key 由 `src/lib/syncEngine.ts` 等现有查询键工厂统一维护，并按用户标识隔离。
+- 知识库先获取目录/列表所需数据；笔记详情通过 `useKnowledgeQuery` 的选择行为触发按需读取，保持正文延迟加载。
+- 面向主窗口的离线同步和 Realtime 生命周期应由已认证用户及主 Webview 状态驱动，并清理监听器/订阅。
 
-- **加载态 (Loading)**：数据获取中展示骨架屏或呼吸动画指示器，避免布局大幅抖动。
-- **空态 (Empty)**：当列表为空时，展示图文结合的引导性空状态面板（如今日无待办时提供快捷录入引导）。
-- **错误态 (Error)**：捕获 PostgREST 异常并通过全局 Toast 或边界 Fallback 给予用户可恢复的操作提示。
+## Interactive States & Feedback
 
-## Effects and Side Effects
+- **加载**：根据查询粒度展示局部加载反馈，使页面导航框架和已加载内容保持可用。
+- **空数据**：由领域视图说明当前没有数据，并提供与该视图有关的下一步操作。
+- **错误**：查询/变更 Hook 将失败状态反馈给界面；可恢复写入展示重试或重新加载路径，乐观更新在写入失败时回滚或失效重取。
+- **提交中**：按钮和表单根据 Mutation 状态反馈不可重复提交状态；输入草稿在明确提交或保存后转换为远端状态。
+- **离线**：由离线写入流程区分可排队网络故障与业务/权限/版本冲突，并向用户表达操作是否暂存、是否需要重新处理。
+- **无障碍交互**：控件保持语义化元素和可访问名称；键盘操作与焦点行为跟随组件职责，使用原生语义或 Arco/UI 封装能力。
+- **定时器/订阅**：通过 Effect 生命周期或领域管理器集中启动，并在用户、窗口或组件生命周期结束时释放资源。
 
-- 副作用严格限制在 `useEffect` 或事件处理函数中，严禁在渲染流程中直接触发状态更新。
-- 定时器、广播订阅与窗口事件监听器必须在 Effect 清理函数中完整注销，防止内存泄漏。
+## Frontend Invariants & Verification
 
-## Hooks and Reusable Logic
+- 页面与组件以 Hooks 和 Services 作为数据边界；Supabase 查询细节归 Service。
+- Query 缓存承载远端权威数据的客户端副本；Zustand 只保存 UI 偏好与交互状态。
+- Broadcast 仅使 Query 失效；状态更新以重新读取的 RLS 结果为准。
+- 用户数据的授权、审计时间及版本转换由 PostgreSQL/RPC 决定；客户端时间仅用于展示和本地临时交互。
+- 知识库正文依选择按需读取；新增 UI 同时遵循 `docs/DESIGN.md` 指定的主题系统。
+- 依赖方向保持为共享能力 (config/lib/types/ui) → features → app/pages；提升共享模块需要明确的跨领域复用证据。
+- 前端构建与类型检查命令为 `pnpm build`。涉及原生配置时增加 `cd src-tauri && cargo check`；文档改动按 Harness 门禁执行 `ai-harness validate docs/FRONTEND.md --json`。
 
-- 通用交互逻辑与外部系统抽象（如主题感知 `useAppThemeStyle`、防抖突变 `useDebouncedMutation`、乐观同步 `useOptimisticSync`）沉淀于 `src/hooks/`。
-- 自定义 Hook 严格遵循以 `use` 开头的命名规范并保持高内聚性。
+## References
 
-## TypeScript
-
-- 全局开启 TypeScript 严格模式（`strict: true`、`noUnusedLocals: true`、`noUnusedParameters: true`）。
-- 领域实体类型统一定义在 `src/types/` 中，严禁使用 `any` 绕过类型检查。
-
-## Performance
-
-- 对高频重计算的过滤、排序与象限分组使用 `useMemo` 进行记忆化。
-- 跨多组件传递的回调函数使用 `useCallback` 稳定引用。
-- 富文本编辑器采用按需加载策略，避免在非激活状态下全量初始化重型编辑器引擎。
-
-## Accessibility Implementation
-
-- 交互按钮与复选框均提供标准语义标签（`role="checkbox"`、`aria-checked`）与 `title` 属性。
-- 关键表单支持全键盘操作（Tab 切换焦点、Enter 提交、Escape 退出）。
-
-## Testing
-
-- 构建与类型门禁以 `pnpm build`（`tsc && vite build`）为基准执行严格校验。
-- 关键排期与逾期计算逻辑（如 `taskBelongsToToday`、`isTaskOverdue`）具备确定性的输入输出边界。
-
-## Frontend Invariants
-
-1. **UI 与数据访问严格解耦**：组件严禁直接调用 Supabase 客户端，必须通过 Hook 与 Service 层操作。
-2. **状态所有权分离**：TanStack Query 拥有服务端状态，Zustand 仅掌控客户端 UI 状态，严禁在 Zustand 中伪造服务端真值。
-3. **实时广播为无状态失效提示**：接收到 Broadcast 广播后仅失效对应 Query Key 重新拉取，禁止直接覆盖本地缓存。
-4. **主题样式统一穿透**：所有新增组件必须同时适配现代极简风与复古像素 8-Bit 风。
-
-## Frontend Review Criteria
-
-- [ ] 是否通过 `pnpm build` 且无任何 TypeScript 报错与未使用的变量？
-- [ ] 数据流向是否符合 Hook -> Service -> Supabase 的单向分层？
-- [ ] 新增交互是否同时支持键盘快捷操作与双主题视觉呈现？
-- [ ] 是否正确处理了加载态、空状态与异常回滚？
+- [Bulletproof React](https://github.com/alan2207/bulletproof-react) — 参考其按领域组织代码、保持依赖单向、贴近使用点放置模块、状态职责分离、组件复用与错误反馈等原则；本指南按 WorkBuddy-D 已有目录和 Tauri/Supabase 架构适配。

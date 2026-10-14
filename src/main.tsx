@@ -1,17 +1,13 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { QueryClientProvider } from "@tanstack/react-query";
-import { queryClient } from "@/lib/queryClient";
-import App from "./App";
-import { AppErrorBoundary } from "@/components/ui/AppErrorBoundary";
+import App from "@/app/App";
+import { AppProviders } from "@/app/providers/AppProviders";
 import "./index.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AppErrorBoundary>
-        <App />
-      </AppErrorBoundary>
-    </QueryClientProvider>
+    <AppProviders>
+      <App />
+    </AppProviders>
   </React.StrictMode>
 );

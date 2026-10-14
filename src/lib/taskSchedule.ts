@@ -1,4 +1,4 @@
-import { Task, QuadrantType } from "@/types/timeManagement";
+import { Task, QuadrantType } from "@/types/task";
 
 export function getTaskEndAt(task: Task): number | undefined {
   return task.scheduledEndAt;
@@ -107,5 +107,6 @@ export function sortTasksByQuadrantAndDeadline(tasks: Task[], now: number = Date
     return (b.createdAt ?? 0) - (a.createdAt ?? 0);
   });
 }
+
 
 

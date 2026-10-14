@@ -1,0 +1,23 @@
+# Tasks: 实施专注助手逻辑修复、清理与侧边栏入口优化
+
+- [x] 1. 核心逻辑漏洞修复
+  - [x] 1.1 改造 `useFocusTimer.ts` 计时循环，基于物理绝对时间戳差值锚定校准，彻底修复睡眠休眠冻结 Bug
+  - [x] 1.2 将 `workbuddy:complete-task-action` 与 `workbuddy:navigate-to-task` 事件监听提升至全局主窗口层级
+  - [x] 1.3 修复 `focusAssistantService.ts` 统计逻辑，严格过滤仅累加 `type === "focus"` 的专注秒数
+  - [x] 1.4 修复 `types.ts` 中的 `getThemeClasses`，补齐 `pixel-dog` 与 `pixel-dog-pure` 复古样式映射
+  - [x] 1.5 修复 `FocusAssistant.tsx` 中修改时间后的“保存并重置”运行态生效逻辑
+  - [x] 1.6 增加已完成/已删除失效幽灵任务的自动校验与重置兜底
+- [x] 2. 清理兼容代码与历史包袱
+  - [x] 2.1 移除 `src/focus-assistant-window.tsx` 中的复制粘贴类名 `tqe-window`
+  - [x] 2.2 规范化 `focusAssistantWindowManager.ts` 中的 `isTauriEnv` 导入源
+  - [x] 2.3 规范化宠物动画逻辑与状态机
+- [x] 3. 冗余代码与死代码清理
+  - [x] 3.1 移除 `startFocus` 中点击“开始专注”时的冗余全屏桌面通知卡片
+  - [x] 3.2 清理 `focusAssistantService.ts` 中未使用的参数与死代码
+- [x] 4. 优化功能重叠与交互体验缺陷
+  - [x] 4.1 在 `AppLayout.tsx` 侧边栏刷新按钮上方新增常驻专注助手召唤按钮
+  - [x] 4.2 优化 `SpeechBubble.tsx` 对话气泡自适应宽度，消除悬浮窗边缘裁切隐患
+  - [x] 4.3 优化 `useWindowDrag.ts` 拖拽稳定性
+- [x] 5. 验证与回归
+  - [x] 5.1 运行 `pnpm build` 确认前端类型与构建零错误
+  - [x] 5.2 运行 `cargo check` 确认 Tauri 桌面端检查零错误

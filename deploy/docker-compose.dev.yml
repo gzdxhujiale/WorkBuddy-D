@@ -1,0 +1,17 @@
+services:
+  postgres-dev:
+    image: postgres:17-alpine
+    container_name: workbuddy-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: workbuddy
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - pgdata-dev:/var/lib/postgresql/data
+      - ../db/migrations:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  pgdata-dev:

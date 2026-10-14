@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, Outlet, useLocation } from "@tanstack/react-router";
+import { Link, Outlet, useLocation, useNavigate } from "@tanstack/react-router";
 import {
   CalendarCheck,
   ListTodo,
@@ -13,15 +13,19 @@ import {
   Minus,
   Square,
   X,
+  Timer,
   type LucideIcon,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth";
-import { supabase } from "@/lib/supabase";
+import { authService, useAuth } from "@/features/auth";
 import { realtimeManager } from "@/lib/realtimeManager";
-import { SettingsDialog } from "./SettingsDialog";
+import { SettingsDialog } from "@/features/settings";
+import { ProjectTemplateManager } from "@/features/projects/components/ProjectTemplateManager";
 import { Toaster, toast } from "../ui/toast";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { apiClient } from "@/lib/apiClient";
+import { toggleFocusAssistant } from "@/app/windows/focusAssistantWindowManager";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
 
@@ -195,8 +199,8 @@ export const DesktopToolbar: React.FC<DesktopToolbarProps> = ({ onSettingsClick 
     setIsRefreshing(true);
     try {
       // 1. Refresh auth session token if possible
-      const { data: sessionData } = await supabase.auth.getSession();
-      const currentToken = sessionData?.session?.access_token || session?.access_token;
+      const sessionData = authService.getSession();
+      const currentToken = sessionData?.access_token || session?.access_token;
 
       // 2. Re-establish realtime broadcast sync channel
       if (userId && currentToken) {
@@ -288,6 +292,32 @@ export const DesktopToolbar: React.FC<DesktopToolbarProps> = ({ onSettingsClick 
       </nav>
 
       <div className="mt-auto pt-2 w-full flex flex-col items-center gap-1.5">
+        {/* 专注助手唤起/隐藏常驻按钮 (刷新按钮上方) */}
+        <button
+          type="button"
+          onClick={() => void toggleFocusAssistant()}
+          className={cn(
+            "relative group flex items-center justify-center w-10 h-[38px] transition-all select-none cursor-pointer",
+            isPixelTheme
+              ? "rounded-xs text-amber-900 dark:text-amber-300 hover:bg-amber-200/60 dark:hover:bg-amber-900/60 border-2 border-transparent hover:border-amber-800/40 active:translate-x-[1.5px] active:translate-y-[1.5px] active:shadow-none"
+              : "rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/70 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800/70 active:scale-95"
+          )}
+          title="召唤/收起专注助手"
+          aria-label="召唤/收起专注助手"
+        >
+          <Timer size={18} strokeWidth={isPixelTheme ? 2.2 : 1.9} />
+          <span
+            className={cn(
+              "pointer-events-none absolute left-14 z-50 whitespace-nowrap px-2.5 py-1 text-xs opacity-0 shadow-md transition-opacity group-hover:opacity-100",
+              isPixelTheme
+                ? "rounded-xs bg-[#2a1d13] text-[#faeed9] border-2 border-amber-700 font-mono shadow-[2px_2px_0px_#000] before:content-[''] before:absolute before:-left-1.5 before:top-1/2 before:-translate-y-1/2 before:border-y-4 before:border-y-transparent before:border-r-4 before:border-r-amber-700"
+                : "rounded-md bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900"
+            )}
+          >
+            专注助手
+          </span>
+        </button>
+
         <button
           type="button"
           disabled={isRefreshing}
@@ -357,6 +387,63 @@ export const AppLayout: React.FC = () => {
   const { isPixelTheme } = useAppThemeStyle();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+
+  useEffect(() => {
+    let unlistenComplete: (() => void) | undefined;
+    let unlistenNavigate: (() => void) | undefined;
+
+    const setupGlobalNotificationListeners = async () => {
+      try {
+        unlistenComplete = await listen<{ taskId: string }>(
+          "workbuddy:complete-task-action",
+          async (event) => {
+            const { taskId } = event.payload;
+            if (!taskId) return;
+            try {
+              await apiClient.put(`/api/v1/tasks/${taskId}`, {
+                completed: true,
+                completed_at: new Date().toISOString(),
+              });
+              await queryClient.invalidateQueries();
+              toast.success("已完成任务！");
+            } catch (err) {
+              console.error("[Global] Failed to complete task from notification:", err);
+            }
+          }
+        );
+
+        unlistenNavigate = await listen<{ taskId: string }>(
+          "workbuddy:navigate-to-task",
+          async (event) => {
+            try {
+              if (event.payload?.taskId) {
+                sessionStorage.setItem("workbuddy:pending-task-navigate", event.payload.taskId);
+              }
+              const { getCurrentWindow } = await import("@tauri-apps/api/window");
+              const win = getCurrentWindow();
+              await win.show();
+              await win.unminimize();
+              await win.setFocus();
+              navigate({ to: "/four-quadrants" });
+            } catch (err) {
+              console.error("[Global] Failed to navigate to task:", err);
+            }
+          }
+        );
+      } catch {
+        // Fallback in non-tauri environment
+      }
+    };
+
+    void setupGlobalNotificationListeners();
+
+    return () => {
+      if (unlistenComplete) unlistenComplete();
+      if (unlistenNavigate) unlistenNavigate();
+    };
+  }, [queryClient, navigate]);
 
   return (
     <div
@@ -405,7 +492,12 @@ export const AppLayout: React.FC = () => {
         </main>
       </div>
 
-      {isSettingsOpen && <SettingsDialog onClose={() => setIsSettingsOpen(false)} />}
+      {isSettingsOpen && (
+        <SettingsDialog
+          onClose={() => setIsSettingsOpen(false)}
+          templatesContent={<ProjectTemplateManager />}
+        />
+      )}
       <Toaster />
     </div>
   );

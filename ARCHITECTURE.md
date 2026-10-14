@@ -1,263 +1,104 @@
 # ARCHITECTURE.md
 
-## System Overview
+## System Topology & Overview (系统全局拓扑与职责边界)
 
-WorkBuddy-D 是一款采用 Tauri 2 架构构建的高性能、多窗口桌面个人生产力与专注工作空间应用。
-
-系统的顶层架构由三大核心运行时边界构成：
-1. **多 Webview 客户端层**：基于 Webkit/Webview2 运行 React 19 单页应用，包含主工作空间窗口（`index.html`）、任务快捷编辑悬浮窗（`quick-edit.html`）以及桌面专注助手伴侣窗（`focus-assistant.html`）。
-2. **Tauri Rust 宿主运行时**：负责管理原生桌面窗口生命周期、系统托盘（Tray）、全局快捷键、本地通知、跨窗口 IPC 事件广播及精细化的 Capabilities 安全权限控制。
-3. **Supabase 云端服务与 PostgreSQL 数据库**：提供基于 GoTrue 的 JWT 用户身份认证、PostgreSQL 结构化持久存储、行级安全隔离（RLS）、存储过程（RPC）事务控制以及私有 Realtime Broadcast 实时变更失效广播通道。
+WorkBuddy-D 是由 Tauri 2 桌面宿主、React 多 Webview 前端与 Supabase 托管服务组成的个人效率应用。仓库不包含独立的 Node、Java 或 Python 应用服务器。
 
 ```text
-+-----------------------------------------------------------------------------------+
-|                            Tauri 2 Desktop Runtime                                |
-|  +---------------------------+  +--------------------+  +----------------------+  |
-|  |   Main Window (React)     |  | Quick Edit Window  |  | Focus Assist Window  |  |
-|  | - Pages & Feature UI      |  | - Lightweight Edit |  | - Mini Status & Pet  |  |
-|  | - TanStack Query / Router |  +--------------------+  +----------------------+  |
-|  | - Zustand (UI Store)      |             |                       |              |
-|  | - RealtimeManager (Sync)  |             |                       |              |
-|  +---------------------------+             |                       |              |
-|                |                           |                       |              |
-|                +---------------------------+-----------------------+              |
-|                                            | Tauri IPC / Events                   |
-|                        +---------------------------------------+                  |
-|                        |   Rust Native Core & Capabilities     |                  |
-|                        +---------------------------------------+                  |
-+--------------------------------------------|--------------------------------------+
-                                             | HTTPS / WebSockets
-                                             v
-+-----------------------------------------------------------------------------------+
-|                                Supabase Backend                                   |
-|  +-------------------------+  +-----------------------+  +---------------------+  |
-|  | Supabase Auth (GoTrue)  |  | PostgREST / RPC API   |  | Realtime Broadcast  |  |
-|  +-------------------------+  +-----------------------+  +---------------------+  |
-|                                            |                                      |
-|                                            v                                      |
-|  +-----------------------------------------------------------------------------+  |
-|  | PostgreSQL: Tables, RLS Policies, Versioned Triggers & Migration History     |  |
-|  +-----------------------------------------------------------------------------+  |
-+-----------------------------------------------------------------------------------+
+Tauri 2 / Rust desktop process
+  ├─ main Webview: React + TanStack Router/Query + Zustand
+  ├─ quick-edit Webview
+  ├─ focus-assistant Webview
+  └─ notification Webview(s)
+       │ frontend services via Supabase client
+       ├─ Supabase Auth (session/JWT)
+       ├─ PostgREST and PostgreSQL RPC
+       └─ private Supabase Realtime Broadcast
+             └─ authenticated PostgreSQL tables, RLS, functions and triggers
 ```
 
-前端作为数据库 API 的直连客户端，无需自建中间层 Node.js/Python 服务。所有业务完整性与安全边界由 PostgreSQL 数据库及 RLS/RPC 强力保障。
+- **React 前端**负责窗口内界面、路由、客户端交互和请求编排；Hook/Service 层将业务读写交给 Supabase JS 客户端。
+- **Tauri/Rust 宿主**负责桌面窗口、系统托盘、通知窗口和插件能力；构建与窗口入口由 `src-tauri/tauri.conf.json` 声明。
+- **Supabase**负责身份认证、持久化、数据库授权、事务函数与实时消息。数据库 RLS 是每个用户数据访问的安全边界。
+- 各 Webview 运行独立前端实例；主窗口拥有应用启动时的离线队列重放和 Realtime 订阅职责，辅助窗口复用认证存储并通过 Tauri 窗口/API 交互。
 
-## Technology Architecture
+## Repository Boundaries (顶层资产与仓库边界)
 
-系统采用现代高效的技术栈组合，各组件架构职责明确：
+- `src/` — React 应用组合层（`app/`）、全局配置（`config/`）、特性模块（`features/`）、共享基础设施（`lib/`、`types/`、`components/ui/`）与桌面窗口入口。
+- `src-tauri/` — Rust 宿主、Tauri 配置、能力清单、图标与原生集成。
+- `supabase/migrations/` — 数据库 DDL、RLS、RPC、触发器及其追加式演进记录。
+- `docs/` — 前端/后端工程规范、设计、安全、可靠性、产品规格、参考资料和生成快照。
+- `openspec/` — 已批准行为规格、进行中的变更与归档记录。
+- `.agents/skills/` — 仓库内 Agent 工作流与领域技能说明。
+- 根目录 `package.json` / `pnpm-lock.yaml` — 前端依赖和 npm 脚本；`src-tauri/Cargo.toml` / `Cargo.lock` — Rust 依赖。
 
-- **TypeScript**：全栈主开发语言，启用严格类型检查模式（`strict: true`, `noUnusedLocals`, `noUnusedParameters`），保障跨模块契约的类型安全。
-- **React 19**：声明式 UI 渲染引擎与组件模型，支撑高频交互、局部渲染与状态派生。
-- **Tauri 2 (Rust)**：轻量级跨平台桌面端应用容器，负责系统级资源隔离、原生窗口生命周期、系统托盘管理及系统能力调度。
-- **Vite**：现代化前端本地高速开发服务器与生产打包构建工具。
-- **Tailwind CSS**：原子化 CSS 与设计令牌（Design Tokens）引擎，统一驱动「现代极简风」与「复古像素 8-Bit 风」双主题切换。
-- **TanStack Query (React Query)**：异步服务端状态管理核心，负责数据拉取、自动重试、内存缓存、乐观更新（Optimistic Updates）与防抖写入编排。
-- **TanStack Router**：声明式客户端路由管理，驱动主窗口各模块平滑切换。
-- **Zustand**：客户端纯 UI 状态管理，托管当前视图选中项、侧边栏折叠、双主题偏好（`app_theme_style`）等临时性交互状态。
-- **Arco Design (@arco-design/web-react)**：企业级 UI 基础组件库，深度集成于弹窗、高级选择器、日期拾取等场景，配合特定全局浮层穿透规则。
-- **Tiptap**：现代化无头（Headless）富文本编辑器核心，驱动知识库笔记创作与 Markdown 格式编辑。
-- **Supabase (PostgreSQL / PostgREST / GoTrue / Realtime)**：后端即服务基础底座，提供完整的身份认证、数据持久化、行级安全隔离、原子级 RPC 事务与实时通知。
-- **pnpm**：高效的依赖包与工作区管理工具。
+### Backend Structure
 
-## Repository Structure
+本仓库没有自建应用服务器代码。持久化后端由 Supabase 托管，数据库实现和访问策略在 SQL 迁移与前端数据访问层内维护：
 
-仓库源码组织与架构职责对应关系如下：
+- `supabase/migrations/` — PostgreSQL 表、索引、RLS 策略、RPC 函数、触发器与 Realtime 授权策略。
+- `src/features/` — 业务特性数据访问层（各 feature 内部 `api/` 适配器），通过 Supabase JS 调用 PostgREST 与 RPC。
+- `server/` — 独立 Go 后端服务，基于 Gin、pgxpool、sqlc 与 WebSocket Sync Hub。
+- `src/lib/apiClient.ts` — 统一 HTTP API 客户端，挂载 Bearer JWT Token 请求后端。
+- `src/lib/wsClient.ts` — 桌面端 WebSocket 客户端，连接 Go Sync Hub 并分发增量事件。
+- `src/lib/offlineSyncQueue.ts` — Webview 本地持久化队列和网络恢复后的写入重放。
+- `src/lib/realtimeManager.ts` — WebSocket 实时增量订阅以及 Query Key 失效分发。
 
-- `src/App.tsx`, `src/main.tsx` — 应用入口装载、全局 Provider（QueryClient, AuthProvider, RealtimeProvider, TooltipProvider）及窗口路由挂载。
-- `src/pages/` — 各业务领域的主路由页面视图（如 `TodayPage`, `TasksPage`, `ProjectsPage`, `KnowledgePage`, `HabitsPage`, `DailyReviewPage`, `SettingsPage`）。
-- `src/components/` — 业务组件及通用 UI 原子库：
-  - `src/components/today/` — 今日工作台（时间流/四象限工作流、项目甘特时间轴联动）。
-  - `src/components/time-management/` — 任务中心四象限看板与周期管理。
-  - `src/components/projects/` — 冒险项目看板、阶段管理与甘特图联动。
-  - `src/components/knowledge/` — 知识库三栏工作区、目录树、笔记列表与富文本编辑器。
-  - `src/components/habit/` — 习惯打卡与连续天数（Streaks）体系。
-  - `src/components/daily-review/` — 每日复盘与总结。
-  - `src/components/focus/` — 专注助手伴侣与专注时钟。
-  - `src/components/ui/` — 深度适配双主题的基础 UI 原子组件（`Button`, `Card`, `Modal`, `Dialog`, `Drawer`, `Item` 等）。
-- `src/hooks/` — 数据读取与变更 Hook（`useTasksQuery.ts`, `useKnowledgeQuery.ts`, `useHabitsQuery.ts` 等），封装 React Query 逻辑。
-- `src/services/` — 领域数据交互层（`taskService.ts`, `knowledgeService.ts`, `projectService.ts` 等），封装 PostgREST 查询与 RPC 存储过程调用。
-- `src/lib/` — 共享基础设施（`supabase.ts`, `queryKeys.ts`, `realtimeManager.ts`, `auth.tsx`, 离线重放队列等）。
-- `src/stores/` — Zustand 管理的本地 UI 状态 Store（`useAppStore.ts`, `useThemeStore.ts` 等）。
-- `src/types/`, `src/utils/` — 跨模块共享的 TypeScript 接口类型定义与通用计算函数。
-- `src-tauri/` — Rust 桌面端源码、Tauri 配置文件（`tauri.conf.json`）、窗口定义与 Capabilities 权限控制。
-- `supabase/migrations/` — 权威且只增不改的数据库结构（DDL）、RLS 策略、RPC 函数及触发器迁移历史。
-- `docs/` — 长期工程文档、产品规格说明（`docs/product-specs/`）、设计决策与数据库快照。
+#### Dependency Boundaries
 
-## Major Components
+依赖方向为 `React app/pages → features → shared (config/lib/types/ui) → Supabase client → PostgreSQL/RPC`。`src/lib/` 提供客户端基础设施；`supabase/migrations/` 定义持久化权威规则。Rust 宿主通过 Tauri 插件和命令服务桌面能力，不承担业务数据 API。
 
-系统主要由以下五大核心架构组件构成：
+## Dependency Flow & Architecture Invariants (单向依赖流向与架构铁律)
 
-### 1. 应用宿主与多窗口系统 (Application Shell & Multi-Window System)
-- **职责**：管理主窗口与两个独立轻量级辅助 Webview 窗口（`quick-edit.html` 快速任务编辑浮窗、`focus-assistant.html` 桌面置顶专注助手）的生命周期、窗口尺寸、托盘交互与全局事件广播。
-- **输入/输出**：接收系统托盘点击、全局快捷键；向各 Webview 广播窗口状态与主题切换事件。
-- **边界**：宿主仅负责窗口容器与系统 API 桥接，不侵入具体业务逻辑。
+全局依赖由共享基础设施流向业务呈现层：
 
-### 2. 数据访问与缓存引擎 (Data Access & Query Engine)
-- **职责**：通过 Services 和 React Query 统一管理对 Supabase 的读取与 RPC 写入，负责查询缓存分发、乐观更新、防抖请求合并与网络错误重试。
-- **输入/输出**：接收 UI 组件触发的操作请求；输出响应式的服务端数据模型与加载/错误状态。
-- **边界**：向 UI 提供类型安全的 Hook 接口，屏蔽底层 PostgREST/RPC 与 SQL 细节。
-
-### 3. 实时协同与同步管理器 (Realtime Sync Manager)
-- **职责**：主窗口持有私有 Broadcast 通道（`user:<id>:sync`），监听数据库触发器发出的提交变更信号，并将事件分发为精准的 `queryKeys` 失效指令；跨窗口通过 Tauri IPC 事件保持协同。
-- **输入/输出**：接收 Supabase Realtime 广播事件与 Tauri 本地事件；输出 QueryClient 缓存失效操作。
-- **边界**：广播载荷仅为失效标记，绝不携带也不信任具体数据行。
-
-### 4. 知识库与富文本子系统 (Knowledge & Editor Subsystem)
-- **职责**：支撑多级知识库目录树、笔记清单与 Tiptap 富文本正文编辑；实现分级按需加载、编辑草稿本地暂存与防抖自动落库。
-- **输入/输出**：接收用户实时文档编辑输入；输出格式化 Markdown/HTML 及其结构化索引。
-- **边界**：笔记正文与复杂目录数据仅在用户选中时按需加载，杜绝启动时全量拉取。
-
-### 5. 双视觉主题驱动引擎 (Dual Theme System)
-- **职责**：全局驱动「现代极简风」与「复古像素 8-Bit 风」的设计令牌与样式类切换，动态适配圆角、边框、硬阴影、游标动画与 Arco 浮层。
-- **输入/输出**：接收用户设置或跨窗口同步的主题风格变更；输出全局 CSS 变量与 HTML root class。
-- **边界**：纯视觉层适配，不改变任何业务逻辑或数据协议。
-
-## Dependency Boundaries
-
-系统严格执行单向依赖与层级隔离原则，禁止违规反向依赖：
-
-1. **UI 层 -> Hook/Service 层**：
-   - 页面与组件（`src/pages/`, `src/components/`）只能依赖 `src/hooks/`、`src/stores/` 和 `src/types/`。
-   - **严禁**在 UI 组件内部直接调用 `src/services/` 或直接操作 `supabaseClient`。
-2. **Hook 层 -> Service 层**：
-   - `src/hooks/` 负责编排 React Query，调用 `src/services/` 进行实际网络交互。
-3. **Service 层 -> 基础设施层**：
-   - `src/services/` 依赖 `src/lib/supabase.ts`，专注于数据转换与后端交互。
-   - **严禁** Service 层依赖 React 组件、Hook 或 Zustand UI Store。
-4. **状态隔离边界**：
-   - Zustand 状态库（`src/stores/`）仅管理纯 UI 瞬态，**严禁**导入或镜像服务端持久化数据作为独立真值源。
-5. **共享层无上层依赖**：
-   - `src/lib/`, `src/utils/`, `src/types/` 严禁反向依赖 `src/components/`, `src/pages/`, `src/hooks/`。
-
-## Data Flow
-
-系统中的核心数据流分为查询读取流与乐观变更写入流：
-
-### 1. 数据读取流 (Query Read Flow)
 ```text
-用户操作/页面加载
-  -> 页面组件调用业务 Hook (例如: useTasksQuery)
-  -> TanStack Query 检查内存缓存 (Cache Hit / Stale)
-  -> 若缓存失效，触发 matching Service (taskService.getTasks)
-  -> Service 携带 JWT 调用 Supabase PostgREST API
-  -> PostgreSQL 校验 user_id 与 RLS 策略
-  -> 返回受保护的结构化数据
-  -> 更新 TanStack Query 缓存并通知观察者
-  -> React 组件接收新数据触发 UI 渲染
+platform services / database
+        ↑
+src/config + src/lib + src/types + src/components/ui
+        ↑
+src/features/<domain> (api + components + hooks + types)
+        ↑
+src/app + src/pages (webview entry points & route composition)
 ```
 
-### 2. 数据写入与乐观更新流 (Mutation & Optimistic Flow)
-```text
-用户触发操作 (例如: 完成任务 / 拖拽排序)
-  -> 组件调用 Mutation Hook (例如: useUpdateTaskMutation)
-  -> Hook 立即触发 onMutate: 取消未决请求，对本地 Query 缓存执行乐观更新 (UI 零延迟响应)
-  -> Service 发起 Supabase RPC 事务请求 (附带当前已知的 updated_at 时间戳)
-  -> 数据库执行原子事务与版本并发检查 (若版本不匹配则抛出 VERSION_CONFLICT)
-  -> 数据库提交事务，并由 Postgres 触发器向 Realtime Broadcast 发送提交信号
-  -> 前端收到 RPC 成功响应: 以后端权威返回行覆盖乐观值
-  -> 若请求失败: 执行 onError 回滚本地缓存至快照，并弹出 Toast 错误提示
-```
+- 页面和组件通过领域 Hook/Service 使用远端数据；领域 Service 封装表访问与 RPC。
+- TanStack Query 持有远端缓存和请求生命周期；Zustand 只承载客户端 UI 偏好与交互状态。
+- Realtime Broadcast 是失效提示：收到消息后使对应查询失效，重新读取经过 RLS 筛选的数据库结果。
+- 用户隔离由 PostgreSQL RLS 和 RPC 所有权校验落实；客户端过滤只服务展示。
+- 知识库先加载目录和列表框架，笔记正文在用户选择后按需读取。
+- 数据库迁移以新文件追加，保留已应用的迁移历史。
+- Tauri capability 的权限范围与目标 Webview 的功能相匹配。
 
-## State Management
+## Cross-Boundary Contracts (跨端通信契约与协议规范)
 
-系统将状态严格划分为四种类型，职责与生命周期互不混淆：
+- **认证请求**：前端由 `@supabase/supabase-js` 管理 Auth Session，并通过 Supabase 客户端向 PostgREST/RPC 发起认证请求。
+- **数据读写**：领域服务使用表查询或数据库函数；复合且需要原子性的写入由迁移中定义的 RPC 承担。数据库字段和 RPC 参数的类型以 `src/types/database.ts` 与 `supabase/migrations/` 为依据。
+- **授权边界**：业务数据访问以有效用户身份和表/函数授权为基础；RLS 使用 `auth.uid()` 匹配 `user_id`，并对写入结果执行所有权约束。
+- **实时同步**：客户端订阅 `user:<userId>:sync` 私有频道的 `entity_changed` 事件。数据库触发器发送表、操作和实体关联等变更提示；客户端据此失效 Query Key，再经授权查询取得权威数据。
+- **桌面窗口通信**：窗口管理和原生能力通过 Tauri API、插件、Rust 命令与窗口事件完成。配置与实际事件名以 `src-tauri/` 和 `src/` 实现为准。
+- 当前仓库没有通用 REST 中间层或统一 HTTP Response Envelope；跨边界数据契约由 Supabase schema、生成/维护的数据库类型与 RPC 定义承载。
 
-1. **服务端状态 (Server State)**：
-   - **托管者**：TanStack Query (`@tanstack/react-query`)。
-   - **内容**：任务列表、项目看板、知识库目录与笔记正文、习惯打卡记录、复盘历史等。
-   - **真值源**：Supabase PostgreSQL 数据库。前端缓存仅为临时投影，通过权威 `queryKeys` 进行自动失效与生命周期管理。
-2. **客户端 UI 状态 (Client UI State)**：
-   - **托管者**：Zustand (`src/stores/`)。
-   - **内容**：当前激活的侧边栏菜单、高亮选区、双视觉主题体系设置（`app_theme_style`）、折叠展开偏好等。
-   - **真值源**：客户端本地内存及 LocalStorage。
-3. **组件局部状态 (Local Component State)**：
-   - **托管者**：React `useState` / `useReducer`。
-   - **内容**：表单即时输入内容、模态框/抽屉开合、富文本编辑器临时选区与编辑草稿。
-4. **窗口级会话状态 (Window Session State)**：
-   - **托管者**：`WindowSessionGate` / `AuthProvider`。
-   - **内容**：Supabase Session、当前登录用户信息，各独立 Webview 窗口共享主会话状态。
+## Shared Data Architecture (全局数据模型与数据隔离原则)
 
-## Interfaces and Integrations
+- **权威数据源**：PostgreSQL 中的用户数据由服务端事务与约束决定；浏览器/WebView 缓存是可失效的展示副本。
+- **用户隔离**：迁移为业务表启用 RLS，并通过认证用户 `auth.uid()` 与行的 `user_id` 限定访问；涉及特权上下文的数据库函数在迁移中单独约束执行权限和 `search_path`。
+- **冲突与审计字段**：版本化写入、服务端更新时间及领域状态转换以对应迁移定义为准；客户端乐观更新根据 RPC 结果提交或回滚。
+- **实时消息**：Broadcast 帮助多个客户端及时发现变化，但消息不是数据库行快照或授权结果。
+- **结构快照**：`docs/generated/db-schema.md` 是 schema 参考材料；SQL 迁移是数据库结构变更的权威历史。
 
-系统与外部系统及原生环境的集成接口定义如下：
+## Architectural Decisions & Evolution (核心架构决策与演进指引)
 
-### 1. Supabase 后端接口
-- **PostgREST HTTP API**：通过 `@supabase/supabase-js` 客户端执行标准的类型安全 CRUD 查询。
-- **PostgreSQL RPC 接口**：执行复杂业务事务，如 `reorder_project_stages`、`complete_task_with_habit` 等，确保多表操作的原子性与版本一致性。
-- **Supabase Auth (GoTrue)**：基于 JWT 的无状态身份认证与会话刷新。
-- **Realtime Broadcast WebSocket**：监听私有通道 `user:<user_id>:sync`，接收行级数据提交触发器发送的轻量失效信号。
+### 当前关键决策
 
-### 2. Tauri 桌面原生 IPC
-- **Window Management API**：创建、展示、隐藏、置顶独立 Webview 窗口（快捷编辑窗、悬浮助手）。
-- **System Tray & Notifications**：注册托盘菜单与系统原生推送通知。
-- **Cross-Window Event Bus**：利用 Tauri 全局事件（如 `workbuddy:theme-style-change`）在多窗口间即时广播风格偏好变更。
+1. **Tauri 2 + Supabase 托管后端**：桌面客户端直接使用 Supabase Auth、PostgREST、RPC 和 Realtime；数据库承担持久数据隔离与原子事务。
+2. **Query 与 UI 状态分离**：TanStack Query 管理可重新读取的服务端状态，Zustand 管理主题和界面交互状态。
+3. **多窗口共享前端能力**：Vite 为多个 HTML/Webview 入口构建资源；Rust/Tauri 管理窗口生命周期和原生能力。
+4. **基于私有 Broadcast 的查询失效**：变化通知不覆盖缓存；各 Webview 通过认证查询重新获取权威记录。
 
-## Runtime and Deployment
+### 演进约定
 
-系统在运行时的部署与承载拓扑如下：
-
-- **桌面宿主模型**：应用以单原生进程承载，在 Windows 环境下调用 WebView2 运行时，在 macOS/Linux 环境下调用 WebKit 运行时。
-- **多 Webview 并存**：
-  - `main` 主窗口：承载完整工作空间界面；
-  - `quick-edit` 辅助窗口：无边框轻量级快捷任务收集/编辑浮窗；
-  - `focus-assistant` 辅助窗口：轻量级桌面悬浮置顶专注时钟与桌宠伴侣。
-- **打包与分发**：
-  - 前端静态 Bundle 由 Vite 构建输出至 `dist/` 目录；
-  - Tauri CLI 将 Rust 原生可执行文件与前端静态资源打包为目标平台安装包（如 Windows `.msi` / `.exe`）。
-- **无自建服务器**：无需运维任何独立的 Node.js / Python 容器或网关，直接面向 Supabase 云端实例通信。
-
-## Cross-Cutting Concerns
-
-系统横切关注点的架构处理与详细文档路由指引：
-
-- **视觉与交互系统**：涵盖「现代极简风」与「复古像素 8-Bit 风」双主题体系及 5 级 Elevation 架构。详见 [docs/DESIGN.md](docs/DESIGN.md)。
-- **前端规范与性能优化**：涵盖组件拆分、Hook 封装、Tiptap 富文本架构与防抖落库。详见 [docs/FRONTEND.md](docs/FRONTEND.md)。
-
-
-## Architectural Invariants
-
-在系统架构演进过程中，必须永久遵守以下架构不变式：
-
-1. **UI 与数据层严格解耦**：前端 UI 禁止绕过 Service/Hook 逻辑直接访问数据库。
-2. **PostgreSQL 为单一权威源**：所有业务时间戳、完成状态、排序位次及软删除记录以数据库提交结果为唯一真值，客户端时钟仅用于展示。
-3. **实时广播为无状态失效标记**：Broadcast 通道仅传输失效信号，不传输敏感数据行，拉取数据必须重新走 RLS 过滤。
-4. **知识库按需分级加载**：严格维护按需加载边界，先拉取目录结构，正文内容延迟加载。
-5. **数据库迁移历史不可变**：已执行的迁移文件严禁修改，所有结构变更只能追加新迁移。
-6. **桌面原生权限最小化**：严禁向无需系统权限的辅助窗口过度授予 Tauri Capabilities。
-
-## Architectural Decisions
-
-系统关键架构决策记录（ADR）：
-
-### 1. 采用 Tauri 2 + Supabase 无独立后端架构
-- **决策**：选用 Tauri 2 搭配 Supabase BaaS 作为全站技术底座，不维护独立的 Node.js/Go 后端服务。
-- **理由**：极大降低个人生产力软件的部署与运维成本，Tauri 2 内存占用极低且启动极快；Supabase 的 RLS 和 RPC 能够满足所有复杂业务安全与事务要求。
-- **后果**：所有权限与并发控制逻辑必须沉淀至 PostgreSQL RLS 与 RPC 函数中。
-
-### 2. 双主题体系的 Token 化抽象驱动
-- **决策**：通过底层 CSS 变量与 Tailwind 设计令牌统一驱动「现代简洁」与「复古像素」双套视觉体系。
-- **理由**：赋予应用独特的像素复古 RPG 质感与严肃现代办公质感，同时避免为两种风格编写两套重复的业务组件。
-- **后果**：所有通用 UI 组件与业务组件必须严格使用语义化设计 Token，禁止内联硬编码色值。
-
-### 3. 基于 RPC 的版本受控原子并发控制
-- **决策**：在涉及多阶段排序、任务多维度批量移动等复杂场景下，使用自定义 Postgres RPC 函数并传递 `updated_at` 时间戳。
-- **理由**：避免网络延迟或多端操作引发的数据覆盖与脏写问题。
-- **后果**：相关写操作需要统一处理 `VERSION_CONFLICT` 错误并回滚前端乐观状态。
-
-## Known Constraints
-
-当前系统存在的已知边界与物理约束：
-
-- **桌面平台专用**：当前架构专为桌面多窗口设计，暂未针对移动端（iOS/Android）或 Web 浏览器独立部署进行适配。
-- **单主广播长连接归属**：为避免多 Webview 产生多个重复的 Supabase Realtime 连接，仅主窗口维持 WebSocket 长连接，次级窗口通过 Tauri 本地事件同步。
-- **自动化测试覆盖度**：目前仓库以 TypeScript 编译构建与严格类型检查为主要自动化保障，暂无端到端自动化测试套件，需结合手动验证。
-
-## Evolution Guidance
-
-指导系统未来健康演进的原则与规范：
-
-1. **规范化变更流转**：任何新增功能或核心行为改动，必须进入 `openspec/changes/` 创建标准化提案，包含规约 Delta、设计与任务清单。
-2. **架构边界维护**：新增功能模块必须在 `src/pages/`、`src/components/`、`src/hooks/` 和 `src/services/` 中建立清晰的职责边界，不可混杂。
-3. **数据库变更合规**：表结构或安全策略变更必须在 `supabase/migrations/` 中创建时间戳命名的追加迁移，并及时更新 `docs/generated/db-schema.md`。
-4. **组件复用优先**：新增 UI 必须优先复用 `src/components/ui/` 基础原子库与 Arco 封装组件，保持双主题与 5 级 Elevation 架构的一致性。
+- 新增系统边界、原生能力或持久化机制时，先更新本架构图和对应端侧文档。
+- 用户可见行为与数据契约变化通过 `openspec/changes/` 管理，并在实现后同步批准的规格。
+- 数据结构、RLS、RPC 或触发器变化通过新的 `supabase/migrations/` 文件演进，并同步生成的 schema 参考。
+- 前端新增领域模块时，优先保持领域视图、Hooks、Services、类型的职责清晰；只有存在跨领域复用时才提升为共享基础设施。

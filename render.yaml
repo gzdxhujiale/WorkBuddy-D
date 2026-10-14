@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: workbuddy-server
+    runtime: docker
+    dockerfilePath: ./deploy/Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    healthCheckPath: /api/v1/health
+    domains:
+      - workbuddy.hujiale.works
+    envVars:
+      - key: GIN_MODE
+        value: release
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: JWT_SECRET
+        sync: false
+      - key: DB_DSN
+        sync: false

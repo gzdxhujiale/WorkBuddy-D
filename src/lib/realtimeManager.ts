@@ -1,17 +1,7 @@
-import { supabase } from "@/lib/supabase";
+import { wsClient, type DeltaEvent } from "@/lib/wsClient";
 import { logSilent } from "@/lib/syncEngine";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
 import { isPendingScope, isQueryPending } from "@/lib/queryPending";
-
-type Subscription = ReturnType<typeof supabase.channel>;
-
-type SyncBroadcast = {
-  table?: string;
-  operation?: "INSERT" | "UPDATE" | "DELETE";
-  id?: string;
-  folder_id?: string | null;
-  previous_folder_id?: string | null;
-};
 
 const TABLES = [
   "knowledge_bases",
@@ -35,39 +25,42 @@ type InvalidationTarget = {
 };
 
 class RealtimeManager {
-  private channel: Subscription | null = null;
   private userId: string | null = null;
   private queryClient: QueryClient | null = null;
   private invalidateTimer: ReturnType<typeof setTimeout> | undefined;
   private dirtyTargets = new Map<string, InvalidationTarget>();
   private lastInvalidatedAt = new Map<string, number>();
-  private static readonly INVALIDATION_DELAY_MS = 500;
-  private static readonly INVALIDATION_COOLDOWN_MS = 2_000;
+  private unsubscribeWs: (() => void) | null = null;
+
+  private static readonly INVALIDATION_DELAY_MS = 300;
+  private static readonly INVALIDATION_COOLDOWN_MS = 1_500;
 
   start(userId: string, queryClient: QueryClient, accessToken: string) {
-    if (this.channel && this.userId === userId) return;
+    if (this.userId === userId && this.unsubscribeWs) return;
     this.stop();
     this.userId = userId;
     this.queryClient = queryClient;
     this.dirtyTargets.clear();
     this.lastInvalidatedAt.clear();
-    void supabase.realtime.setAuth(accessToken).then(() => {
-      if (this.userId !== userId || this.channel) return;
-      const channel = supabase.channel(`user:${userId}:sync`, { config: { private: true } });
-      this.channel = channel;
-      channel.on("broadcast", { event: "entity_changed" }, ({ payload }) => {
-        const event = payload as SyncBroadcast;
-        if (event.table && TABLES.includes(event.table as typeof TABLES[number])) this.notify(event.table, event);
+
+    try {
+      wsClient.connect(accessToken);
+      this.unsubscribeWs = wsClient.subscribe((event: DeltaEvent) => {
+        if (event.table && TABLES.includes(event.table as typeof TABLES[number])) {
+          this.notify(event.table, event);
+        }
       });
-      channel.subscribe((status) => {
-        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") logSilent("Realtime", `user Broadcast subscription ${status}`);
-      });
-    }).catch((error: unknown) => logSilent("Realtime", "unable to set Broadcast authorization", error));
+    } catch (err) {
+      logSilent("RealtimeManager", "Failed to connect to WebSocket sync hub", err);
+    }
   }
 
   stop() {
-    if (this.channel) void supabase.removeChannel(this.channel);
-    this.channel = null;
+    if (this.unsubscribeWs) {
+      this.unsubscribeWs();
+      this.unsubscribeWs = null;
+    }
+    wsClient.disconnect();
     this.userId = null;
     this.queryClient = null;
     if (this.invalidateTimer) clearTimeout(this.invalidateTimer);
@@ -75,7 +68,7 @@ class RealtimeManager {
     this.dirtyTargets.clear();
   }
 
-  private notify(table: string, payload: SyncBroadcast) {
+  private notify(table: string, payload: DeltaEvent) {
     if (!this.userId || !this.queryClient) return;
 
     switch (table) {
@@ -91,24 +84,18 @@ class RealtimeManager {
       case "folder_note_groups":
         if (payload.folder_id) {
           this.addPendingTarget(["lists", this.userId, "contents", payload.folder_id], true);
-        }
-        if (payload.previous_folder_id && payload.previous_folder_id !== payload.folder_id) {
-          this.addPendingTarget(["lists", this.userId, "contents", payload.previous_folder_id], true);
         } else {
-          if (!payload.folder_id) this.addPendingTarget(["lists", this.userId, "all"], true);
+          this.addPendingTarget(["lists", this.userId, "all"], true);
         }
         break;
       case "notes":
         if (payload.folder_id) {
           this.addPendingTarget(["lists", this.userId, "contents", payload.folder_id], true);
         }
-        if (payload.previous_folder_id && payload.previous_folder_id !== payload.folder_id) {
-          this.addPendingTarget(["lists", this.userId, "contents", payload.previous_folder_id], true);
-        }
         if (payload.id) {
           this.addPendingTarget(["lists", this.userId, "note", payload.id], true);
         }
-        if (!payload.folder_id && !payload.previous_folder_id && !payload.id) {
+        if (!payload.folder_id && !payload.id) {
           this.addPendingTarget(["lists", this.userId, "all"], true);
         }
         break;
@@ -164,9 +151,10 @@ class RealtimeManager {
       const keyId = JSON.stringify(target);
       if (now - (this.lastInvalidatedAt.get(keyId) ?? 0) < RealtimeManager.INVALIDATION_COOLDOWN_MS) continue;
       const isKnowledgeTarget = target.queryKey[0] === "lists";
-      if (isQueryPending(target.queryKey)
-        || (isKnowledgeTarget && isPendingScope(`knowledge:${this.userId}`))) {
-        // Re-queue only this target; other targets in the batch continue below.
+      if (
+        isQueryPending(target.queryKey) ||
+        (isKnowledgeTarget && isPendingScope(`knowledge:${this.userId}`))
+      ) {
         this.dirtyTargets.set(keyId, target);
         hasDeferred = true;
         continue;
@@ -188,4 +176,3 @@ class RealtimeManager {
 }
 
 export const realtimeManager = new RealtimeManager();
-

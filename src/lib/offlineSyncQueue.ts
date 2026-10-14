@@ -15,11 +15,11 @@ export type OfflineOperation = {
 type Executor = (payload: unknown) => Promise<void>;
 const executors = new Map<string, Executor>();
 const STORAGE_KEY = "workbuddy_offline_operations_v1";
-const LEGACY_STORAGE_KEY = "fishbuddy_offline_operations_v1";
+
 
 function readQueue(): OfflineOperation[] {
   try {
-    const raw = localStorage.getItem(userStorageKey(STORAGE_KEY)) ?? localStorage.getItem(userStorageKey(LEGACY_STORAGE_KEY));
+    const raw = localStorage.getItem(userStorageKey(STORAGE_KEY));
     const parsed = JSON.parse(raw ?? "[]");
     if (!Array.isArray(parsed)) throw new Error("离线队列格式无效");
     return parsed.filter((item): item is OfflineOperation => (

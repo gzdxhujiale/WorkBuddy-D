@@ -132,23 +132,25 @@ const extensions = [
 
 `StarterKit` 已经包含的扩展不能与同名扩展同时启用，否则可能出现重复扩展警告或 schema 冲突。当前共享组件显式关闭了会被 `reactjs-tiptap-editor` 版本替换的 StarterKit 扩展，再注册对应的库扩展与 `RichTextXxx` 控件；新增能力必须沿用这个模式，而不是重复注册。
 
-常用导入路径：
+常用导入路径与快捷键映射：
 
-| 能力 | 扩展 | 工具栏组件 |
-| --- | --- | --- |
-| 粗体/斜体/删除线/下划线 | `bold` / `italic` / `strike` / `textunderline` | `RichTextBold` / `RichTextItalic` / `RichTextStrike` / `RichTextUnderline` |
-| 标题 | `heading` | `RichTextHeading` |
-| 列表 | `bulletlist` / `orderedlist` / `tasklist` | 对应 `RichText...` |
-| 链接 | `link` | `RichTextLink` |
-| 颜色/高亮 | `color` / `highlight` | `RichTextColor` / `RichTextHighlight` |
-| 对齐 | `textalign` | `RichTextAlign` |
-| 代码 | `code` / `codeblock` | `RichTextCode` / `RichTextCodeBlock` |
-| 撤销/重做 | `history` | `RichTextUndo` / `RichTextRedo` |
-| 查找替换 | `searchandreplace` | `RichTextSearchAndReplace` |
-| 清除格式 | `clear` | `RichTextClear` |
-| 表格 | `table` | `RichTextTable` |
-| Drawer | `drawer` | `RichTextDrawer` |
-| 分割线 | `horizontalrule` | `RichTextHorizontalRule` |
+| 能力 | 扩展 | 工具栏组件 | 快捷键 |
+| --- | --- | --- | --- |
+| 标题 1-6 / 正文 | `heading` | `RichTextHeading` | `Ctrl+1` ~ `Ctrl+6`（切换标题 1-6），`Ctrl+0`（设为正文） |
+| 无序列表 | `bulletlist` | `RichTextBulletList` | `Ctrl+7` / `Ctrl+Shift+8` |
+| 有序列表 | `orderedlist` | `RichTextOrderedList` | `Ctrl+8` / `Ctrl+Shift+7` |
+| 任务列表 | `tasklist` | `RichTextTaskList` | `Ctrl+9` / `Ctrl+Shift+9` |
+| 粗体/斜体/删除线/下划线 | `bold` / `italic` / `strike` / `textunderline` | `RichTextBold` / `RichTextItalic` / `RichTextStrike` / `RichTextUnderline` | `Ctrl+B` / `Ctrl+I` / `Ctrl+Shift+S` / `Ctrl+U` |
+| 链接 | `link` | `RichTextLink` | `Ctrl+K` |
+| 颜色/高亮 | `color` / `highlight` | `RichTextColor` / `RichTextHighlight` | - |
+| 对齐 | `textalign` | `RichTextAlign` | `Ctrl+Shift+L/E/R/J` |
+| 代码 | `code` / `codeblock` | `RichTextCode` / `RichTextCodeBlock` | `Ctrl+E` / `Ctrl+Alt+C` |
+| 撤销/重做 | `history` | `RichTextUndo` / `RichTextRedo` | `Ctrl+Z` / `Ctrl+Y` |
+| 查找替换 | `searchandreplace` | `RichTextSearchAndReplace` | `Ctrl+F` |
+| 清除格式 | `clear` | `RichTextClear` | - |
+| 表格 | `table` | `RichTextTable` | - |
+| Drawer | `drawer` | `RichTextDrawer` | - |
+| 分割线 | `horizontalrule` | `RichTextHorizontalRule` | - |
 
 ## 7. 气泡菜单和斜杠命令
 

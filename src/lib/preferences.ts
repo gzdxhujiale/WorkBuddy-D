@@ -3,17 +3,14 @@ import { emit } from "@tauri-apps/api/event";
 export type AppThemeStyle = "default" | "retro-pixel";
 
 const OPEN_FOCUS_ASSISTANT_ON_START_KEY = "workbuddy.openFocusAssistantOnStart";
-const LEGACY_OPEN_FOCUS_ASSISTANT_ON_START_KEY = "fishbuddy.openFocusAssistantOnStart";
-
 const APP_THEME_STYLE_KEY = "workbuddy.appThemeStyle";
-const LEGACY_APP_THEME_STYLE_KEY = "fishbuddy.appThemeStyle";
 
 export function isTauriEnv(): boolean {
   return typeof window !== "undefined" && ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
 }
 
 export function shouldOpenFocusAssistantOnStart(): boolean {
-  return (localStorage.getItem(OPEN_FOCUS_ASSISTANT_ON_START_KEY) ?? localStorage.getItem(LEGACY_OPEN_FOCUS_ASSISTANT_ON_START_KEY)) === "true";
+  return localStorage.getItem(OPEN_FOCUS_ASSISTANT_ON_START_KEY) === "true";
 }
 
 export function setOpenFocusAssistantOnStart(enabled: boolean): void {
@@ -21,7 +18,7 @@ export function setOpenFocusAssistantOnStart(enabled: boolean): void {
 }
 
 export function getAppThemeStyle(): AppThemeStyle {
-  const saved = localStorage.getItem(APP_THEME_STYLE_KEY) ?? localStorage.getItem(LEGACY_APP_THEME_STYLE_KEY);
+  const saved = localStorage.getItem(APP_THEME_STYLE_KEY);
   if (saved === "retro-pixel" || saved === "default") {
     return saved;
   }
@@ -47,9 +44,12 @@ export function applyAppThemeStyle(style: AppThemeStyle = getAppThemeStyle()): v
 }
 
 export interface NotificationDisplayOptions {
-  centerCard: boolean;      // 屏幕中央互动卡片 (默认 true)
-  assistantBubble: boolean; // 桌面悬浮助手对话气泡 (默认 true)
-  systemTray: boolean;      // 系统托盘通知 (默认 true)
+  /** 屏幕中央互动卡片 (HUD modal, 默认 true) */
+  centerCard: boolean;
+  /** 桌面悬浮助手动作与对话气泡 (默认 true) */
+  assistantBubble: boolean;
+  /** 多屏幕右下角悬浮通知卡片及系统托盘兜底通知 (默认 true) */
+  systemTray: boolean;
 }
 
 const NOTIFICATION_DISPLAY_OPTIONS_KEY = "workbuddy.notificationDisplayOptions";

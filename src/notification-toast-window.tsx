@@ -1,6 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
-import { NotificationToast } from "@/components/focus/NotificationToast";
+import { NotificationToastWindow } from "@/app/windows/NotificationToastWindow";
 import { applyAppThemeStyle } from "@/lib/preferences";
 import "./index.css";
 
@@ -8,6 +8,6 @@ applyAppThemeStyle();
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <NotificationToast />
+    <NotificationToastWindow />
   </React.StrictMode>
 );

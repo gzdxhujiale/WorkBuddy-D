@@ -39,6 +39,53 @@ import {
 import "reactjs-tiptap-editor/style.css";
 import { cn } from "@/lib/utils";
 
+type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
+
+const CustomHeading = Heading.extend({
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      "Mod-1": () => this.editor.commands.toggleHeading({ level: 1 }),
+      "Mod-2": () => this.editor.commands.toggleHeading({ level: 2 }),
+      "Mod-3": () => this.editor.commands.toggleHeading({ level: 3 }),
+      "Mod-4": () => this.editor.commands.toggleHeading({ level: 4 }),
+      "Mod-5": () => this.editor.commands.toggleHeading({ level: 5 }),
+      "Mod-6": () => this.editor.commands.toggleHeading({ level: 6 }),
+      "Mod-0": () => this.editor.commands.setParagraph(),
+    };
+  },
+});
+
+const CustomBulletList = BulletList.extend({
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      "Mod-7": () => this.editor.commands.toggleBulletList(),
+      "Mod-Shift-8": () => this.editor.commands.toggleBulletList(),
+    };
+  },
+});
+
+const CustomOrderedList = OrderedList.extend({
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      "Mod-8": () => this.editor.commands.toggleOrderedList(),
+      "Mod-Shift-7": () => this.editor.commands.toggleOrderedList(),
+    };
+  },
+});
+
+const CustomTaskList = TaskList.extend({
+  addKeyboardShortcuts() {
+    return {
+      ...this.parent?.(),
+      "Mod-9": () => this.editor.commands.toggleTaskList(),
+      "Mod-Shift-9": () => this.editor.commands.toggleTaskList(),
+    };
+  },
+});
+
 export interface ReactjsTiptapEditorProps {
   content: string;
   onChange: (content: string) => void;
@@ -130,15 +177,8 @@ function EditorBubbles() {
   const { t } = useLocale();
 
   const commandList = useMemo(() => {
-    const defaultList = renderCommandListDefault({ t });
-    return defaultList.map((section) => ({
-      ...section,
-      commands: section.commands.filter(
-        (cmd) => !["heading4", "heading5", "heading6"].includes(cmd.name)
-      ),
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return renderCommandListDefault({ t });
+  }, [t]);
 
   return (
     <>
@@ -181,12 +221,27 @@ export function ReactjsTiptapEditor({
         underline: false,
       }),
       Selection,
-      Heading.configure({ levels: [1, 2, 3] }),
+      CustomHeading.configure({
+        levels: [1, 2, 3, 4, 5, 6] as HeadingLevel[],
+        shortcutKeys: [
+          [],
+          ["mod", "1"],
+          ["mod", "2"],
+          ["mod", "3"],
+          ["mod", "4"],
+          ["mod", "5"],
+          ["mod", "6"],
+        ],
+      }),
       Bold,
       Italic,
       TextUnderline,
-      BulletList,
-      OrderedList,
+      CustomBulletList.configure({
+        shortcutKeys: ["mod", "7"],
+      }),
+      CustomOrderedList.configure({
+        shortcutKeys: ["mod", "8"],
+      }),
       Strike,
       Blockquote,
       Code,
@@ -198,7 +253,9 @@ export function ReactjsTiptapEditor({
       }),
       Clear,
       TextAlign.configure({ types: ["heading", "paragraph", "list_item"] }),
-      TaskList,
+      CustomTaskList.configure({
+        shortcutKeys: ["mod", "9"],
+      }),
       Table,
       SearchAndReplace,
       SlashCommand,
@@ -285,11 +342,13 @@ export function ReactjsTiptapEditor({
             "[&_.ProseMirror_h1]:!text-[20px] [&_.ProseMirror_h1]:!font-bold [&_.ProseMirror_h1]:!mt-1.5 [&_.ProseMirror_h1]:!mb-1.5 " +
             "[&_.ProseMirror_h2]:!text-[18px] [&_.ProseMirror_h2]:!font-bold [&_.ProseMirror_h2]:!mt-1.5 [&_.ProseMirror_h2]:!mb-1.5 " +
             "[&_.ProseMirror_h3]:!text-[16px] [&_.ProseMirror_h3]:!font-bold [&_.ProseMirror_h3]:!mt-1.5 [&_.ProseMirror_h3]:!mb-1.5 " +
+            "[&_.ProseMirror_h4]:!text-[15px] [&_.ProseMirror_h4]:!font-bold [&_.ProseMirror_h4]:!mt-1.5 [&_.ProseMirror_h4]:!mb-1.5 " +
+            "[&_.ProseMirror_h5]:!text-[14px] [&_.ProseMirror_h5]:!font-bold [&_.ProseMirror_h5]:!mt-1.5 [&_.ProseMirror_h5]:!mb-1.5 " +
+            "[&_.ProseMirror_h6]:!text-[13px] [&_.ProseMirror_h6]:!font-bold [&_.ProseMirror_h6]:!mt-1.5 [&_.ProseMirror_h6]:!mb-1.5 " +
             "[&_.ProseMirror_ul]:!mt-1.5 [&_.ProseMirror_ul]:!mb-1.5 [&_.ProseMirror_ol]:!mt-1.5 [&_.ProseMirror_ol]:!mb-1.5 " +
             "[&_.ProseMirror_ul_ul]:!my-0.5 [&_.ProseMirror_ol_ol]:!my-0.5 [&_.ProseMirror_ul_ol]:!my-0.5 [&_.ProseMirror_ol_ul]:!my-0.5 " +
             "[&_.ProseMirror_li_p]:!my-0 " +
-            "[&_.ProseMirror_h4]:!hidden [&_.ProseMirror_h5]:!hidden [&_.ProseMirror_h6]:!hidden " +
-            "[&_.heading-1]:!text-[20px] [&_.heading-2]:!text-[18px] [&_.heading-3]:!text-[16px] " +
+            "[&_.heading-1]:!text-[20px] [&_.heading-2]:!text-[18px] [&_.heading-3]:!text-[16px] [&_.heading-4]:!text-[15px] [&_.heading-5]:!text-[14px] [&_.heading-6]:!text-[13px] " +
             "[&_.ProseMirror_blockquote]:my-3 [&_.ProseMirror_blockquote]:rounded-md [&_.ProseMirror_blockquote]:rounded-l-none [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-primary/45 [&_.ProseMirror_blockquote]:bg-muted/50 [&_.ProseMirror_blockquote]:px-4 [&_.ProseMirror_blockquote]:py-2 [&_.ProseMirror_blockquote]:text-muted-foreground [&_.ProseMirror_blockquote]:italic " +
             "[&_.ProseMirror_pre]:my-3 [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:rounded-md [&_.ProseMirror_pre]:border [&_.ProseMirror_pre]:border-border [&_.ProseMirror_pre]:bg-muted [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:font-mono [&_.ProseMirror_pre]:text-sm " +
             "[&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0 [&_.ProseMirror_pre_code]:text-inherit " +
@@ -379,5 +438,3 @@ export function convertTipTapJsonToMarkdown(jsonOrText: string): string {
 
   return jsonOrText;
 }
-
-
