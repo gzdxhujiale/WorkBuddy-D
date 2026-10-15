@@ -64,6 +64,7 @@ Bulletproof React 将可从服务器取得的远端数据与客户端 UI 状态�
 ## Routing & Data Lifecycle
 
 - 路由树在 `src/app/routes/router.tsx` 定义，`/` 重定向到 `/today`；页面使用 `React.lazy` 延迟导入。
+- **意图感知预加载与并发调度**：路由器配置基于意图的预加载机制（设置 50ms 悬停延迟），在用户触发导航前后台预拉取路由代码包与资源；跨日期或富文本文档的重型视图切换采用并发过渡（Concurrent Transition）调度，维持用户键入与界面交互的持续高响应性。
 - `src/main.tsx` 装配 QueryClient Provider 与 `AppErrorBoundary`；`App.tsx` 检测 Supabase Session 后显示登录视图或带 Auth/Realtime Provider 的应用路由。
 - 登录用户变化时清理 Query 缓存和 UI 用户作用域，再使用新 Session 渲染已认证区域，避免上一个账户的缓存展示给下一个账户。
 - 页面与领域组件通过 Hook 访问查询状态；Query Key 由 `src/lib/syncEngine.ts` 等现有查询键工厂统一维护，并按用户标识隔离。

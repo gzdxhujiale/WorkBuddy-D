@@ -20,6 +20,7 @@ WorkBuddy-D 是一款以 Tauri 2、React 19 与 Supabase 构建的个人规划�
 - **分层访问**：页面和组件通过 Hook、Service 访问 Supabase；Realtime Broadcast 仅触发 Query 失效，再通过 RLS 读取权威数据。
 - **迁移演进**：数据库变更追加到 `supabase/migrations/`，保留已应用迁移内容。
 - **原生权限**：新增 Tauri 权限时，依据窗口的实际能力需求更新对应 capability。
+- **规格纯粹与正向表达**：`openspec/specs/` 仅规范业务能力契约与系统行为（WHAT）；技术选型、前端缓存、后端驱动与 UI/UX 视觉分别归属 `docs/FRONTEND.md`、`docs/BACKEND.md` 与 `docs/DESIGN.md`。规格编写全程贯彻正向行动化表述，定义明确的不变量与期望状态，杜绝“粉色大象”式负向禁令与历史修补疤痕。
 
 ## Task Routing (任务路由与事实来源)
 

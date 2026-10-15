@@ -2,7 +2,7 @@ import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { dailyReviewApi } from "../api/dailyReviewService";
 import { dailyReviewQueries } from "../api/dailyReviewQueries";
-import { DailyReviewItem } from "../types";
+import { DailyReviewItem, DailyReviewSummary } from "../types";
 import { useOptimisticSync } from "@/hooks/useOptimisticSync";
 import { queryKeys } from "@/lib/syncEngine";
 import { useAuth } from "@/features/auth";
@@ -47,6 +47,27 @@ export function useDailyReviewData() {
   return useQuery(dailyReviewQueries.all(userId));
 }
 
+export function useDailyReviewSummaries() {
+  const { userId } = useAuth();
+  return useQuery(dailyReviewQueries.summaries(userId));
+}
+
+export function useDailyReviewDetail(date: string) {
+  const { userId } = useAuth();
+  return useQuery(dailyReviewQueries.detail(userId, date));
+}
+
+export function useDailyReviewStats() {
+  const { userId } = useAuth();
+  return useQuery(dailyReviewQueries.stats(userId));
+}
+
+export function useDailyReviewHeatmap(year?: number) {
+  const { userId } = useAuth();
+  const currentYear = year ?? new Date().getFullYear();
+  return useQuery(dailyReviewQueries.heatmap(userId, currentYear));
+}
+
 export function useReviewActions() {
   const queryClient = useQueryClient();
   const { userId } = useAuth();
@@ -59,16 +80,48 @@ export function useReviewActions() {
     updateCache: (old, review) => {
       const list = old ?? [];
       const idx = list.findIndex((r) => r.date === review.date);
+      let nextList = list;
       if (idx >= 0) {
-        const next = [...list];
-        next[idx] = review;
-        return next;
+        nextList = [...list];
+        nextList[idx] = review;
+      } else {
+        nextList = [...list, review];
       }
-      return [...list, review];
+
+      // Update detail query cache directly
+      queryClient.setQueryData(queryKeys.dailyReviews.detail(userId, review.date), review);
+
+      // Update summaries query cache
+      queryClient.setQueryData<DailyReviewSummary[]>(queryKeys.dailyReviews.summaries(userId), (prevSummaries) => {
+        const sList = prevSummaries ?? [];
+        const sIdx = sList.findIndex((s) => s.date === review.date);
+        const isEmpty = isReviewEmpty(review.content);
+        if (isEmpty) {
+          return sList.filter((s) => s.date !== review.date);
+        }
+        if (sIdx >= 0) {
+          const nextS = [...sList];
+          nextS[sIdx] = { ...nextS[sIdx], updatedAt: review.updatedAt };
+          return nextS;
+        }
+        return [
+          {
+            id: review.id,
+            date: review.date,
+            createdAt: review.createdAt,
+            updatedAt: review.updatedAt,
+            lockVersion: review.lockVersion ?? 1,
+          },
+          ...sList,
+        ];
+      });
+
+      return nextList;
     },
     syncFn: async (review) => {
       const savedEntity = await dailyReviewApi.upsertReview(review);
       if (savedEntity === undefined) return;
+
       queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
         old?.map((item) =>
           item.date === review.date
@@ -83,18 +136,33 @@ export function useReviewActions() {
             : item,
         ) ?? old,
       );
+
+      queryClient.setQueryData<DailyReviewItem | null>(queryKeys.dailyReviews.detail(userId, review.date), (prev) =>
+        prev
+          ? {
+              ...prev,
+              id: savedEntity.id,
+              updatedAt: savedEntity.updatedAt,
+              baseUpdatedAt: savedEntity.updatedAt,
+              lockVersion: savedEntity.lockVersion,
+              isNew: false,
+            }
+          : prev
+      );
+
+      // Invalidate server stats to sync streak and compound growth accurately
+      queryClient.invalidateQueries({ queryKey: queryKeys.dailyReviews.stats(userId) });
     },
     getSyncKey: (review) => review.date,
   });
 
   const saveReview = useCallback(
     (date: string, content: string): DailyReviewItem => {
-      const prev = queryClient.getQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY) ?? [];
-      const existing = prev.find((r) => r.date === date);
+      const detailCached = queryClient.getQueryData<DailyReviewItem | null>(queryKeys.dailyReviews.detail(userId, date));
+      const listCached = (queryClient.getQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY) ?? []).find((r) => r.date === date);
+      const existing = detailCached || listCached;
       const isEmpty = isReviewEmpty(content);
 
-      // Editors can emit their current document while being rehydrated after a
-      // Realtime refetch. Treat an identical value as a true no-op.
       if (existing && existing.content === content) {
         return existing;
       }
@@ -131,7 +199,7 @@ export function useReviewActions() {
       triggerUpsert(review);
       return review;
     },
-    [queryClient, triggerUpsert, DAILY_REVIEW_QUERY_KEY]
+    [queryClient, triggerUpsert, DAILY_REVIEW_QUERY_KEY, userId]
   );
 
   const deleteReview = useCallback(

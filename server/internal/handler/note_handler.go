@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgtype"
+	"workbuddy-server/internal/buffer"
 	"workbuddy-server/internal/database/sqlc"
 	"workbuddy-server/internal/middleware"
 	"workbuddy-server/internal/ws"
@@ -15,10 +16,11 @@ import (
 type NoteHandler struct {
 	queries sqlc.Querier
 	hub     *ws.Hub
+	buffer  *buffer.NoteBufferManager
 }
 
-func NewNoteHandler(queries sqlc.Querier, hub *ws.Hub) *NoteHandler {
-	return &NoteHandler{queries: queries, hub: hub}
+func NewNoteHandler(queries sqlc.Querier, hub *ws.Hub, bufMgr *buffer.NoteBufferManager) *NoteHandler {
+	return &NoteHandler{queries: queries, hub: hub, buffer: bufMgr}
 }
 
 // --- Knowledge Bases ---
@@ -713,6 +715,65 @@ func (h *NoteHandler) PatchNote(c *gin.Context) {
 	})
 
 	c.JSON(http.StatusOK, note)
+}
+
+func (h *NoteHandler) BufferPatchNote(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	noteIDStr := c.Param("id")
+	noteID, err := uuid.Parse(noteIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid note id"})
+		return
+	}
+
+	var req PatchNoteRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if h.buffer != nil {
+		h.buffer.BufferPatch(userID, noteID, req.Title, req.Content, req.LockVersion)
+		c.JSON(http.StatusOK, gin.H{
+			"status":       "buffered",
+			"id":           noteIDStr,
+			"lock_version": req.LockVersion,
+		})
+		return
+	}
+
+	// Fallback to direct synchronous patch if buffer manager not initialized
+	h.PatchNote(c)
+}
+
+func (h *NoteHandler) SearchNotes(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	query := c.Query("q")
+	if query == "" {
+		c.JSON(http.StatusOK, []interface{}{})
+		return
+	}
+
+	results, err := h.queries.SearchNotes(c.Request.Context(), sqlc.SearchNotesParams{
+		UserID:  pgtype.UUID{Bytes: userID, Valid: true},
+		Column2: query,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, results)
 }
 
 func (h *NoteHandler) ReorderNotes(c *gin.Context) {

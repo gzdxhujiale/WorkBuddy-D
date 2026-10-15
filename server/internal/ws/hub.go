@@ -1,24 +1,30 @@
 package ws
 
 import (
+	"context"
 	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
+	"workbuddy-server/internal/database/sqlc"
 	"workbuddy-server/internal/middleware"
 )
 
 type Hub struct {
 	mu      sync.RWMutex
 	clients map[uuid.UUID]map[*Client]bool
+	queries sqlc.Querier
 }
 
-func NewHub() *Hub {
+func NewHub(queries sqlc.Querier) *Hub {
 	return &Hub{
 		clients: make(map[uuid.UUID]map[*Client]bool),
+		queries: queries,
 	}
 }
 
@@ -53,6 +59,30 @@ func (h *Hub) Unregister(client *Client) {
 }
 
 func (h *Hub) BroadcastToUser(userID uuid.UUID, sender *Client, msg DeltaMessage) {
+	// If queries is configured, append to entity_change_logs and get monotonic seq_id
+	if h.queries != nil {
+		entityUUID, _ := uuid.Parse(msg.ID)
+		payloadBytes, err := json.Marshal(msg.Data)
+		if err != nil || len(payloadBytes) == 0 {
+			payloadBytes = []byte("{}")
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+		logRow, err := h.queries.InsertChangeLog(ctx, sqlc.InsertChangeLogParams{
+			UserID:     pgtype.UUID{Bytes: userID, Valid: true},
+			EntityType: msg.Table,
+			EntityID:   pgtype.UUID{Bytes: entityUUID, Valid: true},
+			Action:     string(msg.Action),
+			Payload:    payloadBytes,
+		})
+		cancel()
+		if err != nil {
+			log.Printf("[WS] Warning: failed to log change to entity_change_logs: %v", err)
+		} else {
+			msg.SeqID = logRow.SeqID
+		}
+	}
+
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 

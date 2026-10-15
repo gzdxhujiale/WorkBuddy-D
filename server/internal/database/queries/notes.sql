@@ -210,3 +210,11 @@ RETURNING *;
 UPDATE knowledge_base_templates
 SET deleted_at = now(), updated_at = now()
 WHERE id = $1 AND user_id = $2;
+
+-- name: SearchNotes :many
+SELECT id, user_id, folder_id, group_id, title, content, sort_order, lock_version, created_at, updated_at
+FROM notes
+WHERE user_id = $1 AND deleted_at IS NULL
+  AND (title ILIKE '%' || $2 || '%' OR content ILIKE '%' || $2 || '%')
+ORDER BY updated_at DESC
+LIMIT 50;

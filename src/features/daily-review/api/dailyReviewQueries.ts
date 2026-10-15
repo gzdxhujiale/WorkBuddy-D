@@ -10,4 +10,36 @@ export const dailyReviewQueries = {
       enabled: Boolean(userId),
       staleTime: 1000 * 60 * 5,
     }),
+
+  summaries: (userId: string) =>
+    queryOptions({
+      queryKey: queryKeys.dailyReviews.summaries(userId),
+      queryFn: () => dailyReviewApi.loadSummaries(),
+      enabled: Boolean(userId),
+      staleTime: 1000 * 60 * 5,
+    }),
+
+  detail: (userId: string, date: string) =>
+    queryOptions({
+      queryKey: queryKeys.dailyReviews.detail(userId, date),
+      queryFn: () => dailyReviewApi.loadByDate(date),
+      enabled: Boolean(userId) && Boolean(date),
+      staleTime: 1000 * 60 * 2,
+    }),
+
+  stats: (userId: string) =>
+    queryOptions({
+      queryKey: queryKeys.dailyReviews.stats(userId),
+      queryFn: () => dailyReviewApi.loadStats(),
+      enabled: Boolean(userId),
+      staleTime: 1000 * 60 * 5,
+    }),
+
+  heatmap: (userId: string, year: number) =>
+    queryOptions({
+      queryKey: queryKeys.dailyReviews.heatmap(userId, year),
+      queryFn: () => dailyReviewApi.loadHeatmap(year),
+      enabled: Boolean(userId),
+      staleTime: 1000 * 60 * 5,
+    }),
 };

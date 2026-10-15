@@ -3,6 +3,23 @@ SELECT * FROM daily_reviews
 WHERE user_id = $1
 ORDER BY date DESC;
 
+-- name: ListDailyReviewSummaries :many
+SELECT id, user_id, date, lock_version, created_at, updated_at
+FROM daily_reviews
+WHERE user_id = $1
+ORDER BY date DESC;
+
+-- name: GetDailyReviewByDate :one
+SELECT * FROM daily_reviews
+WHERE user_id = $1 AND date = $2
+LIMIT 1;
+
+-- name: GetDailyReviewDatesInRange :many
+SELECT date, id, lock_version, updated_at
+FROM daily_reviews
+WHERE user_id = $1 AND date >= $2 AND date <= $3
+ORDER BY date ASC;
+
 -- name: UpsertDailyReview :one
 INSERT INTO daily_reviews (id, user_id, date, content, lock_version, created_at, updated_at)
 VALUES ($1, $2, $3, $4, 1, now(), now())

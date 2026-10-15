@@ -20,14 +20,20 @@ type Querier interface {
 	CreateTask(ctx context.Context, arg CreateTaskParams) (TimeManagementTask, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DetachFoldersFromKnowledgeBase(ctx context.Context, arg DetachFoldersFromKnowledgeBaseParams) error
+	GetDailyReviewByDate(ctx context.Context, arg GetDailyReviewByDateParams) (DailyReview, error)
+	GetDailyReviewDatesInRange(ctx context.Context, arg GetDailyReviewDatesInRangeParams) ([]GetDailyReviewDatesInRangeRow, error)
 	GetFolderByID(ctx context.Context, arg GetFolderByIDParams) (KnowledgeBaseFolder, error)
+	GetLatestSeqID(ctx context.Context, userID pgtype.UUID) (int64, error)
 	GetNextProjectStageSortOrder(ctx context.Context, arg GetNextProjectStageSortOrderParams) (int32, error)
 	GetNoteByID(ctx context.Context, arg GetNoteByIDParams) (Note, error)
 	GetTaskByID(ctx context.Context, arg GetTaskByIDParams) (TimeManagementTask, error)
 	GetUserByEmail(ctx context.Context, email string) (User, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
+	InsertChangeLog(ctx context.Context, arg InsertChangeLogParams) (EntityChangeLog, error)
 	InterruptOpenFocusSessions(ctx context.Context, userID pgtype.UUID) error
 	ListAllProjectStages(ctx context.Context, userID pgtype.UUID) ([]ProjectStage, error)
+	ListChangeLogsSince(ctx context.Context, arg ListChangeLogsSinceParams) ([]EntityChangeLog, error)
+	ListDailyReviewSummaries(ctx context.Context, userID pgtype.UUID) ([]ListDailyReviewSummariesRow, error)
 	ListDailyReviews(ctx context.Context, userID pgtype.UUID) ([]DailyReview, error)
 	ListFocusSessions(ctx context.Context, userID pgtype.UUID) ([]FocusSession, error)
 	ListFocusSessionsSince(ctx context.Context, arg ListFocusSessionsSinceParams) ([]FocusSession, error)
@@ -46,6 +52,7 @@ type Querier interface {
 	ListTasksByProject(ctx context.Context, arg ListTasksByProjectParams) ([]TimeManagementTask, error)
 	MoveNote(ctx context.Context, arg MoveNoteParams) (Note, error)
 	PatchNote(ctx context.Context, arg PatchNoteParams) (Note, error)
+	SearchNotes(ctx context.Context, arg SearchNotesParams) ([]SearchNotesRow, error)
 	SoftDeleteFolder(ctx context.Context, arg SoftDeleteFolderParams) error
 	SoftDeleteFolderGroup(ctx context.Context, arg SoftDeleteFolderGroupParams) error
 	SoftDeleteFolderGroups(ctx context.Context, arg SoftDeleteFolderGroupsParams) error

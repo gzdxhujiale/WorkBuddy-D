@@ -1,25 +1,20 @@
 import React, { useState, useMemo } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronRight, Sparkles, BookOpen } from "lucide-react";
-import { useDailyReviewData, useReviewActions, isReviewEmpty, extractReviewPlainText } from "../hooks/useDailyReview";
-import { DailyReviewItem } from "../types";
+import { useDailyReviewDetail, useReviewActions, isReviewEmpty, extractReviewPlainText } from "../hooks/useDailyReview";
 import { todayYMD } from "@/lib/dateUtils";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { PixelScroll } from "@/components/pixel/PixelIcons";
 import { cn } from "@/lib/utils";
-
-const EMPTY_REVIEWS: DailyReviewItem[] = [];
 
 export const TodayReviewSection: React.FC = () => {
   const { isPixelTheme } = useAppThemeStyle();
   const navigate = useNavigate();
   const today = todayYMD();
 
-  const { data: reviewsData } = useDailyReviewData();
-  const reviews = reviewsData ?? EMPTY_REVIEWS;
+  const { data: todayReview } = useDailyReviewDetail(today);
   const { saveReview } = useReviewActions();
 
-  const todayReview = useMemo(() => reviews.find((r) => r.date === today), [reviews, today]);
   const reviewWritten = useMemo(() => Boolean(todayReview && !isReviewEmpty(todayReview.content)), [todayReview]);
   const reviewSummary = useMemo(() => extractReviewPlainText(todayReview?.content), [todayReview?.content]);
 

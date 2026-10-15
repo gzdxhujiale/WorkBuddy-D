@@ -1,9 +1,14 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo, startTransition } from "react";
 import { ChevronLeft, ChevronRight, Cloud, Zap, Award, BarChart3 } from "lucide-react";
 import dayjs from "dayjs";
-import { useDailyReviewData, useReviewActions, isReviewEmpty, extractReviewPlainText } from "../hooks/useDailyReview";
-import { DailyReviewItem, CompoundStats as CompoundStatsType } from "../types";
-import { formatDateYMD, todayYMD, daysBetween } from "@/lib/dateUtils";
+import {
+  useDailyReviewSummaries,
+  useDailyReviewDetail,
+  useDailyReviewStats,
+  useReviewActions,
+} from "../hooks/useDailyReview";
+import { DailyReviewItem, DailyReviewSummary, CompoundStats as CompoundStatsType } from "../types";
+import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { ReactjsTiptapEditor } from "@/components/ui/reactjs-tiptap-editor";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
@@ -20,81 +25,13 @@ import { PixelAchievementHall } from "@/components/pixel/PixelBadge";
 // Hoisted constants outside component rendering path (Vercel Best Practice: rendering-hoist-jsx)
 const WEEK_DAYS = ["日", "一", "二", "三", "四", "五", "六"] as const;
 const MIN_DATE = "2020-01-01";
-const EMPTY_REVIEWS: DailyReviewItem[] = [];
 
 const formatDateDisplay = (dateStr: string): string => {
   const [y, m, d] = dateStr.split("-").map(Number);
   return `${y}年${m}月${d}日`;
 };
 
-function normalizeDateStr(d: string): string {
-  if (!d) return "";
-  const trimmed = d.trim();
-  if (trimmed.length >= 10 && trimmed[4] === "-" && trimmed[7] === "-") {
-    return trimmed.slice(0, 10);
-  }
-  const parsed = new Date(trimmed);
-  if (!isNaN(parsed.getTime())) {
-    return formatDateYMD(parsed);
-  }
-  return trimmed;
-}
 
-function getAllReviews(reviews: DailyReviewItem[]): DailyReviewItem[] {
-  return reviews
-    .filter((r) => !isReviewEmpty(r.content))
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-}
-
-function getReviewByDate(reviews: DailyReviewItem[], date: string): DailyReviewItem | undefined {
-  const target = normalizeDateStr(date);
-  return reviews.find((r) => normalizeDateStr(r.date) === target);
-}
-
-function getCompoundStats(reviews: DailyReviewItem[]): CompoundStatsType {
-  const todayStr = todayYMD();
-  // Filter out empty reviews and any future-dated items to prevent streak truncation
-  const meaningful = reviews.filter((r) => !isReviewEmpty(r.content) && r.date <= todayStr);
-  if (meaningful.length === 0) {
-    return { currentStreak: 0, longestStreak: 0, totalReviews: 0, compoundValue: 1.00 };
-  }
-
-  const dates = [...new Set(meaningful.map((r) => r.date))].sort();
-
-  let currentStreak = 0;
-  let longestStreak = 1;
-  let streakCount = 1;
-
-  for (let i = 1; i < dates.length; i++) {
-    const diff = daysBetween(dates[i - 1], dates[i]);
-    if (diff === 1) {
-      streakCount++;
-      longestStreak = Math.max(longestStreak, streakCount);
-    } else {
-      streakCount = 1;
-    }
-  }
-
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const yesterdayStr = formatDateYMD(yesterday);
-
-  const lastDate = dates[dates.length - 1];
-
-  if (lastDate === todayStr || lastDate === yesterdayStr) {
-    currentStreak = streakCount;
-  }
-
-  const compoundValue = parseFloat(Math.pow(1.01, currentStreak).toFixed(4));
-
-  return {
-    currentStreak,
-    longestStreak,
-    totalReviews: dates.length,
-    compoundValue,
-  };
-}
 
 // ==========================================
 // Local Auto-Save State Hook
@@ -256,12 +193,12 @@ ReviewEditor.displayName = "ReviewEditor";
 // ==========================================
 interface CompoundStatsProps {
   stats: CompoundStatsType;
-  reviews: DailyReviewItem[];
+  summaries: DailyReviewSummary[];
   onSelectDate: (date: string) => void;
   selectedDate: string;
 }
 
-const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSelectDate, selectedDate }) => {
+const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, summaries, onSelectDate, selectedDate }) => {
   const { isPixelTheme } = useAppThemeStyle();
   const currentMonth = useMemo(() => dayjs(selectedDate), [selectedDate]);
   const startOfMonth = currentMonth.startOf("month");
@@ -443,29 +380,13 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, reviews, onSe
               if (!day) return <div key={`empty-${idx}`} className={isPixelTheme ? "h-7" : "h-8"} />;
               const dStr = day.format("YYYY-MM-DD");
               const isDisabled = dStr > todayStr;
-              const review = reviews.find((r) => r.date === dStr);
+              const summary = summaries.find((s) => s.date === dStr);
 
               let levelClass = "bg-transparent text-foreground hover:bg-accent border-transparent";
-              if (review && !isReviewEmpty(review.content)) {
-                // Calculate length based on real text characters rather than JSON structural tokens
-                const len = extractReviewPlainText(review.content).length;
-                if (len > 200) {
-                  levelClass = isPixelTheme
-                    ? "bg-emerald-600 text-white font-bold border-2 border-emerald-800 shadow-[1px_1px_0px_#064e3b]"
-                    : "bg-emerald-700 text-white font-bold dark:bg-emerald-600";
-                } else if (len > 100) {
-                  levelClass = isPixelTheme
-                    ? "bg-emerald-500 text-white font-bold border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b]"
-                    : "bg-emerald-500 text-white font-semibold dark:bg-emerald-500";
-                } else if (len > 30) {
-                  levelClass = isPixelTheme
-                    ? "bg-emerald-400 text-emerald-950 font-bold border border-emerald-600 shadow-[1px_1px_0px_#059669]"
-                    : "bg-emerald-300 text-emerald-950 font-semibold dark:bg-emerald-700 dark:text-emerald-100";
-                } else {
-                  levelClass = isPixelTheme
-                    ? "bg-emerald-200 text-emerald-900 font-bold border border-emerald-400 dark:bg-emerald-950 dark:text-emerald-300"
-                    : "bg-emerald-100 text-emerald-800 font-semibold dark:bg-emerald-950 dark:text-emerald-300";
-                }
+              if (summary) {
+                levelClass = isPixelTheme
+                  ? "bg-emerald-500 text-white font-bold border-2 border-emerald-700 shadow-[1px_1px_0px_#064e3b]"
+                  : "bg-emerald-500 text-white font-semibold dark:bg-emerald-500";
               }
 
               const isSelected = dStr === selectedDate;
@@ -531,40 +452,51 @@ export const DailyReviewPanel: React.FC = () => {
   const { isPixelTheme } = useAppThemeStyle();
   const [selectedDate, setSelectedDate] = useState<string>(todayYMD());
 
-  const { data } = useDailyReviewData();
-  const reviewsData = data ?? EMPTY_REVIEWS;
+  const { data: summariesData } = useDailyReviewSummaries();
+  const summaries = summariesData ?? [];
+  const { data: statsData } = useDailyReviewStats();
+  const { data: currentReviewData } = useDailyReviewDetail(selectedDate);
   const { saveReview } = useReviewActions();
 
-  const reviews = useMemo(() => getAllReviews(reviewsData), [reviewsData]);
-  const stats = useMemo(() => getCompoundStats(reviewsData), [reviewsData]);
-  const currentReview = useMemo(
-    () => getReviewByDate(reviewsData, selectedDate),
-    [reviewsData, selectedDate]
+  const stats = useMemo(
+    () =>
+      statsData ?? {
+        currentStreak: 0,
+        longestStreak: 0,
+        totalReviews: summaries.length,
+        compoundValue: 1.0,
+      },
+    [statsData, summaries.length]
   );
+  const currentReview = currentReviewData ?? undefined;
 
   const handleSave = useCallback((date: string, content: string) => {
     saveReview(date, content);
   }, [saveReview]);
 
   const handleSelectDate = useCallback((date: string) => {
-    setSelectedDate(date);
+    startTransition(() => {
+      setSelectedDate(date);
+    });
   }, []);
 
   const changeDate = useCallback((days: number) => {
-    setSelectedDate((prevSelected) => {
-      const [y, m, d_val] = prevSelected.split("-").map(Number);
-      const d = new Date(y, m - 1, d_val);
-      d.setDate(d.getDate() + days);
+    startTransition(() => {
+      setSelectedDate((prevSelected) => {
+        const [y, m, d_val] = prevSelected.split("-").map(Number);
+        const d = new Date(y, m - 1, d_val);
+        d.setDate(d.getDate() + days);
 
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      if (d > today) return prevSelected;
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (d > today) return prevSelected;
 
-      const minDate = new Date(2020, 0, 1);
-      minDate.setHours(0, 0, 0, 0);
-      if (d < minDate) return prevSelected;
+        const minDate = new Date(2020, 0, 1);
+        minDate.setHours(0, 0, 0, 0);
+        if (d < minDate) return prevSelected;
 
-      return formatDateYMD(d);
+        return formatDateYMD(d);
+      });
     });
   }, []);
 
@@ -627,7 +559,11 @@ export const DailyReviewPanel: React.FC = () => {
                   ? "rounded-xs bg-amber-500 hover:bg-amber-600 text-amber-950 font-bold border-2 border-amber-900 shadow-[2px_2px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
                   : "rounded-full bg-accent text-accent-foreground hover:bg-accent/80"
               )}
-              onClick={() => setSelectedDate(todayYMD())}
+              onClick={() => {
+                startTransition(() => {
+                  setSelectedDate(todayYMD());
+                });
+              }}
               title="回到今天"
             >
               回到今天
@@ -673,7 +609,7 @@ export const DailyReviewPanel: React.FC = () => {
         >
           <CompoundStats
             stats={stats}
-            reviews={reviews}
+            summaries={summaries}
             onSelectDate={handleSelectDate}
             selectedDate={selectedDate}
           />

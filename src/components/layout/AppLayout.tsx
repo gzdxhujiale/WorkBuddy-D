@@ -57,16 +57,23 @@ export const DesktopMenuBar: React.FC = () => {
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let resizeTimer: ReturnType<typeof setTimeout> | undefined;
     import("@tauri-apps/api/window")
       .then(async ({ getCurrentWindow }) => {
         const current = getCurrentWindow();
         setIsMaximized(await current.isMaximized());
         unlisten = await current.onResized(() => {
-          void current.isMaximized().then(setIsMaximized);
+          if (resizeTimer) clearTimeout(resizeTimer);
+          resizeTimer = setTimeout(() => {
+            void current.isMaximized().then(setIsMaximized);
+          }, 100);
         });
       })
       .catch(() => undefined);
-    return () => unlisten?.();
+    return () => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      unlisten?.();
+    };
   }, []);
 
   const handleMinimize = async () => {

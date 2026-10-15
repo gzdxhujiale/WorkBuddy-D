@@ -213,3 +213,22 @@ CREATE TABLE IF NOT EXISTS focus_sessions (
     ended_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_focus_sessions_user_time ON focus_sessions (user_id, started_at);
+
+-- 000002_upgrade_sync_kb_review.sql: Ordered Sync Logs, Trigram Search, and Review Metadata Support
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE TABLE IF NOT EXISTS entity_change_logs (
+    seq_id BIGSERIAL PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    entity_type TEXT NOT NULL,
+    entity_id UUID NOT NULL,
+    action TEXT NOT NULL,
+    payload JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_change_logs_user_seq ON entity_change_logs (user_id, seq_id);
+CREATE INDEX IF NOT EXISTS idx_change_logs_created_at ON entity_change_logs (created_at);
+
+CREATE INDEX IF NOT EXISTS idx_notes_trgm_search ON notes USING gin ((title || ' ' || content) gin_trgm_ops)
+WHERE deleted_at IS NULL;

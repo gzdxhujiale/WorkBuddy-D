@@ -1162,3 +1162,61 @@ func (q *Queries) UpsertNote(ctx context.Context, arg UpsertNoteParams) (Note, e
 	)
 	return i, err
 }
+
+const searchNotes = `-- name: SearchNotes :many
+SELECT id, user_id, folder_id, group_id, title, content, sort_order, lock_version, created_at, updated_at
+FROM notes
+WHERE user_id = $1 AND deleted_at IS NULL
+  AND (title ILIKE '%' || $2 || '%' OR content ILIKE '%' || $2 || '%')
+ORDER BY updated_at DESC
+LIMIT 50
+`
+
+type SearchNotesParams struct {
+	UserID  pgtype.UUID `json:"user_id"`
+	Column2 string      `json:"column_2"`
+}
+
+type SearchNotesRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	FolderID    pgtype.UUID        `json:"folder_id"`
+	GroupID     pgtype.UUID        `json:"group_id"`
+	Title       string             `json:"title"`
+	Content     string             `json:"content"`
+	SortOrder   int32              `json:"sort_order"`
+	LockVersion int64              `json:"lock_version"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) SearchNotes(ctx context.Context, arg SearchNotesParams) ([]SearchNotesRow, error) {
+	rows, err := q.db.Query(ctx, searchNotes, arg.UserID, arg.Column2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchNotesRow
+	for rows.Next() {
+		var i SearchNotesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.FolderID,
+			&i.GroupID,
+			&i.Title,
+			&i.Content,
+			&i.SortOrder,
+			&i.LockVersion,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}

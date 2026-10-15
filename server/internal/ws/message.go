@@ -10,6 +10,7 @@ const (
 
 type DeltaMessage struct {
 	Type     string      `json:"type"` // "ENTITY_DELTA"
+	SeqID    int64       `json:"seq_id,omitempty"`
 	Table    string      `json:"table"`
 	Action   ActionType  `json:"action"`
 	ID       string      `json:"id"`

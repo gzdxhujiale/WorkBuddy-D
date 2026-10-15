@@ -11,6 +11,7 @@ import (
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"workbuddy-server/internal/buffer"
 	"workbuddy-server/internal/config"
 	"workbuddy-server/internal/database"
 	"workbuddy-server/internal/database/sqlc"
@@ -33,7 +34,10 @@ func main() {
 	defer db.Close()
 
 	queries := sqlc.New(db.Pool)
-	hub := ws.NewHub()
+	hub := ws.NewHub(queries)
+
+	noteBufferMgr := buffer.NewNoteBufferManager(queries, hub)
+	noteBufferMgr.Start()
 
 	// Initialize Gin Engine
 	r := gin.Default()
@@ -47,7 +51,8 @@ func main() {
 
 	// Handlers
 	authH := handler.NewAuthHandler(queries, cfg)
-	noteH := handler.NewNoteHandler(queries, hub)
+	syncH := handler.NewSyncHandler(queries)
+	noteH := handler.NewNoteHandler(queries, hub, noteBufferMgr)
 	taskH := handler.NewTaskHandler(queries, hub)
 	habitH := handler.NewHabitHandler(queries, hub)
 	focusH := handler.NewFocusHandler(queries, hub)
@@ -72,6 +77,7 @@ func main() {
 	protected.Use(middleware.Auth(cfg.JWTSecret))
 	{
 		protected.GET("/auth/me", authH.Me)
+		protected.GET("/sync", syncH.SyncChanges)
 
 		// Knowledge Base & Folders
 		protected.GET("/knowledge-bases", noteH.ListKnowledgeBases)
@@ -91,11 +97,13 @@ func main() {
 		protected.DELETE("/groups/:id", noteH.DeleteFolderGroup)
 
 		// Notes
+		protected.GET("/notes/search", noteH.SearchNotes)
 		protected.GET("/folders/:id/notes", noteH.ListNotesInFolder)
 		protected.GET("/notes/:id", noteH.GetNote)
 		protected.POST("/notes", noteH.CreateNote)
 		protected.PUT("/notes/:id", noteH.UpdateNote)
 		protected.PATCH("/notes/:id", noteH.PatchNote)
+		protected.PATCH("/notes/:id/buffer", noteH.BufferPatchNote)
 		protected.POST("/notes/:id/move", noteH.MoveNote)
 		protected.POST("/notes/reorder", noteH.ReorderNotes)
 		protected.DELETE("/notes/:id", noteH.DeleteNote)
@@ -141,6 +149,10 @@ func main() {
 
 		// Daily Reviews
 		protected.GET("/daily-reviews", dailyReviewH.ListDailyReviews)
+		protected.GET("/daily-reviews/summaries", dailyReviewH.ListDailyReviewSummaries)
+		protected.GET("/daily-reviews/stats", dailyReviewH.GetStats)
+		protected.GET("/daily-reviews/heatmap", dailyReviewH.GetHeatmap)
+		protected.GET("/daily-reviews/:date", dailyReviewH.GetDailyReviewByDate)
 		protected.POST("/daily-reviews", dailyReviewH.UpsertReview)
 	}
 
@@ -161,6 +173,9 @@ func main() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("[Server] Shutting down gracefully...")
+
+	log.Println("[Server] Flushing note buffers...")
+	noteBufferMgr.Stop()
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()

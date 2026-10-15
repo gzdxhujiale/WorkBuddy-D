@@ -1,32 +1,14 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  WorkBuddy-D 是一款面向知识工作者的个人效能与深度专注工作台。核心业务领域包括今日任务协同与执行、多阶段项目推进、习惯养成与量化追踪、个人知识库笔记整理，以及深度专注伴侣与每日结构化复盘。
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
-
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+rules:
+  specs:
+    - 规格仅规范业务能力契约与外显系统行为（WHAT），技术选型、前端缓存、后端驱动与 UI 视觉归属对应技术文档
+    - 全程贯彻正向行动化表述，定义明确的期望状态与系统不变量，杜绝负向禁令与历史修补疤痕
+    - 需求条目保持高内聚与原子性，提供明确可判定的验证场景
+  proposal:
+    - 阐明用户价值与变更动因，明确划定边界并包含非目标（Non-goals）
+  tasks:
+    - 任务须具备原子性与直接可验证性，支持小步交付

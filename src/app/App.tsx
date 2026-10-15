@@ -12,6 +12,7 @@ import { setStorageUserId } from "@/lib/userStorage";
 import { flushOfflineQueue } from "@/lib/offlineSyncQueue";
 import { RealtimeProvider } from "@/app/providers/RealtimeProvider";
 import { useUiStore } from "@/stores/uiStore";
+import { prefetchTieredData, resetStartupPrefetch } from "@/lib/startupPrefetch";
 
 function App() {
   const [session, setSession] = useState<AuthSession | null | undefined>(undefined);
@@ -31,6 +32,7 @@ function App() {
       // The quick editor belongs to the previous account's in-memory state;
       // discard rather than committing its draft during an auth transition.
       discardQuickEditDraft();
+      resetStartupPrefetch();
       queryClient.clear();
       useUiStore.getState().setUserId(null);
       setStorageUserId(newSession?.user.id ?? null);
@@ -43,12 +45,16 @@ function App() {
   // 修复无边框窗口在 Windows 上跨越不同缩放比例显示器时的尺寸异常问题
   useEffect(() => {
     let unlisten: (() => void) | undefined;
+    let scaleTimer: ReturnType<typeof setTimeout> | undefined;
     const setupListener = async () => {
       try {
         const window = getCurrentWindow();
         if (window.label === "main") {
-          unlisten = await window.onScaleChanged(async () => {
-            await window.setSize(new LogicalSize(1030, 750)).catch(() => undefined);
+          unlisten = await window.onScaleChanged(() => {
+            if (scaleTimer) clearTimeout(scaleTimer);
+            scaleTimer = setTimeout(async () => {
+              await window.setSize(new LogicalSize(1030, 750)).catch(() => undefined);
+            }, 100);
           });
         }
       } catch {
@@ -57,6 +63,7 @@ function App() {
     };
     setupListener();
     return () => {
+      if (scaleTimer) clearTimeout(scaleTimer);
       if (unlisten) unlisten();
     };
   }, []);
@@ -90,6 +97,7 @@ function App() {
         isPrimary = true;
       }
       if (!isPrimary) return;
+      prefetchTieredData(queryClient, session.user.id);
       const flush = () => { void flushOfflineQueue(); };
       flush();
       window.addEventListener("online", flush);

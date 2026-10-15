@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useMemo, useRef, type ReactNode, memo } from 'react';
+import React, { useState, useEffect, useMemo, useRef, type ReactNode, memo, startTransition } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createPortal } from 'react-dom';
 import {
-  MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen,
+  MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen, Search,
   ChevronDown, FileText, Cloud, LoaderCircle,
   Folder as FolderIcon, Library
 } from 'lucide-react';
@@ -1343,6 +1343,14 @@ export function KnowledgePanel() {
     if (!activeNoteId) return null;
     return noteMap.get(activeNoteId) || null;
   }, [noteMap, activeNoteId]);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const { data: searchResults, isFetching: isSearching } = useQuery({
+    queryKey: ['notes-search', searchQuery],
+    queryFn: () => knowledgeService.searchNotes(searchQuery),
+    enabled: searchQuery.trim().length > 0,
+    staleTime: 3000,
+  });
   const { data: activeNoteDetail } = useQuery({
     queryKey: queryKeys.lists.note(userId, activeNoteId ?? 'none'),
     queryFn: () => knowledgeService.loadNote(activeNoteId!),
@@ -1640,8 +1648,10 @@ export function KnowledgePanel() {
 
   // --- Note Actions ---
   const handleOpenNote = (noteId: string, _noteTitle?: string) => {
-    setActiveNoteId(noteId);
-    setIsDrawerOpen(true);
+    startTransition(() => {
+      setActiveNoteId(noteId);
+      setIsDrawerOpen(true);
+    });
   };
 
   const handleAddNote = () => {
@@ -1807,7 +1817,28 @@ export function KnowledgePanel() {
                   {isPixelTheme && <PixelBookOpen size={18} className="shrink-0" />}
                   <span>{activeList.name}</span>
                 </div>
-                <div className="flex items-center gap-4 text-muted-foreground">
+                <div className="flex items-center gap-3 text-muted-foreground">
+                  <div className="relative flex items-center">
+                    <Search size={14} className="absolute left-2.5 text-muted-foreground pointer-events-none" />
+                    <input
+                      type="text"
+                      placeholder="全文搜索笔记..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                      className={cn(
+                        "pl-8 pr-6 py-1 text-xs bg-muted/60 border border-input rounded-md outline-none w-36 transition-all focus:w-56 focus:bg-background focus:border-ring",
+                        isPixelTheme && "font-mono rounded-xs border-2 border-border shadow-[1px_1px_0px_rgba(0,0,0,0.1)]"
+                      )}
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery('')}
+                        className="absolute right-2 text-xs text-muted-foreground hover:text-foreground"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className={isPixelTheme ? "rounded-xs" : "rounded-lg"}>
@@ -1824,6 +1855,43 @@ export function KnowledgePanel() {
               </div>
 
               <div className="px-8 flex-1 overflow-y-auto flex flex-col py-6">
+                {searchQuery.trim().length > 0 ? (
+                  <div className="flex flex-col gap-3 pb-8">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
+                      <span>搜索结果（{searchResults?.length ?? 0} 条）</span>
+                      {isSearching && <span className="animate-pulse">正在检索...</span>}
+                    </div>
+                    {searchResults && searchResults.length > 0 ? (
+                      searchResults.map((result) => (
+                        <div
+                          key={result.id}
+                          onClick={() => handleOpenNote(result.id, result.title)}
+                          className={cn(
+                            "p-3 rounded-lg border bg-card hover:bg-muted/50 cursor-pointer transition-all flex flex-col gap-1 shadow-2xs",
+                            isPixelTheme && "rounded-xs font-mono border-2 border-border"
+                          )}
+                        >
+                          <div className="flex items-center gap-2 font-semibold text-sm text-foreground">
+                            <FileText size={15} className="text-primary shrink-0" />
+                            <span>{result.title || "未命名笔记"}</span>
+                          </div>
+                          {result.content && (
+                            <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                              {result.content.slice(0, 150)}
+                            </p>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      !isSearching && (
+                        <div className="text-center py-12 text-sm text-muted-foreground font-mono">
+                          未找到与 "{searchQuery}" 相关的笔记
+                        </div>
+                      )
+                    )}
+                  </div>
+                ) : (
+                  <>
                 <div className={cn(
                   "flex items-center gap-3 border px-3 py-2 mb-6 transition-all",
                   isPixelTheme
@@ -1936,6 +2004,8 @@ export function KnowledgePanel() {
                       </>
                     )}
                   </div>
+                )}
+                  </>
                 )}
               </div>
 

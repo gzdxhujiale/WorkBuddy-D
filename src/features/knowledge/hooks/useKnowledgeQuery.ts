@@ -431,10 +431,20 @@ export function useKnowledgeActions(): KnowledgeActions {
         if (!latest) return;
         let saved: knowledgeService.SavedNoteVersion | undefined;
         let savedSortOrder: number | undefined;
-        if (updates.content !== undefined) {
-          const savedNote = await knowledgeService.upsertNote(latest);
-          saved = savedNote;
-          savedSortOrder = savedNote?.sortOrder;
+        if (updates.content !== undefined && !latest.isNew && latest.lockVersion !== undefined) {
+          try {
+            await knowledgeService.bufferPatchNote({
+              id,
+              title: latest.title,
+              content: latest.content,
+              lockVersion: latest.lockVersion,
+            });
+            return;
+          } catch {
+            const savedNote = await knowledgeService.upsertNote(latest);
+            saved = savedNote;
+            savedSortOrder = savedNote?.sortOrder;
+          }
         } else if (latest.contentLoaded) {
           const savedNote = await knowledgeService.upsertNote(latest);
           saved = savedNote;

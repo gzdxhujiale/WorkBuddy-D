@@ -1,5 +1,5 @@
 import { apiClient } from "@/lib/apiClient";
-import { DailyReviewItem } from "../types";
+import { DailyReviewItem, DailyReviewSummary, CompoundStats, DailyReviewHeatmap } from "../types";
 import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 
 function tryParseJson(str: string): unknown {
@@ -121,6 +121,76 @@ export const dailyReviewApi = {
       console.error("[DailyReview] Error loading reviews:", err);
     }
     return [];
+  },
+
+  loadSummaries: async (): Promise<DailyReviewSummary[]> => {
+    try {
+      const dbSummaries = await apiClient.get<any[]>("/api/v1/daily-reviews/summaries");
+      if (dbSummaries && Array.isArray(dbSummaries)) {
+        return dbSummaries.map((s) => ({
+          id: s.id,
+          date: typeof s.date === "string" ? s.date.substring(0, 10) : new Date(s.date).toISOString().substring(0, 10),
+          createdAt: asTimestamp(s.created_at || s.createdAt),
+          updatedAt: asTimestamp(s.updated_at || s.updatedAt),
+          lockVersion: Number(s.lock_version ?? s.lockVersion ?? 1),
+        }));
+      }
+    } catch (err) {
+      console.error("[DailyReview] Error loading summaries:", err);
+    }
+    return [];
+  },
+
+  loadByDate: async (date: string): Promise<DailyReviewItem | null> => {
+    try {
+      const r = await apiClient.get<any>(`/api/v1/daily-reviews/${date}`);
+      if (!r || !r.id) return null;
+      const contentStr = readReviewContent(r.content);
+      return {
+        id: r.id,
+        date: typeof r.date === "string" ? r.date.substring(0, 10) : new Date(r.date).toISOString().substring(0, 10),
+        content: contentStr,
+        createdAt: asTimestamp(r.created_at || r.createdAt),
+        updatedAt: asTimestamp(r.updated_at || r.updatedAt),
+        lockVersion: Number(r.lock_version ?? r.lockVersion ?? 1),
+        baseUpdatedAt: asTimestamp(r.updated_at || r.updatedAt),
+      };
+    } catch (err: any) {
+      // 404 is normal when no review exists for this date
+      return null;
+    }
+  },
+
+  loadStats: async (): Promise<CompoundStats> => {
+    try {
+      const stats = await apiClient.get<any>("/api/v1/daily-reviews/stats");
+      if (stats) {
+        return {
+          currentStreak: stats.current_streak ?? 0,
+          longestStreak: stats.longest_streak ?? 0,
+          totalReviews: stats.total_reviews ?? 0,
+          compoundValue: stats.compound_value ?? 1.0,
+        };
+      }
+    } catch (err) {
+      console.error("[DailyReview] Error loading stats:", err);
+    }
+    return { currentStreak: 0, longestStreak: 0, totalReviews: 0, compoundValue: 1.0 };
+  },
+
+  loadHeatmap: async (year: number): Promise<DailyReviewHeatmap> => {
+    try {
+      const data = await apiClient.get<any>(`/api/v1/daily-reviews/heatmap?year=${year}`);
+      if (data) {
+        return {
+          year: data.year ?? year,
+          days: data.days ?? {},
+        };
+      }
+    } catch (err) {
+      console.error("[DailyReview] Error loading heatmap:", err);
+    }
+    return { year, days: {} };
   },
 
   upsertReview: async (review: DailyReviewItem): Promise<SavedDailyReviewEntity | undefined> => {

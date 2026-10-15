@@ -11,6 +11,77 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const getDailyReviewByDate = `-- name: GetDailyReviewByDate :one
+SELECT id, user_id, date, content, lock_version, created_at, updated_at FROM daily_reviews
+WHERE user_id = $1 AND date = $2
+LIMIT 1
+`
+
+type GetDailyReviewByDateParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Date   pgtype.Date `json:"date"`
+}
+
+func (q *Queries) GetDailyReviewByDate(ctx context.Context, arg GetDailyReviewByDateParams) (DailyReview, error) {
+	row := q.db.QueryRow(ctx, getDailyReviewByDate, arg.UserID, arg.Date)
+	var i DailyReview
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Date,
+		&i.Content,
+		&i.LockVersion,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getDailyReviewDatesInRange = `-- name: GetDailyReviewDatesInRange :many
+SELECT date, id, lock_version, updated_at
+FROM daily_reviews
+WHERE user_id = $1 AND date >= $2 AND date <= $3
+ORDER BY date ASC
+`
+
+type GetDailyReviewDatesInRangeParams struct {
+	UserID   pgtype.UUID `json:"user_id"`
+	Date     pgtype.Date `json:"date"`
+	Date_2   pgtype.Date `json:"date_2"`
+}
+
+type GetDailyReviewDatesInRangeRow struct {
+	Date        pgtype.Date        `json:"date"`
+	ID          pgtype.UUID        `json:"id"`
+	LockVersion int64              `json:"lock_version"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) GetDailyReviewDatesInRange(ctx context.Context, arg GetDailyReviewDatesInRangeParams) ([]GetDailyReviewDatesInRangeRow, error) {
+	rows, err := q.db.Query(ctx, getDailyReviewDatesInRange, arg.UserID, arg.Date, arg.Date_2)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetDailyReviewDatesInRangeRow
+	for rows.Next() {
+		var i GetDailyReviewDatesInRangeRow
+		if err := rows.Scan(
+			&i.Date,
+			&i.ID,
+			&i.LockVersion,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listDailyReviews = `-- name: ListDailyReviews :many
 SELECT id, user_id, date, content, lock_version, created_at, updated_at FROM daily_reviews
 WHERE user_id = $1
@@ -31,6 +102,49 @@ func (q *Queries) ListDailyReviews(ctx context.Context, userID pgtype.UUID) ([]D
 			&i.UserID,
 			&i.Date,
 			&i.Content,
+			&i.LockVersion,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listDailyReviewSummaries = `-- name: ListDailyReviewSummaries :many
+SELECT id, user_id, date, lock_version, created_at, updated_at
+FROM daily_reviews
+WHERE user_id = $1
+ORDER BY date DESC
+`
+
+type ListDailyReviewSummariesRow struct {
+	ID          pgtype.UUID        `json:"id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	Date        pgtype.Date        `json:"date"`
+	LockVersion int64              `json:"lock_version"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
+}
+
+func (q *Queries) ListDailyReviewSummaries(ctx context.Context, userID pgtype.UUID) ([]ListDailyReviewSummariesRow, error) {
+	rows, err := q.db.Query(ctx, listDailyReviewSummaries, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDailyReviewSummariesRow
+	for rows.Next() {
+		var i ListDailyReviewSummariesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Date,
 			&i.LockVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,

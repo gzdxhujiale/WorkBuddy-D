@@ -13,9 +13,27 @@ export interface DailyReviewItem {
   baseUpdatedAt?: number;
 }
 
+export interface DailyReviewSummary {
+  id: string;
+  date: string; // YYYY-MM-DD
+  createdAt: number;
+  updatedAt: number;
+  lockVersion?: number;
+}
+
 export interface CompoundStats {
   currentStreak: number;
   longestStreak: number;
   totalReviews: number;
   compoundValue: number;
+}
+
+export interface HeatmapDayData {
+  has_review: boolean;
+  level: number;
+}
+
+export interface DailyReviewHeatmap {
+  year: number;
+  days: Record<string, HeatmapDayData>;
 }

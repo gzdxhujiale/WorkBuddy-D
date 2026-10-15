@@ -18,7 +18,7 @@
 
 ### Modified Capabilities
 
-- `today-workbench`: 修改今日快速创建任务的项目关联规则，要求项目关联同时包含其下的具体活动阶段。
+- `task-management`: 修改今日快速创建任务的项目关联规则，要求项目关联同时包含其下的具体活动阶段。
 
 ## Impact
 

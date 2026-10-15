@@ -241,3 +241,51 @@ export function moveNote(note: NoteStructuralMove): Promise<SavedKnowledgeOrderE
     () => remoteMoveNote(note)
   );
 }
+
+export interface NoteSearchResult {
+  id: string;
+  userId: string;
+  folderId: string;
+  groupId?: string;
+  title: string;
+  content: string;
+  sortOrder: number;
+  lockVersion: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function searchNotes(query: string): Promise<NoteSearchResult[]> {
+  if (!query.trim()) return [];
+  const res = await apiClient.get<any[]>(`/api/v1/notes/search?q=${encodeURIComponent(query.trim())}`);
+  return (res || []).map((item) => ({
+    id: item.id,
+    userId: item.user_id,
+    folderId: item.folder_id,
+    groupId: item.group_id,
+    title: item.title,
+    content: item.content,
+    sortOrder: item.sort_order ?? 0,
+    lockVersion: Number(item.lock_version ?? 1),
+    createdAt: item.created_at,
+    updatedAt: item.updated_at,
+  }));
+}
+
+export async function bufferPatchNote(
+  patch: ListNotePatch
+): Promise<{ status: string; id: string; lockVersion?: number }> {
+  const res = await apiClient.patch<any>(`/api/v1/notes/${patch.id}/buffer`, {
+    title: patch.title,
+    content: patch.content,
+    sort_order: patch.sortOrder,
+    folder_id: patch.folderId,
+    group_id: patch.groupId,
+    lock_version: patch.lockVersion ?? 1,
+  });
+  return {
+    status: res.status || "buffered",
+    id: res.id,
+    lockVersion: res.lock_version ? Number(res.lock_version) : undefined,
+  };
+}

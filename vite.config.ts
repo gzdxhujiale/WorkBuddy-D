@@ -22,6 +22,21 @@ export default defineConfig(async () => ({
         focusAssistant: path.resolve(__dirname, "focus-assistant.html"),
         notificationToast: path.resolve(__dirname, "notification-toast.html"),
       },
+      output: {
+        manualChunks: (id) => {
+          if (id.includes("node_modules")) {
+            if (id.includes("@tiptap") || id.includes("reactjs-tiptap-editor") || id.includes("prosemirror")) {
+              return "tiptap-vendor";
+            }
+            if (id.includes("@tanstack")) {
+              return "tanstack-vendor";
+            }
+            if (id.includes("react") || id.includes("react-dom") || id.includes("scheduler")) {
+              return "react-vendor";
+            }
+          }
+        },
+      },
     },
   },
   server: {

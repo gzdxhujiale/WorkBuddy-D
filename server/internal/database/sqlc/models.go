@@ -198,3 +198,13 @@ type User struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
+
+type EntityChangeLog struct {
+	SeqID      int64              `json:"seq_id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	EntityType string             `json:"entity_type"`
+	EntityID   pgtype.UUID        `json:"entity_id"`
+	Action     string             `json:"action"`
+	Payload    json.RawMessage    `json:"payload"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}

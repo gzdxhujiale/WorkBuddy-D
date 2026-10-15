@@ -84,6 +84,8 @@ const routeTree = rootRoute.addChildren([
 
 export const router = createRouter({
   routeTree,
+  defaultPreload: "intent",
+  defaultPreloadDelay: 50,
   defaultNotFoundComponent: () => (
     <div className="flex items-center justify-center h-screen text-muted-foreground text-sm">
       页面未找到

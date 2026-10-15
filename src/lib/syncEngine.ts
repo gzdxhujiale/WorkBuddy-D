@@ -5,7 +5,16 @@ export const queryKeys = {
     note: (userId: string, noteId: string) => ['lists', userId, 'note', noteId] as const,
   },
   habits: (userId: string) => ['habits', userId] as const,
-  dailyReviews: (userId: string) => ['dailyReviews', userId] as const,
+  dailyReviews: Object.assign(
+    (userId: string) => ['dailyReviews', userId] as const,
+    {
+      all: (userId: string) => ['dailyReviews', userId, 'all'] as const,
+      summaries: (userId: string) => ['dailyReviews', userId, 'summaries'] as const,
+      detail: (userId: string, date: string) => ['dailyReviews', userId, 'detail', date] as const,
+      stats: (userId: string) => ['dailyReviews', userId, 'stats'] as const,
+      heatmap: (userId: string, year: number) => ['dailyReviews', userId, 'heatmap', year] as const,
+    }
+  ),
   templates: (userId: string) => ['knowledge_base_templates', userId] as const,
   timeManagement: (userId: string) => ['time-management-tasks', userId] as const,
   focusAssistantTasks: (userId: string) => ['focus-assistant-tasks', userId] as const,
