@@ -74,6 +74,19 @@ export const authService = {
   },
 
   logout(): void {
+    const session = this.getSession();
+    if (session?.user?.id) {
+      try {
+        localStorage.removeItem(`workbuddy_last_seq_id:${session.user.id}`);
+      } catch {
+        // Storage unavailable
+      }
+    }
+    try {
+      localStorage.removeItem("workbuddy_last_seq_id");
+    } catch {
+      // Storage unavailable
+    }
     this.setSession(null);
   },
 

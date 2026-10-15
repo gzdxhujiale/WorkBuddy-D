@@ -2,7 +2,7 @@ package buffer
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"sync"
 	"time"
 
@@ -12,6 +12,8 @@ import (
 	"workbuddy-server/internal/ws"
 )
 
+const DefaultIdleEvictionTTL = 5 * time.Minute
+
 type BufferedNote struct {
 	UserID      uuid.UUID
 	NoteID      uuid.UUID
@@ -20,6 +22,15 @@ type BufferedNote struct {
 	LockVersion int64
 	UpdatedAt   time.Time
 	IsDirty     bool
+}
+
+type noteFlushSnapshot struct {
+	noteID      uuid.UUID
+	userID      uuid.UUID
+	title       *string
+	content     *string
+	lockVersion int64
+	updatedAt   time.Time
 }
 
 type NoteBufferManager struct {
@@ -90,69 +101,115 @@ func (m *NoteBufferManager) BufferPatch(userID uuid.UUID, noteID uuid.UUID, titl
 
 func (m *NoteBufferManager) FlushDirty() {
 	m.mu.Lock()
-	var toFlush []*BufferedNote
+	var toFlush []noteFlushSnapshot
 	for _, item := range m.items {
 		if item.IsDirty {
-			toFlush = append(toFlush, item)
-			item.IsDirty = false
+			toFlush = append(toFlush, noteFlushSnapshot{
+				noteID:      item.NoteID,
+				userID:      item.UserID,
+				title:       item.Title,
+				content:     item.Content,
+				lockVersion: item.LockVersion,
+				updatedAt:   item.UpdatedAt,
+			})
 		}
 	}
 	m.mu.Unlock()
 
-	if len(toFlush) == 0 {
-		return
-	}
+	if len(toFlush) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
+		for _, item := range toFlush {
+			setTitle := item.title != nil
+			titleStr := ""
+			if setTitle {
+				titleStr = *item.title
+			}
 
-	for _, item := range toFlush {
-		setTitle := item.Title != nil
-		titleStr := ""
-		if setTitle {
-			titleStr = *item.Title
-		}
+			setContent := item.content != nil
+			contentStr := ""
+			if setContent {
+				contentStr = *item.content
+			}
 
-		setContent := item.Content != nil
-		contentStr := ""
-		if setContent {
-			contentStr = *item.Content
-		}
-
-		note, err := m.queries.PatchNote(ctx, sqlc.PatchNoteParams{
-			ID:           pgtype.UUID{Bytes: item.NoteID, Valid: true},
-			UserID:       pgtype.UUID{Bytes: item.UserID, Valid: true},
-			SetTitle:     setTitle,
-			Title:        titleStr,
-			SetContent:   setContent,
-			Content:      contentStr,
-			SetSortOrder: false,
-			SortOrder:    0,
-			SetFolderID:  false,
-			FolderID:     pgtype.UUID{},
-			SetGroupID:   false,
-			GroupID:      pgtype.UUID{},
-			LockVersion:  item.LockVersion,
-		})
-		if err != nil {
-			log.Printf("[NoteBuffer] Warning: flush note %s failed: %v", item.NoteID, err)
-			continue
-		}
-
-		m.mu.Lock()
-		if current, ok := m.items[item.NoteID]; ok {
-			current.LockVersion = note.LockVersion
-		}
-		m.mu.Unlock()
-
-		if m.hub != nil {
-			m.hub.BroadcastToUser(item.UserID, nil, ws.DeltaMessage{
-				Type:   "ENTITY_DELTA",
-				Table:  "notes",
-				Action: ws.ActionUpdate,
-				ID:     item.NoteID.String(),
-				Data:   note,
+			note, err := m.queries.PatchNote(ctx, sqlc.PatchNoteParams{
+				ID:           pgtype.UUID{Bytes: item.noteID, Valid: true},
+				UserID:       pgtype.UUID{Bytes: item.userID, Valid: true},
+				SetTitle:     setTitle,
+				Title:        titleStr,
+				SetContent:   setContent,
+				Content:      contentStr,
+				SetSortOrder: false,
+				SortOrder:    0,
+				SetFolderID:  false,
+				FolderID:     pgtype.UUID{},
+				SetGroupID:   false,
+				GroupID:      pgtype.UUID{},
+				LockVersion:  item.lockVersion,
 			})
+			if err != nil {
+				slog.Error("flush note failed; retaining dirty state for retry",
+					slog.String("note_id", item.noteID.String()),
+					slog.Any("error", err),
+				)
+				continue
+			}
+
+			m.mu.Lock()
+			if current, ok := m.items[item.noteID]; ok {
+				current.LockVersion = note.LockVersion
+				if current.UpdatedAt.Equal(item.updatedAt) {
+					current.IsDirty = false
+				}
+			}
+			m.mu.Unlock()
+
+			if m.hub != nil {
+				m.hub.BroadcastToUser(item.userID, nil, ws.DeltaMessage{
+					Type:   "ENTITY_DELTA",
+					Table:  "notes",
+					Action: ws.ActionUpdate,
+					ID:     item.noteID.String(),
+					Data:   note,
+				})
+			}
 		}
 	}
+
+	// Evict clean items untouched beyond idle TTL
+	m.EvictIdle(DefaultIdleEvictionTTL)
+}
+
+func (m *NoteBufferManager) EvictIdle(ttl time.Duration) int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	now := time.Now()
+	evicted := 0
+	for id, item := range m.items {
+		if !item.IsDirty && now.Sub(item.UpdatedAt) > ttl {
+			delete(m.items, id)
+			evicted++
+		}
+	}
+	return evicted
+}
+
+func (m *NoteBufferManager) GetItem(id uuid.UUID) (*BufferedNote, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	item, ok := m.items[id]
+	if !ok {
+		return nil, false
+	}
+	// Return shallow copy
+	cp := *item
+	return &cp, true
+}
+
+func (m *NoteBufferManager) ItemCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.items)
 }

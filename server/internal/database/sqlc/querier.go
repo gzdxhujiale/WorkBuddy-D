@@ -20,6 +20,7 @@ type Querier interface {
 	CreateTask(ctx context.Context, arg CreateTaskParams) (TimeManagementTask, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DetachFoldersFromKnowledgeBase(ctx context.Context, arg DetachFoldersFromKnowledgeBaseParams) error
+	DeleteDailyReviewByDate(ctx context.Context, arg DeleteDailyReviewByDateParams) error
 	GetDailyReviewByDate(ctx context.Context, arg GetDailyReviewByDateParams) (DailyReview, error)
 	GetDailyReviewDatesInRange(ctx context.Context, arg GetDailyReviewDatesInRangeParams) ([]GetDailyReviewDatesInRangeRow, error)
 	GetFolderByID(ctx context.Context, arg GetFolderByIDParams) (KnowledgeBaseFolder, error)

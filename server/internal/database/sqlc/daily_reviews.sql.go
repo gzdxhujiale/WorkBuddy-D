@@ -38,7 +38,7 @@ func (q *Queries) GetDailyReviewByDate(ctx context.Context, arg GetDailyReviewBy
 }
 
 const getDailyReviewDatesInRange = `-- name: GetDailyReviewDatesInRange :many
-SELECT date, id, lock_version, updated_at
+SELECT date, id, content, lock_version, updated_at
 FROM daily_reviews
 WHERE user_id = $1 AND date >= $2 AND date <= $3
 ORDER BY date ASC
@@ -53,6 +53,7 @@ type GetDailyReviewDatesInRangeParams struct {
 type GetDailyReviewDatesInRangeRow struct {
 	Date        pgtype.Date        `json:"date"`
 	ID          pgtype.UUID        `json:"id"`
+	Content     []byte             `json:"-"`
 	LockVersion int64              `json:"lock_version"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
@@ -69,6 +70,7 @@ func (q *Queries) GetDailyReviewDatesInRange(ctx context.Context, arg GetDailyRe
 		if err := rows.Scan(
 			&i.Date,
 			&i.ID,
+			&i.Content,
 			&i.LockVersion,
 			&i.UpdatedAt,
 		); err != nil {
@@ -117,7 +119,7 @@ func (q *Queries) ListDailyReviews(ctx context.Context, userID pgtype.UUID) ([]D
 }
 
 const listDailyReviewSummaries = `-- name: ListDailyReviewSummaries :many
-SELECT id, user_id, date, lock_version, created_at, updated_at
+SELECT id, user_id, date, content, lock_version, created_at, updated_at
 FROM daily_reviews
 WHERE user_id = $1
 ORDER BY date DESC
@@ -127,6 +129,7 @@ type ListDailyReviewSummariesRow struct {
 	ID          pgtype.UUID        `json:"id"`
 	UserID      pgtype.UUID        `json:"user_id"`
 	Date        pgtype.Date        `json:"date"`
+	Content     []byte             `json:"-"`
 	LockVersion int64              `json:"lock_version"`
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
@@ -145,6 +148,7 @@ func (q *Queries) ListDailyReviewSummaries(ctx context.Context, userID pgtype.UU
 			&i.ID,
 			&i.UserID,
 			&i.Date,
+			&i.Content,
 			&i.LockVersion,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -192,4 +196,19 @@ func (q *Queries) UpsertDailyReview(ctx context.Context, arg UpsertDailyReviewPa
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteDailyReviewByDate = `-- name: DeleteDailyReviewByDate :exec
+DELETE FROM daily_reviews
+WHERE user_id = $1 AND date = $2
+`
+
+type DeleteDailyReviewByDateParams struct {
+	UserID pgtype.UUID `json:"user_id"`
+	Date   pgtype.Date `json:"date"`
+}
+
+func (q *Queries) DeleteDailyReviewByDate(ctx context.Context, arg DeleteDailyReviewByDateParams) error {
+	_, err := q.db.Exec(ctx, deleteDailyReviewByDate, arg.UserID, arg.Date)
+	return err
 }

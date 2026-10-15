@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -21,6 +21,12 @@ import (
 )
 
 func main() {
+	// Initialize default structured logger
+	logger := slog.New(slog.NewTextHandler(os.Stdout, &slog.HandlerOptions{
+		Level: slog.LevelInfo,
+	}))
+	slog.SetDefault(logger)
+
 	cfg := config.Load()
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -29,7 +35,8 @@ func main() {
 	// Connect to PostgreSQL via pgxpool
 	db, err := database.Connect(ctx, cfg.DBDSN)
 	if err != nil {
-		log.Fatalf("[Server] Failed to connect to database: %v", err)
+		slog.Error("failed to connect to database", slog.Any("error", err))
+		os.Exit(1)
 	}
 	defer db.Close()
 
@@ -162,9 +169,10 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("[Server] Starting WorkBuddy-D server on port %s", cfg.Port)
+		slog.Info("starting server", slog.String("port", cfg.Port))
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("[Server] Listen failed: %v", err)
+			slog.Error("server listen failed", slog.Any("error", err))
+			os.Exit(1)
 		}
 	}()
 
@@ -172,15 +180,16 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-	log.Println("[Server] Shutting down gracefully...")
-
-	log.Println("[Server] Flushing note buffers...")
-	noteBufferMgr.Stop()
+	slog.Info("shutting down gracefully...")
 
 	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer shutdownCancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
-		log.Fatalf("[Server] Forced to shutdown: %v", err)
+		slog.Error("forced to shutdown server", slog.Any("error", err))
+		os.Exit(1)
 	}
-	log.Println("[Server] Server exited")
+
+	slog.Info("flushing note buffers...")
+	noteBufferMgr.Stop()
+	slog.Info("server exited cleanly")
 }

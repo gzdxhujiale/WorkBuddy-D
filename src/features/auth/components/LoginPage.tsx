@@ -213,7 +213,7 @@ export const LoginPage: React.FC = () => {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "认证失败，请重试";
-      // 转换常见的 Supabase 英文错误提示为友好的中文
+      // 转换常见的身份认证与服务端错误提示为友好的中文
       if (msg.includes("Invalid login credentials")) {
         setErrorMsg("邮箱或密码不正确，请重新输入");
       } else if (msg.includes("Email not confirmed")) {

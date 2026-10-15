@@ -117,6 +117,16 @@ export function useKnowledgeFolderContents(folderId: string | null) {
     if (!folderId || !query.data) return;
     setData(queryClient, userId, (current) => {
       const existingById = new Map(current.notes.map(note => [note.id, note]));
+      const remoteNoteIds = new Set(query.data.notes.map(n => n.id));
+      const pendingLocalNotes = current.notes.filter(
+        note => note.folderId === folderId && (note.isNew || note.lockVersion === undefined) && !remoteNoteIds.has(note.id)
+      );
+
+      const remoteGroupIds = new Set(query.data.noteGroups.map(g => g.id));
+      const pendingLocalGroups = current.noteGroups.filter(
+        group => group.folderId === folderId && group.lockVersion === undefined && !remoteGroupIds.has(group.id)
+      );
+
       const notes = query.data.notes.map((summary) => {
         const cached = existingById.get(summary.id);
         // List-content queries deliberately omit note bodies. Keep a loaded
@@ -127,8 +137,16 @@ export function useKnowledgeFolderContents(folderId: string | null) {
       });
       return {
         ...current,
-        noteGroups: [...current.noteGroups.filter(group => group.folderId !== folderId), ...query.data.noteGroups],
-        notes: [...current.notes.filter(note => note.folderId !== folderId), ...notes],
+        noteGroups: [
+          ...current.noteGroups.filter(group => group.folderId !== folderId),
+          ...query.data.noteGroups,
+          ...pendingLocalGroups,
+        ],
+        notes: [
+          ...current.notes.filter(note => note.folderId !== folderId),
+          ...notes,
+          ...pendingLocalNotes,
+        ],
       };
     });
   }, [folderId, query.data, queryClient, userId]);

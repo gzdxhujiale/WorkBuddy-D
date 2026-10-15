@@ -27,3 +27,4 @@ docs/.vitepress/cache/
 
 # Reference repositories
 .reference
+*.exe

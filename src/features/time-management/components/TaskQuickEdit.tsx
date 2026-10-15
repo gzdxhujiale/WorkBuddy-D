@@ -7,8 +7,6 @@ import {
   memo,
   forwardRef,
   useImperativeHandle,
-  lazy,
-  Suspense,
 } from "react";
 import { emit, listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -28,11 +26,7 @@ import {
 } from "../types";
 import type { Project, ProjectStage } from "@/types/project";
 import { hasTaskDescription } from "@/lib/taskDescription";
-const LazyTiptapEditor = lazy(() =>
-  import("@/components/ui/reactjs-tiptap-editor").then((m) => ({
-    default: m.ReactjsTiptapEditor,
-  }))
-);
+import { ReactjsTiptapEditor } from "@/components/ui/reactjs-tiptap-editor";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { applyAppThemeStyle } from "@/lib/preferences";
 import { PixelScroll } from "@/components/pixel/PixelIcons";
@@ -683,28 +677,20 @@ export const TaskQuickEditPopover = memo(
               </div>
 
               <div className="h-[260px] min-h-[148px] overflow-hidden">
-                <Suspense
-                  fallback={
-                    <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground/60 bg-muted/20 rounded-md">
-                      <span>加载编辑器...</span>
-                    </div>
+                <ReactjsTiptapEditor
+                  placeholder={isPixelTheme ? "添加委托任务详细备忘..." : "添加任务备注描述..."}
+                  content={description}
+                  showToolbar={false}
+                  className={
+                    isPixelTheme
+                      ? "tqe-description-editor rounded-xs border-2 border-border bg-background/50 font-mono"
+                      : "tqe-description-editor rounded-b-none border border-slate-200/80 dark:border-slate-800"
                   }
-                >
-                  <LazyTiptapEditor
-                    placeholder={isPixelTheme ? "添加委托任务详细备忘..." : "添加任务备注描述..."}
-                    content={description}
-                    showToolbar={false}
-                    className={
-                      isPixelTheme
-                        ? "tqe-description-editor rounded-xs border-2 border-border bg-background/50 font-mono"
-                        : "tqe-description-editor rounded-b-none border border-slate-200/80 dark:border-slate-800"
-                    }
-                    onChange={(nextDescription) => {
-                      latestDescription.current = nextDescription;
-                      setDescription(nextDescription);
-                    }}
-                  />
-                </Suspense>
+                  onChange={(nextDescription) => {
+                    latestDescription.current = nextDescription;
+                    setDescription(nextDescription);
+                  }}
+                />
               </div>
             </div>
           </div>

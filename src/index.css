@@ -328,4 +328,59 @@ html.tqe-window body > div:has(> [class*="richtext-max-h-"]) {
   animation: modern-fade-in 100ms ease-out forwards;
 }
 
+/* Collapsible Details Global & Retro Pixel Support */
+.ProseMirror details.details {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background-color: var(--card);
+  margin: 0.75rem 0;
+  padding: 0.5rem;
+}
+
+.ProseMirror details.details > summary {
+  cursor: pointer;
+  font-weight: 600;
+  padding: 0.35rem 0.5rem;
+  border-radius: 4px;
+  user-select: none;
+}
+
+.ProseMirror details.details > summary:hover {
+  background-color: var(--muted);
+}
+
+.theme-retro-pixel .ProseMirror details.details {
+  border: 2px solid #d97706;
+  border-radius: 0;
+  background-color: #fffbeb;
+  box-shadow: 2px 2px 0px #b45309;
+}
+
+.dark.theme-retro-pixel .ProseMirror details.details,
+.theme-retro-pixel.dark .ProseMirror details.details {
+  background-color: #261f18;
+  border-color: #d97706;
+  box-shadow: 2px 2px 0px #78350f;
+}
+
+/* Highlight Mark Global & Retro Pixel Support */
+.ProseMirror mark {
+  background-color: #fef08a;
+  color: inherit;
+  border-radius: 2px;
+  padding: 0.05em 0.2em;
+}
+
+.dark .ProseMirror mark {
+  background-color: rgba(180, 83, 9, 0.45);
+  color: #fef9c3;
+}
+
+.theme-retro-pixel .ProseMirror mark {
+  background-color: #fde047;
+  color: #1c1917;
+  border-radius: 0;
+}
+
+
 

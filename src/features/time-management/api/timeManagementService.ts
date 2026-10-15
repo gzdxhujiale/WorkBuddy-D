@@ -20,39 +20,31 @@ registerOfflineExecutor("task:delete", async (payload) => {
 
 export const timeManagementApi = {
   loadAll: async (_userId: string): Promise<TimeManagementData> => {
-    try {
-      const dbTasks = await apiClient.get<Array<Record<string, unknown>>>("/api/v1/tasks");
+    const dbTasks = await apiClient.get<Array<Record<string, unknown>>>("/api/v1/tasks");
 
-      if (dbTasks && dbTasks.length >= 0) {
-        const tasks: Task[] = dbTasks.map((t) => ({
-          id: t.id as string,
-          title: t.title as string,
-          quadrant: (DB_QUADRANT_MAP[t.quadrant as string] || "Q2") as QuadrantType,
-          scheduleMode: (t.schedule_mode as Task["scheduleMode"]) || undefined,
-          scheduledStartAt: t.scheduled_start_at ? new Date(t.scheduled_start_at as string).getTime() : undefined,
-          scheduledEndAt: t.scheduled_end_at ? new Date(t.scheduled_end_at as string).getTime() : undefined,
-          completed: Boolean(t.completed),
-          completedAt: t.completed_at ? new Date(t.completed_at as string).getTime() : undefined,
-          description: (t.description as string) || undefined,
-          reminder: typeof t.reminder === "string" ? t.reminder : t.reminder ? JSON.stringify(t.reminder) : undefined,
-          projectId: (t.project_id as string) || undefined,
-          projectStageId: (t.project_stage_id as string) || undefined,
-          priority: ((t.priority as string) || "medium") as Task["priority"],
-          assigneeName: (t.assignee_name as string) || undefined,
-          sortOrder: Number(t.sort_order),
-          createdAt: t.created_at ? new Date(t.created_at as string).getTime() : Date.now(),
-          updatedAt: t.updated_at ? new Date(t.updated_at as string).getTime() : undefined,
-          lockVersion: Number(t.lock_version || 1),
-          baseUpdatedAt: t.updated_at ? new Date(t.updated_at as string).getTime() : undefined,
-        }));
+    const tasks: Task[] = (dbTasks ?? []).map((t) => ({
+      id: t.id as string,
+      title: t.title as string,
+      quadrant: (DB_QUADRANT_MAP[t.quadrant as string] || "Q2") as QuadrantType,
+      scheduleMode: (t.schedule_mode as Task["scheduleMode"]) || undefined,
+      scheduledStartAt: t.scheduled_start_at ? new Date(t.scheduled_start_at as string).getTime() : undefined,
+      scheduledEndAt: t.scheduled_end_at ? new Date(t.scheduled_end_at as string).getTime() : undefined,
+      completed: Boolean(t.completed),
+      completedAt: t.completed_at ? new Date(t.completed_at as string).getTime() : undefined,
+      description: (t.description as string) || undefined,
+      reminder: typeof t.reminder === "string" ? t.reminder : t.reminder ? JSON.stringify(t.reminder) : undefined,
+      projectId: (t.project_id as string) || undefined,
+      projectStageId: (t.project_stage_id as string) || undefined,
+      priority: ((t.priority as string) || "medium") as Task["priority"],
+      assigneeName: (t.assignee_name as string) || undefined,
+      sortOrder: Number(t.sort_order),
+      createdAt: t.created_at ? new Date(t.created_at as string).getTime() : Date.now(),
+      updatedAt: t.updated_at ? new Date(t.updated_at as string).getTime() : undefined,
+      lockVersion: Number(t.lock_version || 1),
+      baseUpdatedAt: t.updated_at ? new Date(t.updated_at as string).getTime() : undefined,
+    }));
 
-        return { tasks };
-      }
-    } catch {
-      return { tasks: [] };
-    }
-
-    return { tasks: [] };
+    return { tasks };
   },
 
   upsertTask: async (task: Task): Promise<SavedTaskVersion | undefined> => {

@@ -2,6 +2,7 @@ import { useRef, useEffect, useCallback } from "react";
 import { useQueryClient, QueryKey } from "@tanstack/react-query";
 import { markQueryPending, clearQueryPending } from "@/lib/queryPending";
 import { toast } from "@/components/ui/toast";
+import { hasVersionConflict } from "@/lib/offlineSyncQueue";
 
 let nextSyncOwnerId = 0;
 
@@ -12,7 +13,7 @@ export interface OptimisticSyncOptions<TData, TVariables> {
   queryKey: QueryKey;
   /** Pure function to optimistically update the cached data (0ms delay UI response) */
   updateCache: (old: TData | undefined, vars: TVariables) => TData;
-  /** Persistence API function (Supabase / local DB) */
+  /** Persistence API function (Go backend / local DB) */
   syncFn: (vars: TVariables) => Promise<void>;
   /** Debounce delay in ms (default: 500ms; set to 0 for instant async persistence) */
   debounceMs?: number;
@@ -75,7 +76,11 @@ export function useOptimisticSync<TData, TVariables>({
         // when this is still the newest operation for the entity.
         if ((versionRef.current.get(key) ?? 0) === version) {
           void queryClient.invalidateQueries({ queryKey, refetchType: "active" });
-          toast.error("保存失败，已重新加载最新数据。");
+          if (hasVersionConflict(err)) {
+            toast.error("检测到版本冲突，已重新加载最新数据以防覆盖。");
+          } else {
+            toast.error("保存失败，已重新加载最新数据。");
+          }
         }
       } finally {
         inFlightKeysRef.current.delete(key);
@@ -132,7 +137,11 @@ export function useOptimisticSync<TData, TVariables>({
         syncFnRef.current(payload)
           .catch((err) => {
             console.error("[useOptimisticSync] Unmount flush failed:", err);
-            toast.error("离开页面前保存失败，已重新加载最新数据。");
+            if (hasVersionConflict(err)) {
+              toast.error("离开页面前检测到版本冲突，已重新加载最新数据以防覆盖。");
+            } else {
+              toast.error("离开页面前保存失败，已重新加载最新数据。");
+            }
           })
           .finally(() => {
             inFlightKeysRef.current.delete(key);

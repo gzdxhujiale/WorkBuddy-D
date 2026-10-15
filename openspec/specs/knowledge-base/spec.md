@@ -6,7 +6,7 @@ Provides a hierarchical personal knowledge base capability covering knowledge ba
 ## Requirements
 
 ### Requirement: Lossless Partial Update and Optimistic Concurrency Control
-The system SHALL apply partial updates exclusively to specified fields, preserving omitted note attributes with their existing persistent values. The system enforces matching lock versions during note updates, responding with version conflict status when outdated tokens are received.
+The system SHALL apply partial updates exclusively to specified fields, preserving omitted note attributes with their existing persistent values. The system enforces matching lock versions during note updates, responding with version conflict status when outdated tokens are received. Write-behind auto-save buffers SHALL retain their unpersisted dirty status upon any database update failure, continuing to retry persistence in subsequent cycles without dropping in-memory changes.
 
 #### Scenario: Renaming note in sidebar preserves unhydrated content
 - **WHEN** user updates a note's title or location from navigation before its body is loaded into the editor
@@ -16,12 +16,20 @@ The system SHALL apply partial updates exclusively to specified fields, preservi
 - **WHEN** client submits a note update carrying a lock version that does not match the server's current version
 - **THEN** the system responds with version conflict status, prompting the client to refresh and preventing silent data overwrites
 
+#### Scenario: Write-behind buffer retry on persistence failure
+- **WHEN** a scheduled write-behind buffer flush encounters a database failure or connection error
+- **THEN** the buffer manager retains the note in dirty state and retries persistence during the next flush cycle
+
 ### Requirement: Deep Folder Duplication
-The system SHALL atomically duplicate folders including child note groups and note records within a database transaction, preserving group hierarchies and content bindings.
+The system SHALL atomically duplicate folders including child note groups and note records within a database transaction, preserving group hierarchies and content bindings. If any operation within the duplication process fails, all changes SHALL roll back entirely.
 
 #### Scenario: Duplicating folder clones all child groups and notes
 - **WHEN** user duplicates a folder containing multiple groups and notes
 - **THEN** the system creates a new folder containing complete copies of all child groups and notes with their internal hierarchy intact
+
+#### Scenario: Duplication failure triggers full rollback
+- **WHEN** folder duplication encounters an error while cloning child notes
+- **THEN** the system aborts the database transaction, removing any partially cloned records and leaving existing folders intact
 
 ### Requirement: On-Demand Hydration for Note Operations
 The system SHALL asynchronously hydrate full document bodies on demand when cloning, templating, or exporting notes, ensuring complete content integrity across all output documents.
@@ -79,3 +87,55 @@ The backend service SHALL commit all pending dirty note buffers to persistent st
 #### Scenario: Service receives termination signal
 - **WHEN** the server process receives a termination signal
 - **THEN** all unwritten note modifications in the buffer are committed to persistent storage before exit
+
+### Requirement: Collapsible Details Content Blocks in Note Documents
+The system SHALL support collapsible details content blocks within rich-text note documents, allowing users to nest summary titles and collapsible body blocks, toggle visual disclosure, and persist disclosure state through auto-save buffers.
+
+#### Scenario: User inserts and toggles collapsible block in note
+- **WHEN** user inserts a collapsible block into the active note editor and enters a summary title and body content
+- **THEN** the editor renders a structured collapsible container with disclosure toggle controls and editable summary and content regions
+
+#### Scenario: Collapsible block content persists across note reload
+- **WHEN** user saves a note containing collapsible blocks and re-opens the note
+- **THEN** the system re-renders the collapsible structure with summary headings, body elements, and disclosure states preserved without content truncation
+
+### Requirement: Fidelity Markdown Document Import
+The system SHALL parse imported Markdown documents into structured rich-text document AST nodes (including headings level 1 to 6, bullet lists, ordered lists, task lists, code blocks, blockquotes, and inline formatting). The system SHALL automatically extract the note title from the selected file name or the document's first top-level heading.
+
+#### Scenario: Single Markdown file imported into active note
+- **WHEN** user selects a valid Markdown file via the note import action
+- **THEN** system populates the rich-text editor with corresponding structured nodes preserving headings, lists, code blocks, and marks
+- **AND** system updates the note title matching the imported document identity
+
+#### Scenario: File dialog cancelled during single import
+- **WHEN** user cancels or closes the file selection dialog without choosing a file
+- **THEN** system terminates the import interaction safely without mutating editor content, title, or displaying error notices
+
+### Requirement: Batch Markdown Document Import with Cache Protection
+The system SHALL support selecting multiple Markdown files simultaneously and importing them as distinct notes within the active folder. The system SHALL retain pending imported notes in local state while asynchronous persistence proceeds, preventing incoming synchronization deltas from purging uncommitted local drafts.
+
+#### Scenario: Batch importing multiple Markdown files
+- **WHEN** user selects multiple Markdown files and confirms batch import
+- **THEN** system creates individual note entries for each file in the active folder with parsed content and titles
+- **AND** system displays the total count of successfully imported notes upon completion
+
+#### Scenario: Background synchronization delta during batch import
+- **WHEN** remote synchronization events arrive while a batch import is persisting
+- **THEN** system preserves all in-flight batch imported notes in the navigation list until persistence concludes
+
+#### Scenario: File dialog cancelled during batch import
+- **WHEN** user opens the batch import dialog and cancels selection
+- **THEN** system safely aborts the operation without creating blank notes or displaying success toasts for zero items
+
+### Requirement: Popover and Action Dropdown Menu Stability
+The system SHALL render contextual action dropdown menus in an isolated portal layer with calculated viewport alignment. The menu trigger and popover container SHALL maintain invariant layout dimensions during pointer hover and active focus across all visual themes.
+
+#### Scenario: Hovering and clicking action dropdown trigger
+- **WHEN** user hovers over or clicks the note more action trigger in retro-pixel or default theme
+- **THEN** trigger button preserves its layout box dimensions without border flutter or cursor thrashing
+- **AND** action menu opens smoothly anchored to the trigger position without being clipped by scrollable parent containers
+
+#### Scenario: Clicking outside or on trigger to toggle
+- **WHEN** user clicks outside an active dropdown menu or clicks the trigger button while open
+- **THEN** system closes the dropdown menu cleanly without flickering or reopening
+

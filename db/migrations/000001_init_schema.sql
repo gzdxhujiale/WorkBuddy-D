@@ -1,4 +1,5 @@
 -- 000001_init_schema.sql: WorkBuddy-D clean PostgreSQL schema
+-- +goose Up
 
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -213,3 +214,19 @@ CREATE TABLE IF NOT EXISTS focus_sessions (
     ended_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_focus_sessions_user_time ON focus_sessions (user_id, started_at);
+
+-- +goose Down
+DROP TABLE IF EXISTS focus_sessions;
+DROP TABLE IF EXISTS time_management_tasks;
+DROP TABLE IF EXISTS project_templates;
+DROP TABLE IF EXISTS project_stages;
+DROP TABLE IF EXISTS projects;
+DROP TABLE IF EXISTS daily_reviews;
+DROP TABLE IF EXISTS habit_checkins;
+DROP TABLE IF EXISTS habits;
+DROP TABLE IF EXISTS knowledge_base_templates;
+DROP TABLE IF EXISTS notes;
+DROP TABLE IF EXISTS folder_note_groups;
+DROP TABLE IF EXISTS knowledge_base_folders;
+DROP TABLE IF EXISTS knowledge_bases;
+DROP TABLE IF EXISTS users;

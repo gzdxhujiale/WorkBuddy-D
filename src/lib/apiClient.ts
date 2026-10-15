@@ -1,7 +1,19 @@
-export interface ApiError {
-  error: string;
-  status: number;
+export class ApiHttpError extends Error {
+  readonly status: number;
+  readonly error: string;
+  readonly data?: unknown;
+
+  constructor(status: number, message: string, data?: unknown) {
+    super(message);
+    this.name = "ApiHttpError";
+    this.status = status;
+    this.error = message;
+    this.data = data;
+    Object.setPrototypeOf(this, ApiHttpError.prototype);
+  }
 }
+
+export type ApiError = ApiHttpError;
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
@@ -34,14 +46,17 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   if (!response.ok) {
     let errorMsg = `HTTP Error ${response.status}`;
+    let errJson: unknown = undefined;
     try {
-      const errJson = await response.json();
-      errorMsg = errJson.error || errJson.message || errorMsg;
+      errJson = await response.json();
+      if (errJson && typeof errJson === "object") {
+        const obj = errJson as Record<string, unknown>;
+        errorMsg = (obj.error as string) || (obj.message as string) || errorMsg;
+      }
     } catch {
       // Non-JSON error
     }
-    const err: ApiError = { error: errorMsg, status: response.status };
-    throw err;
+    throw new ApiHttpError(response.status, errorMsg, errJson);
   }
 
   if (response.status === 204) {

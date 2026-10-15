@@ -2,70 +2,68 @@ import { apiClient } from "@/lib/apiClient";
 import { DailyReviewItem, DailyReviewSummary, CompoundStats, DailyReviewHeatmap } from "../types";
 import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
 
-function tryParseJson(str: string): unknown {
-  try {
-    return JSON.parse(str);
-  } catch {
-    return null;
-  }
-}
+export const EMPTY_TIPTAP_DOC = {
+  type: "doc",
+  content: [],
+};
 
-function tryDecodeBase64(str: string): string | null {
-  if (!str || str.length < 8 || /[\s{}]/.test(str)) return null;
-  try {
-    const decoded = atob(str);
-    if (decoded.startsWith("{") || decoded.startsWith("[")) {
-      return decoded;
-    }
-  } catch {
-    // Not valid base64
-  }
-  return null;
-}
+export function readReviewContent(content: unknown): string {
+  if (!content) return JSON.stringify(EMPTY_TIPTAP_DOC);
 
-function readReviewContent(content: unknown): string {
-  if (!content) return "";
+  // 1. If it's an object, check if it's already a canonical Tiptap Doc or a legacy wrapper { text: ... }
+  if (typeof content === "object" && content !== null) {
+    const obj = content as Record<string, unknown>;
 
-  // 1. If it's a string, it might be raw text, a JSON string, or a Base64-encoded string
-  if (typeof content === "string") {
-    const trimmed = content.trim();
-    if (!trimmed) return "";
-
-    // Check if it's base64 encoded
-    const decodedBase64 = tryDecodeBase64(trimmed);
-    if (decodedBase64) {
-      return readReviewContent(tryParseJson(decodedBase64) ?? decodedBase64);
+    // Case 1A: Directly a canonical Tiptap Document object
+    if (obj.type === "doc" && Array.isArray(obj.content)) {
+      return JSON.stringify(obj);
     }
 
-    // Check if it's a JSON string representing a wrapper object { text: "..." } or tiptap doc
-    const parsed = tryParseJson(trimmed);
-    if (parsed && typeof parsed === "object") {
-      return readReviewContent(parsed);
-    }
-
-    return trimmed;
-  }
-
-  // 2. If it's an object, check for wrapper keys: text, html, raw
-  if (typeof content === "object") {
-    const payload = content as Record<string, unknown>;
-
-    // If it's directly a Tiptap Doc
-    if (payload.type === "doc" && Array.isArray(payload.content)) {
-      return JSON.stringify(content);
-    }
-
-    // If it's a wrapper like { text: "..." }
+    // Case 1B: Legacy wrapper { text: "..." }, { html: "..." }, or { raw: "..." }
     for (const key of ["text", "html", "raw"]) {
-      if (typeof payload[key] === "string") {
-        return readReviewContent(payload[key]);
+      if (key in obj && obj[key] !== undefined && obj[key] !== null) {
+        return readReviewContent(obj[key]);
       }
     }
 
-    return JSON.stringify(content);
+    // Case 1C: Empty object
+    if (Object.keys(obj).length === 0) {
+      return JSON.stringify(EMPTY_TIPTAP_DOC);
+    }
+
+    return JSON.stringify(obj);
   }
 
-  return String(content);
+  // 2. If it's a string, it could be a JSON-serialized Doc, a JSON-serialized wrapper, or raw text/html
+  if (typeof content === "string") {
+    const trimmed = content.trim();
+    if (!trimmed || trimmed === "{}" || trimmed === "null" || trimmed === '""') {
+      return JSON.stringify(EMPTY_TIPTAP_DOC);
+    }
+
+    // Attempt JSON parse
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (parsed && typeof parsed === "object") {
+        return readReviewContent(parsed);
+      }
+    } catch {
+      // Not JSON; continue to plain-text fallback
+    }
+
+    // Plain text fallback into a canonical paragraph node
+    return JSON.stringify({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: trimmed }],
+        },
+      ],
+    });
+  }
+
+  return JSON.stringify(EMPTY_TIPTAP_DOC);
 }
 
 function asTimestamp(val: unknown): number {
@@ -81,10 +79,30 @@ export type SavedDailyReviewEntity = {
 };
 
 async function saveRemote(review: DailyReviewItem): Promise<SavedDailyReviewEntity> {
+  let contentPayload: unknown = review.content;
+  if (typeof review.content === "string") {
+    try {
+      contentPayload = JSON.parse(review.content);
+    } catch {
+      const trimmed = review.content.trim();
+      contentPayload = trimmed
+        ? {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: trimmed }],
+              },
+            ],
+          }
+        : EMPTY_TIPTAP_DOC;
+    }
+  }
+
   const saved = await apiClient.post<any>("/api/v1/daily-reviews", {
     id: review.id,
     date: review.date,
-    content: { text: review.content },
+    content: contentPayload,
     lock_version: review.lockVersion ?? 1,
   });
   return {
@@ -155,7 +173,7 @@ export const dailyReviewApi = {
         lockVersion: Number(r.lock_version ?? r.lockVersion ?? 1),
         baseUpdatedAt: asTimestamp(r.updated_at || r.updatedAt),
       };
-    } catch (err: any) {
+    } catch {
       // 404 is normal when no review exists for this date
       return null;
     }

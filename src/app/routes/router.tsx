@@ -1,13 +1,11 @@
-import { lazy } from "react";
 import { createRootRoute, createRoute, createRouter, redirect } from "@tanstack/react-router";
 import { AppLayout } from "@/components/layout/AppLayout";
-
-const TodayPage = lazy(() => import("@/pages/TodayPage").then(m => ({ default: m.TodayPage })));
-const FourQuadrantsPage = lazy(() => import("@/pages/FourQuadrantsPage").then(m => ({ default: m.FourQuadrantsPage })));
-const HabitPage = lazy(() => import("@/pages/HabitPage").then(m => ({ default: m.HabitPage })));
-const DailyReviewPage = lazy(() => import("@/pages/DailyReviewPage").then(m => ({ default: m.DailyReviewPage })));
-const KnowledgePage = lazy(() => import("@/pages/KnowledgePage").then(m => ({ default: m.KnowledgePage })));
-const ProjectsPage = lazy(() => import("@/pages/ProjectsPage").then(m => ({ default: m.ProjectsPage })));
+import { TodayPage } from "@/pages/TodayPage";
+import { FourQuadrantsPage } from "@/pages/FourQuadrantsPage";
+import { HabitPage } from "@/pages/HabitPage";
+import { DailyReviewPage } from "@/pages/DailyReviewPage";
+import { KnowledgePage } from "@/pages/KnowledgePage";
+import { ProjectsPage } from "@/pages/ProjectsPage";
 
 const rootRoute = createRootRoute({
   component: AppLayout,

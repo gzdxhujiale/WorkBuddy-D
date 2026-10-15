@@ -6,7 +6,7 @@ export const queryClient = new QueryClient({
       refetchOnWindowFocus: false,
       // Realtime is the source of cross-window invalidation. Refetching every
       // active query again on a network reconnect can create a request burst
-      // and exhaust Supabase's connection pool.
+      // and exhaust the database connection pool.
       refetchOnReconnect: false,
       refetchOnMount: false,
       retryOnMount: false,

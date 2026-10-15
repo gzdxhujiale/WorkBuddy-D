@@ -61,10 +61,12 @@ function useReviewAutoSave({
     stateRef.current = { content, date };
   }, [content, date]);
 
-  // When switching to a different date, save any dirty work from previous date and load new content
+  // When switching to a different date, save any dirty work from previous date and load new content.
+  // When remote content arrives asynchronously for the current date, reconcile it safely.
   useEffect(() => {
     const prev = stateRef.current;
     const last = lastSavedRef.current;
+
     if (prev.date !== date) {
       if (prev.content !== last.content) {
         onSaveRef.current(prev.date, prev.content);
@@ -73,6 +75,18 @@ function useReviewAutoSave({
       setSaveStatus("saved");
       lastSavedRef.current = { content: initialContent, date };
       stateRef.current = { content: initialContent, date };
+      return;
+    }
+
+    // Remote data hydrated asynchronously for the current date
+    if (initialContent !== last.content) {
+      const isPristine = prev.content === last.content;
+      if (isPristine) {
+        setContent(initialContent);
+        setSaveStatus("saved");
+        lastSavedRef.current = { content: initialContent, date };
+        stateRef.current = { content: initialContent, date };
+      }
     }
   }, [date, initialContent]);
 
@@ -138,10 +152,11 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
       )}
     >
       <ReactjsTiptapEditor
-        key={date}
         content={content}
         onChange={setContent}
         placeholder={isPixelTheme ? "📜 撰写今日冒险日志... (输入 / 使用魔法指令)" : "输入 / 使用命令..."}
+        hideHighlight
+        hideCallout
       />
 
       {/* Footer: Save Status */}
@@ -200,9 +215,18 @@ interface CompoundStatsProps {
 
 const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, summaries, onSelectDate, selectedDate }) => {
   const { isPixelTheme } = useAppThemeStyle();
-  const currentMonth = useMemo(() => dayjs(selectedDate), [selectedDate]);
-  const startOfMonth = currentMonth.startOf("month");
-  const daysInMonth = currentMonth.daysInMonth();
+  const [viewMonth, setViewMonth] = useState<dayjs.Dayjs>(() => dayjs(selectedDate).startOf("month"));
+
+  // Keep viewMonth in sync whenever selectedDate navigates into a different month
+  useEffect(() => {
+    const selectedD = dayjs(selectedDate);
+    if (!selectedD.isSame(viewMonth, "month")) {
+      setViewMonth(selectedD.startOf("month"));
+    }
+  }, [selectedDate]);
+
+  const startOfMonth = viewMonth.startOf("month");
+  const daysInMonth = viewMonth.daysInMonth();
   const startDayOfWeek = startOfMonth.day(); // 0 is Sunday
 
   // Dynamically evaluated to avoid midnight stale freeze
@@ -216,10 +240,10 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, summaries, on
       list.push(null);
     }
     for (let d = 1; d <= daysInMonth; d++) {
-      list.push(currentMonth.date(d));
+      list.push(viewMonth.date(d));
     }
     return list;
-  }, [startDayOfWeek, daysInMonth, currentMonth]);
+  }, [startDayOfWeek, daysInMonth, viewMonth]);
 
   return (
     <section className="flex flex-col h-full p-4 gap-4 overflow-y-auto no-scrollbar">
@@ -315,19 +339,19 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, summaries, on
           <div className="flex items-center gap-1 text-xs font-semibold text-foreground">
             {isPixelTheme && <PixelHourglass size={14} />}
             <span className={isPixelTheme ? "font-mono font-bold" : ""}>
-              {currentMonth.format("YYYY年 M月")} {isPixelTheme ? "📜 复盘刻印月历" : "打卡记录"}
+              {viewMonth.format("YYYY年 M月")} {isPixelTheme ? "📜 复盘刻印月历" : "打卡记录"}
             </span>
           </div>
           <nav className="flex items-center gap-1">
             <button
               type="button"
               onClick={() => {
-                const prev = currentMonth.subtract(1, "month");
+                const prev = viewMonth.subtract(1, "month");
                 if (prev.format("YYYY-MM") >= "2020-01") {
-                  onSelectDate(prev.format("YYYY-MM-DD"));
+                  setViewMonth(prev);
                 }
               }}
-              disabled={currentMonth.format("YYYY-MM") <= "2020-01"}
+              disabled={viewMonth.format("YYYY-MM") <= "2020-01"}
               className={cn(
                 "p-1 transition-colors cursor-pointer text-muted-foreground disabled:opacity-30 disabled:pointer-events-none",
                 isPixelTheme
@@ -341,12 +365,12 @@ const CompoundStats: React.FC<CompoundStatsProps> = memo(({ stats, summaries, on
             <button
               type="button"
               onClick={() => {
-                const next = currentMonth.add(1, "month");
+                const next = viewMonth.add(1, "month");
                 if (next.format("YYYY-MM") <= todayMonthStr) {
-                  onSelectDate(next.format("YYYY-MM-DD"));
+                  setViewMonth(next);
                 }
               }}
-              disabled={currentMonth.format("YYYY-MM") >= todayMonthStr}
+              disabled={viewMonth.format("YYYY-MM") >= todayMonthStr}
               className={cn(
                 "p-1 transition-colors cursor-pointer text-muted-foreground disabled:opacity-30 disabled:pointer-events-none",
                 isPixelTheme
@@ -588,10 +612,9 @@ export const DailyReviewPanel: React.FC = () => {
 
       {/* Main Layout: Left Editor + Right Stats */}
       <section className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left: Editor with stable date key */}
+        {/* Left: Persistent Review Editor instance */}
         <section className="flex-1 flex flex-col p-4 md:p-5 min-w-0 overflow-hidden">
           <ReviewEditor
-            key={selectedDate}
             date={selectedDate}
             review={currentReview}
             onSave={handleSave}

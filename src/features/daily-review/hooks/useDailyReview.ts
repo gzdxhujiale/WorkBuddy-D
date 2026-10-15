@@ -14,8 +14,20 @@ export function extractReviewPlainText(content?: string): string {
   if (trimmed === "" || trimmed === "{}") return "";
 
   try {
-    const parsed = JSON.parse(trimmed);
+    let parsed: any = JSON.parse(trimmed);
     if (parsed && typeof parsed === "object") {
+      // If wrapped in legacy { text: "..." }
+      if (typeof parsed.text === "string" && parsed.text.trim().startsWith("{")) {
+        try {
+          const inner = JSON.parse(parsed.text.trim());
+          if (inner && typeof inner === "object" && inner.type === "doc") {
+            parsed = inner;
+          }
+        } catch {}
+      } else if (parsed.text && typeof parsed.text === "object" && parsed.text.type === "doc") {
+        parsed = parsed.text;
+      }
+
       const texts: string[] = [];
       const extractText = (node: any) => {
         if (!node || typeof node !== "object") return;
@@ -80,22 +92,25 @@ export function useReviewActions() {
     updateCache: (old, review) => {
       const list = old ?? [];
       const idx = list.findIndex((r) => r.date === review.date);
+      const isEmpty = isReviewEmpty(review.content);
       let nextList = list;
-      if (idx >= 0) {
+
+      if (isEmpty) {
+        nextList = list.filter((r) => r.date !== review.date);
+        queryClient.setQueryData(queryKeys.dailyReviews.detail(userId, review.date), null);
+      } else if (idx >= 0) {
         nextList = [...list];
         nextList[idx] = review;
+        queryClient.setQueryData(queryKeys.dailyReviews.detail(userId, review.date), review);
       } else {
         nextList = [...list, review];
+        queryClient.setQueryData(queryKeys.dailyReviews.detail(userId, review.date), review);
       }
-
-      // Update detail query cache directly
-      queryClient.setQueryData(queryKeys.dailyReviews.detail(userId, review.date), review);
 
       // Update summaries query cache
       queryClient.setQueryData<DailyReviewSummary[]>(queryKeys.dailyReviews.summaries(userId), (prevSummaries) => {
         const sList = prevSummaries ?? [];
         const sIdx = sList.findIndex((s) => s.date === review.date);
-        const isEmpty = isReviewEmpty(review.content);
         if (isEmpty) {
           return sList.filter((s) => s.date !== review.date);
         }
@@ -119,39 +134,52 @@ export function useReviewActions() {
       return nextList;
     },
     syncFn: async (review) => {
+      const isEmpty = isReviewEmpty(review.content);
       const savedEntity = await dailyReviewApi.upsertReview(review);
       if (savedEntity === undefined) return;
 
-      queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
-        old?.map((item) =>
-          item.date === review.date
+      if (isEmpty) {
+        queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
+          old?.filter((item) => item.date !== review.date) ?? old
+        );
+        queryClient.setQueryData<DailyReviewItem | null>(queryKeys.dailyReviews.detail(userId, review.date), null);
+        queryClient.setQueryData<DailyReviewSummary[]>(queryKeys.dailyReviews.summaries(userId), (prevSummaries) =>
+          prevSummaries?.filter((s) => s.date !== review.date) ?? []
+        );
+      } else {
+        queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
+          old?.map((item) =>
+            item.date === review.date
+              ? {
+                  ...item,
+                  id: savedEntity.id,
+                  updatedAt: savedEntity.updatedAt,
+                  baseUpdatedAt: savedEntity.updatedAt,
+                  lockVersion: savedEntity.lockVersion,
+                  isNew: false,
+                }
+              : item,
+          ) ?? old,
+        );
+
+        queryClient.setQueryData<DailyReviewItem | null>(queryKeys.dailyReviews.detail(userId, review.date), (prev) =>
+          prev
             ? {
-                ...item,
+                ...prev,
                 id: savedEntity.id,
                 updatedAt: savedEntity.updatedAt,
                 baseUpdatedAt: savedEntity.updatedAt,
                 lockVersion: savedEntity.lockVersion,
                 isNew: false,
               }
-            : item,
-        ) ?? old,
-      );
+            : prev
+        );
+      }
 
-      queryClient.setQueryData<DailyReviewItem | null>(queryKeys.dailyReviews.detail(userId, review.date), (prev) =>
-        prev
-          ? {
-              ...prev,
-              id: savedEntity.id,
-              updatedAt: savedEntity.updatedAt,
-              baseUpdatedAt: savedEntity.updatedAt,
-              lockVersion: savedEntity.lockVersion,
-              isNew: false,
-            }
-          : prev
-      );
-
-      // Invalidate server stats to sync streak and compound growth accurately
+      // Invalidate server stats and heatmap to sync streak and compound growth accurately
       queryClient.invalidateQueries({ queryKey: queryKeys.dailyReviews.stats(userId) });
+      const year = Number(review.date.slice(0, 4)) || new Date().getFullYear();
+      queryClient.invalidateQueries({ queryKey: queryKeys.dailyReviews.heatmap(userId, year) });
     },
     getSyncKey: (review) => review.date,
   });
@@ -166,19 +194,21 @@ export function useReviewActions() {
       if (existing && existing.content === content) {
         return existing;
       }
+      if (existing && isEmpty && isReviewEmpty(existing.content)) {
+        return existing;
+      }
 
       if (isEmpty) {
-        if (existing) {
-          const clearedReview: DailyReviewItem = {
-            ...existing,
-            content: "",
-            updatedAt: Date.now(),
-            baseUpdatedAt: existing.baseUpdatedAt,
-          };
-          triggerUpsert(clearedReview);
-          return clearedReview;
-        }
-        return { id: "", date, content: "", createdAt: Date.now(), updatedAt: Date.now() };
+        const clearedReview: DailyReviewItem = {
+          id: existing?.id || createDailyReviewId(),
+          date,
+          content: "",
+          createdAt: existing?.createdAt || Date.now(),
+          updatedAt: Date.now(),
+          baseUpdatedAt: existing?.baseUpdatedAt,
+        };
+        triggerUpsert(clearedReview);
+        return clearedReview;
       }
 
       const review: DailyReviewItem = existing

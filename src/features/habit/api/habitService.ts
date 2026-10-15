@@ -1,15 +1,29 @@
 import { apiClient } from "@/lib/apiClient";
 import { Habit, HabitCheckIn, HabitData } from "../types";
 import { registerOfflineExecutor, runOrQueue } from "@/lib/offlineSyncQueue";
+import { formatDateYMD } from "@/lib/dateUtils";
 
 export type SavedHabitVersion = { updatedAt: number; lockVersion: number };
 
 function formatDateString(val: unknown): string {
   if (!val) return "";
   if (typeof val === "string") {
-    return val.length >= 10 ? val.slice(0, 10) : val;
+    if (/^\d{4}-\d{2}-\d{2}/.test(val)) {
+      return val.slice(0, 10);
+    }
+    const parsed = new Date(val);
+    if (!isNaN(parsed.getTime())) {
+      return formatDateYMD(parsed);
+    }
+    return val;
   }
-  return new Date(val as string | number).toISOString().slice(0, 10);
+  if (typeof val === "number" || val instanceof Date) {
+    const parsed = new Date(val);
+    if (!isNaN(parsed.getTime())) {
+      return formatDateYMD(parsed);
+    }
+  }
+  return "";
 }
 
 async function saveHabit(habit: Habit): Promise<SavedHabitVersion> {
@@ -49,45 +63,41 @@ registerOfflineExecutor("habit:delete", async (payload) => {
 
 export const habitApi = {
   loadAll: async (): Promise<HabitData> => {
-    try {
-      const [habitsRes, checkinsRes] = await Promise.all([
-        apiClient.get<Array<Record<string, unknown>>>("/api/v1/habits"),
-        apiClient.get<Array<Record<string, unknown>>>("/api/v1/habits/checkins"),
-      ]);
+    const [habitsRes, checkinsRes] = await Promise.all([
+      apiClient.get<Array<Record<string, unknown>>>("/api/v1/habits"),
+      apiClient.get<Array<Record<string, unknown>>>("/api/v1/habits/checkins"),
+    ]);
 
-      const habits: Habit[] = (habitsRes || []).map((r) => {
-        const reminderStr = (r.reminder as string) || undefined;
-        return {
-          id: r.id as string,
-          name: r.name as string,
-          frequencyType: (r.frequency_type as "daily" | "weekly_days" | "custom") || "daily",
-          goal: (r.goal as string) || undefined,
-          startDate: r.start_date ? formatDateString(r.start_date) : undefined,
-          duration: (r.duration as string) || undefined,
-          category: (r.category as string) || undefined,
-          reminder: reminderStr,
-          autoPopupLog: Boolean(r.auto_popup_log),
-          checkInTime: reminderStr || "08:00:00",
-          sortOrder: Number(r.sort_order || 0),
-          createdAt: r.created_at ? new Date(r.created_at as string).getTime() : Date.now(),
-          updatedAt: r.updated_at ? new Date(r.updated_at as string).getTime() : Date.now(),
-          lockVersion: Number(r.lock_version || 1),
-        };
-      });
+    const habits: Habit[] = (habitsRes || []).map((r) => {
+      const reminderStr = (r.reminder as string) || undefined;
+      return {
+        id: r.id as string,
+        name: r.name as string,
+        frequencyType: (r.frequency_type as "daily" | "weekly_days" | "custom") || "daily",
+        goal: (r.goal as string) || undefined,
+        startDate: r.start_date ? formatDateString(r.start_date) : undefined,
+        duration: (r.duration as string) || undefined,
+        category: (r.category as string) || undefined,
+        reminder: reminderStr,
+        autoPopupLog: Boolean(r.auto_popup_log),
+        checkInTime: reminderStr || "08:00:00",
+        sortOrder: Number(r.sort_order || 0),
+        createdAt: r.created_at ? new Date(r.created_at as string).getTime() : Date.now(),
+        updatedAt: r.updated_at ? new Date(r.updated_at as string).getTime() : Date.now(),
+        lockVersion: Number(r.lock_version || 1),
+      };
+    });
 
-      const checkIns: HabitCheckIn[] = (checkinsRes || []).map((c) => ({
-        id: c.id as string,
-        habitId: (c.habit_id || c.habitId) as string,
-        date: formatDateString(c.date),
-        completed: Boolean(c.completed),
-        createdAt: c.created_at ? new Date(c.created_at as string).getTime() : Date.now(),
-        updatedAt: c.updated_at ? new Date(c.updated_at as string).getTime() : Date.now(),
-      }));
+    const checkIns: HabitCheckIn[] = (checkinsRes || []).map((c) => ({
+      id: c.id as string,
+      habitId: (c.habit_id || c.habitId) as string,
+      date: formatDateString(c.date),
+      completed: Boolean(c.completed),
+      createdAt: c.created_at ? new Date(c.created_at as string).getTime() : Date.now(),
+      updatedAt: c.updated_at ? new Date(c.updated_at as string).getTime() : Date.now(),
+    }));
 
-      return { habits, checkIns };
-    } catch {
-      return { habits: [], checkIns: [] };
-    }
+    return { habits, checkIns };
   },
 
   createHabit: async (habit: Habit): Promise<SavedHabitVersion | undefined> => {

@@ -1,20 +1,15 @@
 import { useMemo, useState, useEffect } from "react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { FolderKanban } from "lucide-react";
-import {
-  ProjectSidebar,
-  ProjectHeaderToolbar,
-  ProjectStageBoard,
-  ProjectGanttView,
-  ProjectTableView,
-  TemplateEditorModal,
-  ProjectCreateModal,
-  useProjectActions,
-  useProjectsData,
-  type ProjectViewMode,
-  type SidebarStatusFilter,
-  type Project,
-} from "@/features/projects";
+import { ProjectSidebar, type SidebarStatusFilter } from "@/features/projects/components/ProjectSidebar";
+import { ProjectHeaderToolbar, type ProjectViewMode } from "@/features/projects/components/ProjectHeaderToolbar";
+import { ProjectStageBoard } from "@/features/projects/components/ProjectStageBoard";
+import { ProjectGanttView } from "@/features/projects/components/ProjectGanttView";
+import { ProjectTableView } from "@/features/projects/components/ProjectTableView";
+import { TemplateEditorModal } from "@/features/projects/components/TemplateEditorModal";
+import { ProjectCreateModal } from "@/features/projects/components/ProjectCreateModal";
+import { useProjectActions, useProjectsData } from "@/features/projects/hooks/useProjects";
+import type { Project } from "@/types/project";
 import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary";
 import { useConfirmDialog } from "@/components/ui/confirm-dialog";
 import { createProjectStageId } from "@/lib/entityIds";
@@ -64,7 +59,6 @@ export function ProjectsPage() {
   const [creatingTemplate, setCreatingTemplate] = useState(false);
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
 
   const projects = data?.projects ?? [];
   const allStages = data?.stages ?? [];
@@ -132,8 +126,6 @@ export function ProjectsPage() {
           onSelectProject={(id) => setSelectedId(id)}
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
-          searchQuery={searchQuery}
-          onSearchQueryChange={setSearchQuery}
           onCreateProject={() => setCreating(true)}
           onManageTemplates={() => setCreatingTemplate(true)}
         />

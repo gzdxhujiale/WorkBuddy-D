@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { focusAssistantApi, FocusStats } from "../api/focusAssistantService";
+import { focusQueries } from "../api/focusQueries";
+import { queryKeys } from "@/lib/syncEngine";
 import { sendDesktopNotification } from "@/lib/notifications/notificationService";
 import {
   playVictorySound,
@@ -13,6 +16,8 @@ import type { PetState } from "../components/pets/PixelPet";
 import { getPetDialogue, PetEvent, PetDialogueOptions } from "../components/pets/petDialogues";
 import { getNotificationDisplayOptions, NotificationDisplayOptions } from "@/lib/preferences";
 import type { SelectedTarget, Status, StyleTheme } from "../components/assistant/types";
+
+const DEFAULT_FOCUS_STATS: FocusStats = { todayMinutes: 0, weekMinutes: 0 };
 
 export interface UseFocusTimerOptions {
   userId?: string | null;
@@ -31,11 +36,13 @@ export function useFocusTimer({
   onSelectTarget,
   theme,
 }: UseFocusTimerOptions) {
+  const queryClient = useQueryClient();
+  const { data: stats = DEFAULT_FOCUS_STATS } = useQuery(focusQueries.stats(userId));
+
   const [status, setStatus] = useState<Status>("ready");
   const [sessionType, setSessionType] = useState<FocusSessionType>("focus");
   const [secondsLeft, setSecondsLeft] = useState(focusMinutes * 60);
   const [session, setSession] = useState<FocusSession | null>(null);
-  const [stats, setStats] = useState<FocusStats>({ todayMinutes: 0, weekMinutes: 0 });
   const [bubbleText, setBubbleText] = useState<string | null>(null);
   const [petOverrideState, setPetOverrideState] = useState<PetState | null>(null);
   const [isPetPoked, setIsPetPoked] = useState<boolean>(false);
@@ -114,20 +121,12 @@ export function useFocusTimer({
     statusRef.current = status;
   }, [status]);
 
-  // Load stats
-  const refreshStats = useCallback(async () => {
-    if (!userId) return;
-    try {
-      const data = await focusAssistantApi.getFocusStats();
-      setStats(data);
-    } catch {
-      // Ignore
-    }
-  }, [userId]);
-
-  useEffect(() => {
-    refreshStats();
-  }, [refreshStats, status]);
+  // Invalidate and refresh stats via TanStack Query
+  const refreshStats = useCallback(() => {
+    void queryClient.invalidateQueries({
+      queryKey: queryKeys.focusStats(userId),
+    });
+  }, [queryClient, userId]);
 
   // Actions
   const startFocus = useCallback(

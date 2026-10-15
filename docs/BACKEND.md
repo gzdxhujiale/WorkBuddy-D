@@ -1,60 +1,109 @@
 # 后端与数据服务规范
 
-## Baseline & Runtime
+## Baseline & Runtime (运行时基线与工程管理)
 
-WorkBuddy-D 仓库不运行独立的业务应用服务器。Supabase 提供托管后端服务，Tauri Webview 中的前端通过 Supabase 客户端访问这些服务。
+WorkBuddy-D 采用 Go 1.26 独立后端服务（`server/`，模块名为 `workbuddy-server`）与 PostgreSQL（Neon Serverless Postgres / 本地开发环境）作为系统核心持久化与业务支撑层。
 
-- **身份认证**：Supabase Auth 签发用户会话，供已认证的数据请求使用。
-- **数据 API**：PostgREST 提供 PostgreSQL 查询和常规读写；数据库 RPC 函数处理事务性或带版本校验的操作。
-- **持久化**：Supabase PostgreSQL 保存用户数据；数据库结构演进记录在 `supabase/migrations/`。
-- **实时更新**：Supabase Realtime Broadcast 分发按用户隔离的私有变更提示。
-- **运行配置**：`src/lib/supabase.ts` 读取 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_PUBLISHABLE_KEY`。两者都是公开的客户端配置；公开密钥不替代 RLS 授权。
-- **桌面宿主**：`src-tauri/` 提供 Rust 桌面运行时，不承载业务 API 服务。
+- **语言与标准库**：Go 1.26，使用标准库 `log/slog` 进行结构化日志记录，使用 `context` 贯穿处理超时与取消生命周期。
+- **Web 服务框架**：Gin v1.10.0（`github.com/gin-gonic/gin`）提供高性能 RESTful API 路由与中间件流水线；CORS 跨域由 `github.com/gin-contrib/cors` 管理。
+- **数据库连接与池化**：基于 `github.com/jackc/pgx/v5` 与 `pgxpool` 实现连接池管理，配置受控的连接数与空闲回收策略。
+- **数据库版本化迁移**：Goose v3.29.0（`github.com/pressly/goose/v3`）配合 `embed.FS` 嵌入式迁移，服务启动时自动检查并演进数据库版本。
+- **类型安全查询**：基于 `sqlc` 预编译 SQL 查询并自动生成 Go 强类型数据访问模型与 `Querier` 接口。
+- **认证与加密**：JWT 规范采用 `github.com/golang-jwt/jwt/v5`（HS256 签名），密码哈希采用 `golang.org/x/crypto/bcrypt`（Cost 10）。
+- **实时同步 Hub**：基于 Gorilla WebSocket v1.5.3（`github.com/gorilla/websocket`）构建多客户端连接池与单调递增序列增量广播中心。
+- **异步写后缓冲**：内置 `NoteBufferManager` 内存去抖缓冲池，平滑高频富文本编辑的磁盘写入负载。
+- **工程构建与测试命令**：
+  - 后端依赖整理：`go -C server mod tidy`
+  - 单元测试运行：`go -C server test ./...`
+  - 静态代码检查：`go -C server vet ./...`
+  - 二进制程序编译：`go -C server build ./cmd/server`
 
-## Package & Layering Boundaries
+## Package & Layering Boundaries (包结构垂直分层与边界)
 
-- `src/features/<feature>/api/` 负责领域数据访问和 RPC 调用。
-- `src/features/<feature>/hooks/` 将 API 操作与 React 组件、TanStack Query 生命周期连接起来。
-- `src/lib/supabase.ts` 根据 `src/types/database.ts` 创建带类型的 Supabase 客户端。
-- `src/lib/realtimeManager.ts` 订阅 Broadcast，并使受影响的 Query Key 失效。
-- `src/lib/offlineSyncQueue.ts` 为受支持的离线写入提供客户端重放队列；它不属于服务端任务队列或分布式作业处理器。
-- `supabase/migrations/` 管理数据库表、函数、触发器、索引、RLS 和 Realtime 授权策略。
-- `src-tauri/src/` 管理原生桌面命令与宿主集成；业务持久化由 Supabase 承担。
+Go 服务端采用清晰的垂直分层包结构，各层职责内聚、单向依赖：
 
-数据依赖方向为 `UI → Query Hook → 领域 API → Supabase 客户端 → PostgREST/RPC → PostgreSQL`。持久化记录和访问决策以数据库约束及 RLS 为准。
+- `server/cmd/server/main.go` — 服务端主入口，负责配置加载、连接池创建、Goose 迁移触发、路由挂载、Worker 启动与基于 OS 信号的优雅关机。
+- `server/internal/config/` — 配置管理包，通过 `bufio.Scanner` 解析 `.env` 与系统环境变量，封装 `Config` 结构体。
+- `server/internal/database/` — 数据持久化基础设施包：
+  - `db.go`：管理 `pgxpool.Pool` 连接池生命周期与 Goose 嵌入式自动迁移执行。
+  - `migrations/`：包含 `000001_init_schema.sql` 与 `000002_upgrade_sync_kb_review.sql` 版本化 SQL 脚本。
+  - `queries/`：业务 SQL 查询文件（`tasks.sql`、`notes.sql`、`sync.sql`、`habits.sql`、`focus.sql`、`projects.sql`、`daily_reviews.sql`、`users.sql`）。
+  - `sqlc/`：sqlc 自动生成的类型安全数据模型与 `Querier` 接口。
+- `server/internal/buffer/` — 写后缓冲池包，提供 `NoteBufferManager`，去抖暂存高频笔记更新并在 2.5 秒定时器或系统关机时批量事务刷盘。
+- `server/internal/ws/` — WebSocket 实时同步包：
+  - `hub.go`：维护客户端注册映射表（`map[uuid.UUID]map[*Client]bool`），写入变更时在 `entity_change_logs` 记录单调递增序列并向目标用户的各连接分发 `ENTITY_DELTA` 载荷。
+  - `client.go`：管理单个 WebSocket 客户端连接的读写 Pump 与心跳保活。
+  - `message.go`：定义增量事件格式与动作枚举。
+- `server/internal/middleware/` — 认证与请求上下文中间件，负责校验 Bearer JWT 并将 `user_id` 注入 Gin 上下文。
+- `server/internal/handler/` — 领域请求处理器：
+  - `auth_handler.go`：注册、登录与 `/auth/me`。
+  - `task_handler.go`：任务 CRUD 与乐观锁版本控制。
+  - `note_handler.go`：知识库、目录、分组、笔记（CRUD、搜索、缓冲 Patch、重排序与移动）。
+  - `habit_handler.go`：习惯与打卡 CRUD。
+  - `focus_handler.go`：专注会话创建、更新与未完成会话中断。
+  - `project_handler.go`：项目、阶段看板与项目模板。
+  - `daily_review_handler.go`：复盘元数据摘要、日期懒加载正文、统计数据与热力图矩阵。
+  - `sync_handler.go`：基于单调递增序列 `seq_id` 的增量日志查询重放（`/api/v1/sync?since_seq=`）。
 
-## Configuration & Security Operations
+### 单向依赖流动边界
 
-- 本地前端配置通过 Vite `import.meta.env` 读取；`src/lib/supabase.ts` 使用 `VITE_SUPABASE_URL` 与 `VITE_SUPABASE_PUBLISHABLE_KEY`。
-- `VITE_` 前缀的值会进入客户端构建产物，因此属于公开配置。数据库访问控制依赖认证会话、RLS 策略和受限的 RPC 授权。
-- 迁移为用户数据表启用行级安全策略，并以 `auth.uid()` 和 `user_id` 所有权条件约束认证用户的访问。
-- 特权触发器和 RPC 函数在相应迁移中定义执行上下文与授权。修改这些函数时，需一并核对函数所有者、`search_path`、执行权限及 RLS 关系。
-- 私有 Realtime 授权定义在 `supabase/migrations/20260814010000_replace_postgres_changes_with_private_broadcast.sql`。变更时同时核对数据库策略和客户端主题名称。
-- Tauri 原生能力由独立配置管理；涉及宿主权限时检查 `src-tauri/capabilities/`。
+数据调用与业务流程遵循严格单向规则：
+`cmd/server → handler / ws / buffer → database (sqlc) → pgxpool → PostgreSQL`。
+各领域 Handler 仅通过注入的 `sqlc.Querier` 访问数据库，通过 `ws.Hub` 广播变更事件，跨业务领域的逻辑由统一数据模型与事务保障。
 
-## Persistence & Data Isolation
+## Configuration & Security Operations (配置隔离、安全与数据脱敏)
 
-- 数据库 DDL 与策略历史追加保存在 `supabase/migrations/`；迁移历史是数据库演进的权威记录。
-- `src/types/database.ts` 提供 TypeScript 数据库契约；`docs/generated/db-schema.md` 是生成的参考快照。
-- 用户自有记录通过 `user_id` 和 RLS 中的 `auth.uid()` 条件隔离。新增用户数据表时，在迁移中按相同所有权模型配置策略。
-- 涉及多条记录或服务端决定值的写操作由数据库 RPC 执行，使校验与提交在 PostgreSQL 中完成。
-- 数据库时间戳、锁版本、排序分配及完成状态转换以迁移声明的默认值、触发器和函数为准。
-- 客户端 Query Key 按用户身份区分；Auth 用户变化时清除旧账户缓存。此客户端边界与数据库授权共同工作，不能替代 RLS。
+- **环境配置加载与优先级**：
+  - `server/internal/config/config.go` 依次加载当前目录与上级目录的 `.env` 文件。
+  - 核心配置项包括 `PORT`（默认 8080）、`DB_DSN`（PostgreSQL 连接串）、`JWT_SECRET`（JWT 签名密钥）与 `CORS_ORIGIN`。
+  - 生产环境下敏感配置（如数据库密码、JWT 密钥）由环境变量直接注入，不在代码中硬编码敏感凭据。
+- **认证中间件与会话鉴权**：
+  - 用户密码经 bcrypt 加盐哈希存储，不可逆向还原。
+  - 客户端登录成功后签发标准 HS256 JWT Token，有效载荷包含用户标识与过期时间戳。
+  - 受保护路由统一挂载 `middleware.Auth` 中间件，校验有效性后将 `user_id` 注入请求上下文；WebSocket 路由在握手阶段通过 Query Token 校验。
+- **结构化日志与安全脱敏**：
+  - 采用 `log/slog` 进行全链路结构化日志输出，包含操作级别、模块名、执行耗时与实体唯一标识。
+  - 用户明文密码、私钥凭据与敏感富文本内容在日志打印时进行过滤脱敏，保持日志安全合规。
 
-## Concurrency, Queue & Reliability
+## Persistence & Data Isolation (数据持久化与多租户隔离)
 
-- 带版本控制的 RPC 写入会比较预期锁版本；遇到过期编辑时返回冲突，调用方提示用户并重新读取权威数据。
-- `src/lib/sync.ts` 和 `src/lib/offlineSyncQueue.ts` 对受支持的网络错误进行分类；主 Webview 启动或网络恢复后重放符合条件的操作。
-- 队列条目存放在客户端本地存储，并按应用存储/用户范围管理；不提供服务端调度或跨设备队列保证。
-- Realtime 消息触发精确的 Query 失效。错过消息后，后续授权查询会重新取得当前数据；广播不充当持久事件日志。
-- Supabase 客户端与 Query 重试行为分别在 `src/lib/supabase.ts`、`src/lib/queryClient.ts` 配置，以减少平台故障时请求叠加。
-- 专注会话中断和任务提醒调度由前端或 Service 生命周期处理；仓库中没有独立后台 Worker 服务。
+- **模式版本化演进**：
+  - 数据库表结构变更全部以带前缀编号的 SQL 迁移文件追加至 `server/internal/database/migrations/`。
+  - 每个迁移文件严格包含 `-- +goose Up` 与 `-- +goose Down` 幂等脚本。
+  - 启动阶段调用 `goose.Up(db, "migrations")` 确保数据库版本与当前代码完全对齐。
+- **多租户物理与逻辑隔离**：
+  - 系统所有实体表均显式声明 `user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE`。
+  - 建立基于 `(user_id, deleted_at)` 等复合局部索引，确保单租户查询命中专有索引且不可跨租户穿透。
+  - 所有 sqlc 查询语句均强制绑定 `WHERE user_id = $1` 条件，由服务端层层校验用户所属权。
+- **并发乐观锁机制**：
+  - 实体表具备 `lock_version BIGINT NOT NULL DEFAULT 1` 字段。
+  - 更新操作要求调用方提供预期的 `lock_version`；更新成功时版本号递增，若版本冲突则返回 HTTP 409 引导前端重新加载。
+- **全文检索与序列增量**：
+  - 启用 PostgreSQL `pg_trgm` 扩展并在 `notes` 表构建 GIN 复合三元组索引 `((title || ' ' || content) gin_trgm_ops)`，支撑高性能模糊搜索。
+  - `entity_change_logs` 维护自增主键 `seq_id`，持久化记录实体的操作类型与载荷快照。
 
-## Backend Invariants & Verification
+## Concurrency, Queue & Reliability (并发流控、队列与可靠性)
 
-- PostgreSQL RLS/RPC 负责持久化访问控制；界面过滤只用于展示。
-- 执行多行领域操作的 RPC 在数据库事务中校验所有权、预期版本和允许的状态转换。
-- 数据库变更新增带时间戳的迁移文件；根据权威结构刷新生成的 schema 参考资料。
-- Broadcast 载荷只作为失效提示；客户端通过认证查询重新加载记录。
-- 离线重放仅处理明确支持的操作，并复用在线写入使用的 Service/RPC 契约。
-- 前端或数据客户端变更运行 `pnpm build`；SQL 变更检查 RLS 策略、函数授权、触发器和迁移顺序。本文档修改后运行 `ai-harness validate docs/BACKEND.md --json`。
+- **数据库连接池流控管理**：
+  - `pgxpool` 显式设置连接池边界：`MaxConns = 25`、`MinConns = 3`、`MaxConnLifetime = 1h`、`MaxConnIdleTime = 30m`、`HealthCheckPeriod = 1m`，避免并发突发耗尽 Neon Serverless 数据库连接配额。
+- **异步写后缓冲池 (`NoteBufferManager`)**：
+  - 采用互斥锁 `sync.Mutex` 保护内存脏数据哈希表。
+  - 启动独立 Goroutine 运行 2.5 秒定时器，批量抽取脏数据并在独立上下文执行数据库更新。
+  - 系统接收 `SIGINT` / `SIGTERM` 信号时，执行优雅关机流程，优先调用 `noteBufferMgr.Stop()` 强制冲刷所有脏数据落盘，随后调用 `http.Server.Shutdown(ctx)` 优雅断开 HTTP 与 WebSocket 连接。
+- **WebSocket Hub 与单调递增广播**：
+  - 读写锁 `sync.RWMutex` 保护客户端连接映射表。
+  - 每个客户端拥有独立缓冲通道（容量 256），由专有 `WritePump` 与 `ReadPump` Goroutine 负责消息收发与心跳检测（Ping/Pong），避免慢客户端阻塞广播主循环。
+  - 写操作时在 `entity_change_logs` 递增记录并附带 `seq_id`；客户端断线恢复后通过 `GET /api/v1/sync?since_seq=` 精确拉取历史增量，无需触发全库重扫。
+
+## Backend Invariants & Verification (后端架构不变量与验证准出)
+
+- Go 独立服务端作为持久化数据与业务规则的单一真值源，各 Handler 统一通过 JWT 中间件提取 `userID` 并注入查询。
+- 数据库并发写操作始终校验 `lock_version` 乐观锁。
+- 数据库变更全部以递增编号的 Goose 脚本追加至 `server/internal/database/migrations/`。
+- 结构化日志统一使用 `log/slog`，保持上下文键值对规范。
+- 系统关机必须触发缓冲池冲刷（`Stop()`）与 HTTP 优雅终止。
+- 后端准出验证命令：
+  - 执行 `go -C server test ./...` 运行全部 Go 后端单元测试。
+  - 执行 `go -C server vet ./...` 运行静态语法检查。
+  - 执行 `go -C server build ./cmd/server` 验证二进制编译通过。
+  - 文档修改后运行 `ai-harness validate docs/BACKEND.md --json` 确认 0 错误。

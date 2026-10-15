@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { SectionErrorBoundary } from "@/components/ui/SectionErrorBoundary";
 import { TodayQuickAdd } from "@/features/time-management/components/TodayQuickAdd";
 import { TodayTasksSection } from "@/features/time-management/components/TodayTasksSection";
@@ -11,9 +11,6 @@ export const TodayPage: React.FC = () => {
   const { data: projectsData } = useProjectsData();
   const projects = projectsData?.projects ?? [];
   const stages = projectsData?.stages ?? [];
-
-  const [hoveredTaskId, setHoveredTaskId] = useState<string | null>(null);
-  const [hoveredStageId, setHoveredStageId] = useState<string | null>(null);
 
   return (
     <SectionErrorBoundary
@@ -30,9 +27,6 @@ export const TodayPage: React.FC = () => {
           <TodayTasksSection
             projects={projects}
             stages={stages}
-            hoveredTaskId={hoveredTaskId}
-            onHoverTask={setHoveredTaskId}
-            onHoverStage={setHoveredStageId}
           />
 
           {/* 右栏：习惯追踪打卡与复盘快速记录 */}
@@ -43,12 +37,7 @@ export const TodayPage: React.FC = () => {
         </div>
 
         {/* 下屏：项目全景时间轴与甘特图联动 */}
-        <TodayProjectTimeline
-          hoveredTaskId={hoveredTaskId}
-          hoveredStageId={hoveredStageId}
-          onHoverTask={setHoveredTaskId}
-          onHoverStage={setHoveredStageId}
-        />
+        <TodayProjectTimeline />
       </div>
     </SectionErrorBoundary>
   );

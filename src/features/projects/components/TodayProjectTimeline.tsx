@@ -17,6 +17,7 @@ import { PixelScroll } from "@/components/pixel/PixelIcons";
 import { createTaskId } from "@/lib/entityIds";
 import { openQuickEditWindow } from "@/app/windows/quickEditWindowManager";
 import { taskIntersectsDay } from "@/lib/taskSchedule";
+import { useTodayHighlightStore } from "@/stores/todayHighlightStore";
 import type { Project, ProjectTask } from "../types";
 import type { Task } from "@/types/task";
 
@@ -150,11 +151,21 @@ export interface TodayProjectTimelineProps {
 }
 
 export const TodayProjectTimeline: React.FC<TodayProjectTimelineProps> = ({
-  hoveredTaskId,
-  hoveredStageId,
-  onHoverTask,
-  onHoverStage,
+  hoveredTaskId: hoveredTaskIdProp,
+  hoveredStageId: hoveredStageIdProp,
+  onHoverTask: onHoverTaskProp,
+  onHoverStage: onHoverStageProp,
 }) => {
+  const storeHoveredTaskId = useTodayHighlightStore((s) => s.hoveredTaskId);
+  const storeHoveredStageId = useTodayHighlightStore((s) => s.hoveredStageId);
+  const storeSetHoveredTask = useTodayHighlightStore((s) => s.setHoveredTask);
+  const storeSetHoveredStage = useTodayHighlightStore((s) => s.setHoveredStage);
+
+  const hoveredTaskId = hoveredTaskIdProp !== undefined ? hoveredTaskIdProp : storeHoveredTaskId;
+  const hoveredStageId = hoveredStageIdProp !== undefined ? hoveredStageIdProp : storeHoveredStageId;
+  const onHoverTask = onHoverTaskProp ?? storeSetHoveredTask;
+  const onHoverStage = onHoverStageProp ?? storeSetHoveredStage;
+
   const navigate = useNavigate();
   const { isPixelTheme } = useAppThemeStyle();
   const { data: projectsData } = useProjectsData();

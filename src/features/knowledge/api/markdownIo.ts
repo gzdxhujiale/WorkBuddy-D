@@ -2,21 +2,47 @@ import type { Note } from "../types";
 
 export type ImportedMarkdownFile = { title: string; content: string };
 
-export async function pickMarkdownFile(): Promise<string | null> {
+export function extractTitleFromMarkdown(filename: string, content: string): string {
+  const h1Match = content.match(/^#\s+(.+)$/m);
+  if (h1Match && h1Match[1]?.trim()) {
+    return h1Match[1].trim();
+  }
+  const cleanName = filename.replace(/\.[^/.]+$/, "").trim();
+  return cleanName || "未命名笔记";
+}
+
+export async function pickMarkdownFile(): Promise<ImportedMarkdownFile | null> {
   return new Promise((resolve) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = ".md,.txt";
-    input.onchange = (e) => {
+
+    let resolved = false;
+    const safeResolve = (val: ImportedMarkdownFile | null) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(val);
+    };
+
+    input.oncancel = () => {
+      safeResolve(null);
+    };
+
+    input.onchange = async (e) => {
       const file = (e.target as HTMLInputElement).files?.[0];
       if (file) {
-        const reader = new FileReader();
-        reader.onload = (evt) => resolve(evt.target?.result as string);
-        reader.readAsText(file);
+        try {
+          const text = await file.text();
+          const title = extractTitleFromMarkdown(file.name, text);
+          safeResolve({ title, content: text });
+        } catch {
+          safeResolve(null);
+        }
       } else {
-        resolve(null);
+        safeResolve(null);
       }
     };
+
     input.click();
   });
 }
@@ -39,15 +65,37 @@ export async function pickMultipleMarkdownFiles(): Promise<ImportedMarkdownFile[
     input.type = "file";
     input.accept = ".md,.txt";
     input.multiple = true;
+
+    let resolved = false;
+    const safeResolve = (val: ImportedMarkdownFile[]) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(val);
+    };
+
+    input.oncancel = () => {
+      safeResolve([]);
+    };
+
     input.onchange = async (e) => {
       const files = Array.from((e.target as HTMLInputElement).files ?? []);
+      if (files.length === 0) {
+        safeResolve([]);
+        return;
+      }
       const results: ImportedMarkdownFile[] = [];
       for (const file of files) {
-        const text = await file.text();
-        results.push({ title: file.name.replace(/\.[^/.]+$/, ""), content: text });
+        try {
+          const text = await file.text();
+          const title = extractTitleFromMarkdown(file.name, text);
+          results.push({ title, content: text });
+        } catch {
+          // Skip unreadable file
+        }
       }
-      resolve(results);
+      safeResolve(results);
     };
+
     input.click();
   });
 }

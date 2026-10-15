@@ -1,4 +1,5 @@
 -- 000002_upgrade_sync_kb_review.sql: Ordered Sync Logs, Trigram Search, and Review Metadata Support
+-- +goose Up
 
 -- 1. Trigram Extension for fuzzy and substring search
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -20,3 +21,8 @@ CREATE INDEX IF NOT EXISTS idx_change_logs_created_at ON entity_change_logs (cre
 -- 3. Trigram GIN index on notes for full-text and substring search
 CREATE INDEX IF NOT EXISTS idx_notes_trgm_search ON notes USING gin ((title || ' ' || content) gin_trgm_ops)
 WHERE deleted_at IS NULL;
+
+-- +goose Down
+DROP INDEX IF EXISTS idx_notes_trgm_search;
+DROP TABLE IF EXISTS entity_change_logs;
+

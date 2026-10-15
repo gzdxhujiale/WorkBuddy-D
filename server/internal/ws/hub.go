@@ -3,7 +3,7 @@ package ws
 import (
 	"context"
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -38,7 +38,7 @@ func (h *Hub) Register(client *Client) {
 		h.clients[client.UserID] = userClients
 	}
 	userClients[client] = true
-	log.Printf("[WS] Client connected for user %s (total: %d)", client.UserID, len(userClients))
+	slog.Info("ws client connected", slog.String("user_id", client.UserID.String()), slog.Int("total_clients", len(userClients)))
 }
 
 func (h *Hub) Unregister(client *Client) {
@@ -53,7 +53,7 @@ func (h *Hub) Unregister(client *Client) {
 			if len(userClients) == 0 {
 				delete(h.clients, client.UserID)
 			}
-			log.Printf("[WS] Client disconnected for user %s", client.UserID)
+			slog.Info("ws client disconnected", slog.String("user_id", client.UserID.String()))
 		}
 	}
 }
@@ -77,7 +77,7 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, sender *Client, msg DeltaMessage
 		})
 		cancel()
 		if err != nil {
-			log.Printf("[WS] Warning: failed to log change to entity_change_logs: %v", err)
+			slog.Warn("failed to log change to entity_change_logs", slog.Any("error", err))
 		} else {
 			msg.SeqID = logRow.SeqID
 		}
@@ -93,7 +93,7 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, sender *Client, msg DeltaMessage
 
 	payload, err := json.Marshal(msg)
 	if err != nil {
-		log.Printf("[WS] Error marshaling delta message: %v", err)
+		slog.Error("error marshaling delta message", slog.Any("error", err))
 		return
 	}
 
@@ -105,7 +105,7 @@ func (h *Hub) BroadcastToUser(userID uuid.UUID, sender *Client, msg DeltaMessage
 		case client.Send <- payload:
 		default:
 			// Buffer full, drop or close
-			log.Printf("[WS] Client buffer full for user %s", userID)
+			slog.Warn("client buffer full, dropping message", slog.String("user_id", userID.String()))
 		}
 	}
 }
@@ -119,7 +119,7 @@ func (h *Hub) HandleWebSocket(c *gin.Context) {
 
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Printf("[WS] Failed to upgrade websocket: %v", err)
+		slog.Error("failed to upgrade websocket", slog.Any("error", err))
 		return
 	}
 

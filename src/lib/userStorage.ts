@@ -3,7 +3,7 @@ let activeUserId: string | null = null;
 /**
  * Keeps browser-only offline caches separated between signed-in accounts.
  * Services are intentionally synchronous around localStorage, so the active
- * identity is set by the application when Supabase auth changes.
+ * identity is set by the application when auth session changes.
  */
 export function setStorageUserId(userId: string | null): void {
   activeUserId = userId;

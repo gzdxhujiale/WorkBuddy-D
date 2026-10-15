@@ -1,230 +1,189 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useRef,
-  useEffect,
-  useCallback,
-  ReactNode,
-  HTMLAttributes,
-  ButtonHTMLAttributes,
-} from "react";
+import React, { createContext, useContext, forwardRef } from "react";
+import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
 import { cn } from "@/lib/utils";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 
 interface DropdownMenuContextValue {
   open: boolean;
   setOpen: (open: boolean) => void;
-  toggleOpen: () => void;
   close: () => void;
-  triggerRef: React.RefObject<HTMLElement | null>;
 }
 
-const DropdownMenuContext = createContext<DropdownMenuContextValue | null>(null);
+const DropdownMenuContext = createContext<DropdownMenuContextValue>({
+  open: false,
+  setOpen: () => {},
+  close: () => {},
+});
 
 export function useDropdownMenu() {
-  const context = useContext(DropdownMenuContext);
-  if (!context) {
-    throw new Error("useDropdownMenu must be used within a DropdownMenu");
-  }
-  return context;
+  return useContext(DropdownMenuContext);
 }
 
 export interface DropdownMenuProps {
   open?: boolean;
+  defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
-  children: ReactNode;
+  children: React.ReactNode;
 }
 
-export function DropdownMenu({ open: controlledOpen, onOpenChange, children }: DropdownMenuProps) {
-  const [uncontrolledOpen, setUncontrolledOpen] = useState(false);
+export function DropdownMenu({
+  open: controlledOpen,
+  defaultOpen,
+  onOpenChange,
+  children,
+}: DropdownMenuProps) {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false);
   const isControlled = controlledOpen !== undefined;
   const open = isControlled ? controlledOpen : uncontrolledOpen;
-  const triggerRef = useRef<HTMLElement | null>(null);
 
-  const setOpen = useCallback(
-    (nextOpen: boolean) => {
+  const handleOpenChange = React.useCallback(
+    (next: boolean) => {
       if (!isControlled) {
-        setUncontrolledOpen(nextOpen);
+        setUncontrolledOpen(next);
       }
-      onOpenChange?.(nextOpen);
+      onOpenChange?.(next);
     },
     [isControlled, onOpenChange]
   );
 
-  const toggleOpen = useCallback(() => {
-    setOpen(!open);
-  }, [open, setOpen]);
-
-  const close = useCallback(() => {
-    setOpen(false);
-  }, [setOpen]);
+  const contextValue = React.useMemo<DropdownMenuContextValue>(
+    () => ({
+      open,
+      setOpen: handleOpenChange,
+      close: () => handleOpenChange(false),
+    }),
+    [open, handleOpenChange]
+  );
 
   return (
-    <DropdownMenuContext.Provider value={{ open, setOpen, toggleOpen, close, triggerRef }}>
-      <div className="relative inline-flex">{children}</div>
+    <DropdownMenuContext.Provider value={contextValue}>
+      <RadixDropdownMenu.Root
+        open={open}
+        defaultOpen={defaultOpen}
+        onOpenChange={handleOpenChange}
+      >
+        {children}
+      </RadixDropdownMenu.Root>
     </DropdownMenuContext.Provider>
   );
 }
 
-export interface DropdownMenuTriggerProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface DropdownMenuTriggerProps
+  extends React.ComponentPropsWithoutRef<typeof RadixDropdownMenu.Trigger> {
   asChild?: boolean;
 }
 
-export function DropdownMenuTrigger({ asChild, children, className, onClick, ...props }: DropdownMenuTriggerProps) {
-  const { toggleOpen, triggerRef } = useDropdownMenu();
-
-  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    e.stopPropagation();
-    onClick?.(e);
-    toggleOpen();
-  };
-
-  if (asChild && React.isValidElement(children)) {
-    return React.cloneElement(children as React.ReactElement<any>, {
-      ref: triggerRef,
-      onClick: (e: React.MouseEvent<HTMLButtonElement>) => {
-        (children as React.ReactElement<any>).props.onClick?.(e);
-        handleClick(e);
-      },
-    });
-  }
-
+export const DropdownMenuTrigger = forwardRef<
+  React.ElementRef<typeof RadixDropdownMenu.Trigger>,
+  DropdownMenuTriggerProps
+>(({ className, ...props }, ref) => {
   return (
-    <button
-      ref={triggerRef as React.RefObject<HTMLButtonElement>}
-      type="button"
-      className={cn("cursor-pointer select-none", className)}
-      onClick={handleClick}
+    <RadixDropdownMenu.Trigger
+      ref={ref}
+      className={cn("cursor-pointer select-none outline-none", className)}
       {...props}
-    >
-      {children}
-    </button>
+    />
   );
-}
+});
+DropdownMenuTrigger.displayName = "DropdownMenuTrigger";
 
-export interface DropdownMenuContentProps extends HTMLAttributes<HTMLDivElement> {
-  align?: "start" | "end";
+export interface DropdownMenuContentProps
+  extends React.ComponentPropsWithoutRef<typeof RadixDropdownMenu.Content> {
+  align?: "start" | "center" | "end";
   sideOffset?: number;
   width?: string;
 }
 
-export function DropdownMenuContent({
-  align = "end",
-  sideOffset = 4,
-  className,
-  children,
-  style,
-  ...props
-}: DropdownMenuContentProps) {
-  const { open, close, triggerRef } = useDropdownMenu();
+export const DropdownMenuContent = forwardRef<
+  React.ElementRef<typeof RadixDropdownMenu.Content>,
+  DropdownMenuContentProps
+>(({ align = "end", sideOffset = 4, className, children, ...props }, ref) => {
   const { isPixelTheme } = useAppThemeStyle();
-  const contentRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-
-    const handlePointerDown = (e: MouseEvent) => {
-      const target = e.target as Node;
-      if (target instanceof Element && target.closest("[data-dropdown-menu-overlay]")) {
-        return;
-      }
-      if (
-        contentRef.current &&
-        !contentRef.current.contains(target) &&
-        triggerRef.current &&
-        !triggerRef.current.contains(target)
-      ) {
-        close();
-      }
-    };
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        close();
-      }
-    };
-
-    document.addEventListener("mousedown", handlePointerDown);
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [open, close, triggerRef]);
-
-  if (!open) return null;
 
   return (
-    <div
-      ref={contentRef}
-      style={{
-        marginTop: `${sideOffset}px`,
-        ...style,
-      }}
-      className={cn(
-        "absolute top-full z-50 min-w-36 p-1 bg-popover text-popover-foreground flex flex-col animate-in fade-in zoom-in-95 duration-100",
-        align === "end" ? "right-0" : "left-0",
-        isPixelTheme
-          ? "rounded-xs border-2 border-border font-mono shadow-[3px_3px_0px_#000]"
-          : "border border-border rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)]",
-        className
-      )}
-      onClick={(e) => e.stopPropagation()}
-      {...props}
-    >
-      {children}
-    </div>
+    <RadixDropdownMenu.Portal>
+      <RadixDropdownMenu.Content
+        ref={ref}
+        align={align}
+        sideOffset={sideOffset}
+        collisionPadding={8}
+        className={cn(
+          "z-[1100] min-w-36 p-1 bg-popover text-popover-foreground flex flex-col animate-in fade-in zoom-in-95 duration-100 outline-none",
+          isPixelTheme
+            ? "rounded-xs border-2 border-border font-mono shadow-[3px_3px_0px_#000]"
+            : "border border-border rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)]",
+          className
+        )}
+        {...props}
+      >
+        {children}
+      </RadixDropdownMenu.Content>
+    </RadixDropdownMenu.Portal>
   );
-}
+});
+DropdownMenuContent.displayName = "DropdownMenuContent";
 
-export interface DropdownMenuItemProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+export interface DropdownMenuItemProps
+  extends React.ComponentPropsWithoutRef<typeof RadixDropdownMenu.Item> {
   destructive?: boolean;
   closeOnClick?: boolean;
 }
 
-export function DropdownMenuItem({
-  destructive = false,
-  closeOnClick = true,
-  className,
-  children,
-  onClick,
-  disabled,
-  ...props
-}: DropdownMenuItemProps) {
-  const { close } = useDropdownMenu();
+export const DropdownMenuItem = forwardRef<
+  React.ElementRef<typeof RadixDropdownMenu.Item>,
+  DropdownMenuItemProps
+>(({ destructive = false, className, children, onSelect, onClick, ...props }, ref) => {
   const { isPixelTheme } = useAppThemeStyle();
 
-  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
-    if (disabled) return;
-    e.stopPropagation();
-    onClick?.(e);
-    if (closeOnClick) {
-      close();
-    }
-  };
-
   return (
-    <button
-      type="button"
-      disabled={disabled}
+    <RadixDropdownMenu.Item
+      ref={ref}
+      onSelect={(e) => {
+        onSelect?.(e);
+        onClick?.(e as unknown as React.MouseEvent<HTMLDivElement>);
+      }}
       className={cn(
-        "w-full text-left px-2.5 py-1.5 text-xs transition-colors cursor-pointer flex items-center justify-start gap-2 select-none",
+        "w-full text-left px-2.5 py-1.5 text-xs transition-colors cursor-pointer flex items-center justify-start gap-2 select-none outline-none data-[disabled]:opacity-50 data-[disabled]:pointer-events-none data-[highlighted]:bg-muted",
         isPixelTheme ? "rounded-xs font-mono" : "rounded-lg",
         destructive
-          ? "text-destructive hover:bg-destructive/10"
-          : "text-foreground hover:bg-muted",
-        disabled && "opacity-50 cursor-not-allowed pointer-events-none",
+          ? "text-destructive data-[highlighted]:bg-destructive/10 data-[highlighted]:text-destructive"
+          : "text-foreground",
         className
       )}
-      onClick={handleClick}
       {...props}
     >
       {children}
-    </button>
+    </RadixDropdownMenu.Item>
   );
-}
+});
+DropdownMenuItem.displayName = "DropdownMenuItem";
 
-export function DropdownMenuSeparator({ className }: { className?: string }) {
-  return <div className={cn("h-px bg-border my-1 -mx-1", className)} />;
-}
+export const DropdownMenuSeparator = forwardRef<
+  React.ElementRef<typeof RadixDropdownMenu.Separator>,
+  React.ComponentPropsWithoutRef<typeof RadixDropdownMenu.Separator>
+>(({ className, ...props }, ref) => {
+  return (
+    <RadixDropdownMenu.Separator
+      ref={ref}
+      className={cn("h-px bg-border my-1 -mx-1", className)}
+      {...props}
+    />
+  );
+});
+DropdownMenuSeparator.displayName = "DropdownMenuSeparator";
+
+export const DropdownMenuLabel = forwardRef<
+  React.ElementRef<typeof RadixDropdownMenu.Label>,
+  React.ComponentPropsWithoutRef<typeof RadixDropdownMenu.Label>
+>(({ className, ...props }, ref) => {
+  return (
+    <RadixDropdownMenu.Label
+      ref={ref}
+      className={cn("px-2 py-1 text-xs font-semibold text-muted-foreground", className)}
+      {...props}
+    />
+  );
+});
+DropdownMenuLabel.displayName = "DropdownMenuLabel";
+
+export const DropdownMenuGroup = RadixDropdownMenu.Group;

@@ -1,7 +1,7 @@
 package handler
 
 import (
-	"log"
+	"log/slog"
 	"net/http"
 	"time"
 
@@ -60,7 +60,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		PasswordHash: string(hash),
 	})
 	if err != nil {
-		log.Printf("[Auth] Register failed for %s: %v", req.Email, err)
+		slog.Warn("auth register failed", slog.String("email", req.Email), slog.Any("error", err))
 		c.JSON(http.StatusConflict, gin.H{"error": "email already exists or registration failed"})
 		return
 	}
@@ -87,13 +87,13 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	user, err := h.queries.GetUserByEmail(c.Request.Context(), req.Email)
 	if err != nil {
-		log.Printf("[Auth] Login failed for %s (user not found): %v", req.Email, err)
+		slog.Warn("auth login failed: user not found", slog.String("email", req.Email), slog.Any("error", err))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		return
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-		log.Printf("[Auth] Login failed for %s (invalid password): %v", req.Email, err)
+		slog.Warn("auth login failed: invalid password", slog.String("email", req.Email), slog.Any("error", err))
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid email or password"})
 		return
 	}

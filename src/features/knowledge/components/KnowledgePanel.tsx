@@ -718,10 +718,13 @@ function NoteDrawerContent({
   }, [title, content, note.id, note.title, note.content, isOpen]);
 
   const handleImport = async () => {
-    const mdContent = await knowledgeService.pickMarkdownFile();
-    if (mdContent) {
-      const jsonStr = convertMarkdownToTipTapJson(mdContent);
+    const imported = await knowledgeService.pickMarkdownFile();
+    if (imported) {
+      const jsonStr = convertMarkdownToTipTapJson(imported.content);
       setContent(jsonStr);
+      if (imported.title) {
+        setTitle(imported.title);
+      }
       toast.success('导入成功！');
     }
   };
@@ -1252,7 +1255,7 @@ const EMPTY_NOTE_GROUPS: NoteGroup[] = [];
 export function KnowledgePanel() {
   const { isPixelTheme } = useAppThemeStyle();
   const { userId } = useAuth();
-  // Query-backed data + write actions (connected to knowledgeService Supabase backend)
+  // Query-backed data + write actions (connected to knowledgeService Go backend)
   const { data } = useKnowledgeData();
   const rawLists = data?.lists ?? EMPTY_LISTS;
   const rawFolders = data?.folders ?? EMPTY_FOLDERS;
@@ -1670,6 +1673,9 @@ export function KnowledgePanel() {
     if (!activeListId) return;
     try {
       const importedFiles = await knowledgeService.pickMultipleMarkdownFiles();
+      if (!importedFiles || importedFiles.length === 0) {
+        return;
+      }
       for (const file of importedFiles) {
         const jsonContent = convertMarkdownToTipTapJson(file.content);
         addNote({

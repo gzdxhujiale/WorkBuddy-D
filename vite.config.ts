@@ -25,11 +25,26 @@ export default defineConfig(async () => ({
       output: {
         manualChunks: (id) => {
           if (id.includes("node_modules")) {
-            if (id.includes("@tiptap") || id.includes("reactjs-tiptap-editor") || id.includes("prosemirror")) {
-              return "tiptap-vendor";
+            if (id.includes("reactjs-tiptap-editor")) {
+              return "tiptap-ui";
+            }
+            if (id.includes("prosemirror")) {
+              return "prosemirror-vendor";
+            }
+            if (id.includes("@tiptap")) {
+              return "tiptap-core";
             }
             if (id.includes("@tanstack")) {
               return "tanstack-vendor";
+            }
+            if (id.includes("@tauri-apps")) {
+              return "tauri-vendor";
+            }
+            if (id.includes("dayjs")) {
+              return "dayjs-vendor";
+            }
+            if (id.includes("lucide-react")) {
+              return "lucide-vendor";
             }
             if (id.includes("react") || id.includes("react-dom") || id.includes("scheduler")) {
               return "react-vendor";
@@ -38,6 +53,7 @@ export default defineConfig(async () => ({
         },
       },
     },
+    chunkSizeWarningLimit: 800,
   },
   server: {
     port: 1420,

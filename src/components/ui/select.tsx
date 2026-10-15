@@ -1,14 +1,15 @@
 import React, {
   useState,
-  useRef,
-  useEffect,
-  useCallback,
   useMemo,
+  useCallback,
   forwardRef,
 } from "react";
+import * as RadixSelect from "@radix-ui/react-select";
 import { ChevronDown, Check, X } from "lucide-react";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
+
+const EMPTY_VALUE_SENTINEL = "__EMPTY_SELECT_VALUE__";
 
 export interface SelectOptionProps {
   value: any;
@@ -27,10 +28,14 @@ export const OptGroup: React.FC<{ label?: React.ReactNode; children?: React.Reac
   children,
 }) => {
   return (
-    <div>
-      {label && <div className="px-2 py-1 text-xs font-semibold text-muted-foreground">{label}</div>}
+    <RadixSelect.Group>
+      {label && (
+        <RadixSelect.Label className="px-2 py-1 text-xs font-semibold text-muted-foreground">
+          {label}
+        </RadixSelect.Label>
+      )}
       {children}
-    </div>
+    </RadixSelect.Group>
   );
 };
 
@@ -47,7 +52,7 @@ export interface SelectProps {
   placeholder?: React.ReactNode;
   disabled?: boolean;
   allowClear?: boolean;
-  options?: Array<SelectItem | string | number>;
+  options?: Array<SelectItem | string | number | { label: string; value: any; disabled?: boolean }>;
   children?: React.ReactNode;
   className?: string;
   dropdownMenuClassName?: string;
@@ -57,7 +62,7 @@ export interface SelectProps {
   getPopupContainer?: (node: HTMLElement) => HTMLElement;
 }
 
-const SelectComponent = forwardRef<HTMLDivElement, SelectProps>(
+const SelectComponent = forwardRef<HTMLButtonElement, SelectProps>(
   (
     {
       value: controlledValue,
@@ -75,16 +80,22 @@ const SelectComponent = forwardRef<HTMLDivElement, SelectProps>(
     ref
   ) => {
     const { isPixelTheme } = useAppThemeStyle();
-    const [isOpen, setIsOpen] = useState(false);
-    const [internalValue, setInternalValue] = useState(
-      controlledValue !== undefined ? controlledValue : defaultValue
-    );
-    const containerRef = useRef<HTMLDivElement>(null);
+    const [internalValue, setInternalValue] = useState<string | undefined>(() => {
+      const init = controlledValue !== undefined ? controlledValue : defaultValue;
+      if (init === "") return EMPTY_VALUE_SENTINEL;
+      return init !== undefined ? String(init) : undefined;
+    });
 
     const isControlled = controlledValue !== undefined;
-    const currentValue = isControlled ? controlledValue : internalValue;
+    const rawValue = isControlled ? controlledValue : internalValue;
+    const currentRadixValue =
+      rawValue === ""
+        ? EMPTY_VALUE_SENTINEL
+        : rawValue !== undefined && rawValue !== null
+        ? String(rawValue)
+        : undefined;
 
-    // Parse options from props.options or props.children
+    // Parse items from options prop or Select.Option children
     const parsedItems: SelectItem[] = useMemo(() => {
       if (options && options.length > 0) {
         return options.map((opt) => {
@@ -118,38 +129,37 @@ const SelectComponent = forwardRef<HTMLDivElement, SelectProps>(
     }, [options, children]);
 
     const selectedItem = useMemo(() => {
-      return parsedItems.find((item) => String(item.value) === String(currentValue));
-    }, [parsedItems, currentValue]);
-
-    // Close dropdown on click outside
-    useEffect(() => {
-      if (!isOpen) return;
-      const handleClickOutside = (e: MouseEvent) => {
-        if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-          setIsOpen(false);
+      return parsedItems.find((item) => {
+        if (currentRadixValue === EMPTY_VALUE_SENTINEL) {
+          return item.value === "" || item.value === null;
         }
-      };
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, [isOpen]);
+        return String(item.value) === String(currentRadixValue);
+      });
+    }, [parsedItems, currentRadixValue]);
 
-    const handleSelect = useCallback(
-      (item: SelectItem) => {
-        if (item.disabled) return;
+    const handleValueChange = useCallback(
+      (newRadixValue: string) => {
+        const actualValue = newRadixValue === EMPTY_VALUE_SENTINEL ? "" : newRadixValue;
+        const found = parsedItems.find((item) => {
+          if (actualValue === "") return item.value === "" || item.value === null;
+          return String(item.value) === actualValue;
+        });
+
+        const returnedValue = found ? found.value : actualValue;
         if (!isControlled) {
-          setInternalValue(item.value);
+          setInternalValue(newRadixValue);
         }
-        onChange?.(item.value, item);
-        setIsOpen(false);
+        onChange?.(returnedValue, found);
       },
-      [isControlled, onChange]
+      [isControlled, onChange, parsedItems]
     );
 
     const handleClear = useCallback(
       (e: React.MouseEvent) => {
         e.stopPropagation();
+        e.preventDefault();
         if (!isControlled) {
-          setInternalValue("");
+          setInternalValue(undefined);
         }
         onChange?.("", undefined);
       },
@@ -157,25 +167,20 @@ const SelectComponent = forwardRef<HTMLDivElement, SelectProps>(
     );
 
     return (
-      <div
-        ref={(node) => {
-          (containerRef as any).current = node;
-          if (typeof ref === "function") ref(node);
-          else if (ref) (ref as any).current = node;
-        }}
-        style={style}
-        className={cn("relative inline-block text-left text-sm select-none", className)}
+      <RadixSelect.Root
+        value={currentRadixValue}
+        onValueChange={handleValueChange}
+        disabled={disabled}
       >
-        {/* Trigger Button */}
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => !disabled && setIsOpen((prev) => !prev)}
+        <RadixSelect.Trigger
+          ref={ref}
+          style={style}
           className={cn(
-            "w-full flex items-center justify-between gap-2 px-3 py-1.5 min-h-[34px] transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed",
+            "w-full flex items-center justify-between gap-2 px-3 py-1.5 min-h-[34px] text-sm text-left select-none transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed outline-none",
             isPixelTheme
               ? "rounded-xs border-2 border-border bg-muted/60 hover:bg-muted text-foreground font-mono shadow-[1px_1px_0px_#000] focus:border-amber-600 focus:bg-background"
-              : "rounded-lg border border-border/80 bg-background hover:border-primary/60 focus:border-primary text-foreground shadow-2xs"
+              : "rounded-lg border border-border/80 bg-background hover:border-primary/60 focus:border-primary text-foreground shadow-2xs",
+            className
           )}
         >
           <span className="truncate flex-1 text-left">
@@ -187,7 +192,7 @@ const SelectComponent = forwardRef<HTMLDivElement, SelectProps>(
           </span>
 
           <div className="flex items-center gap-1 shrink-0 text-muted-foreground">
-            {allowClear && selectedItem && (
+            {allowClear && selectedItem && !disabled && (
               <span
                 role="button"
                 tabIndex={0}
@@ -198,58 +203,70 @@ const SelectComponent = forwardRef<HTMLDivElement, SelectProps>(
                 <X size={13} />
               </span>
             )}
-            <ChevronDown
-              size={14}
-              className={cn("transition-transform duration-200", isOpen && "rotate-180")}
-            />
+            <RadixSelect.Icon asChild>
+              <ChevronDown size={14} className="transition-transform duration-200" />
+            </RadixSelect.Icon>
           </div>
-        </button>
+        </RadixSelect.Trigger>
 
-        {/* Dropdown Menu Popover */}
-        {isOpen && (
-          <div
+        <RadixSelect.Portal>
+          <RadixSelect.Content
+            position="popper"
+            sideOffset={4}
             className={cn(
-              "absolute left-0 top-full mt-1 w-full min-w-[120px] max-h-60 overflow-y-auto z-50 p-1 animate-in fade-in zoom-in-95 duration-100",
+              "z-[1100] min-w-[var(--radix-select-trigger-width)] max-h-60 overflow-y-auto p-1 animate-in fade-in zoom-in-95 duration-100",
               isPixelTheme
                 ? "rounded-xs border-2 border-border bg-popover text-popover-foreground font-mono shadow-[3px_3px_0px_#000]"
                 : "rounded-xl border border-border bg-popover text-popover-foreground shadow-lg",
               dropdownMenuClassName
             )}
           >
-            {parsedItems.length === 0 ? (
-              <div className="py-2 text-center text-xs text-muted-foreground">无匹配选项</div>
-            ) : (
-              parsedItems.map((item, index) => {
-                const isSelected = String(item.value) === String(currentValue);
-                return (
-                  <div
-                    key={String(item.value) || index}
-                    onClick={() => handleSelect(item)}
-                    className={cn(
-                      "flex items-center justify-between px-2.5 py-1.5 text-sm cursor-pointer transition-colors",
-                      item.disabled
-                        ? "opacity-40 cursor-not-allowed"
-                        : isPixelTheme
-                        ? cn(
-                            "rounded-xs hover:bg-muted font-mono",
-                            isSelected &&
-                              "bg-amber-100 dark:bg-amber-950/80 font-bold text-amber-950 dark:text-amber-100"
-                          )
-                        : cn(
-                            "rounded-md hover:bg-muted",
-                            isSelected && "bg-accent text-accent-foreground font-medium"
-                          )
-                    )}
-                  >
-                    <span className="truncate">{item.label}</span>
-                    {isSelected && <Check size={14} className="shrink-0 ml-1 text-primary" />}
-                  </div>
-                );
-              })
-            )}
-          </div>
-        )}
-      </div>
+            <RadixSelect.Viewport className="p-0.5">
+              {parsedItems.length === 0 ? (
+                <div className="py-2 text-center text-xs text-muted-foreground">无匹配选项</div>
+              ) : (
+                parsedItems.map((item, index) => {
+                  const itemRadixValue =
+                    item.value === "" || item.value === null
+                      ? EMPTY_VALUE_SENTINEL
+                      : String(item.value);
+                  const isSelected =
+                    currentRadixValue === itemRadixValue ||
+                    (currentRadixValue === EMPTY_VALUE_SENTINEL && item.value === "");
+
+                  return (
+                    <RadixSelect.Item
+                      key={itemRadixValue || index}
+                      value={itemRadixValue}
+                      disabled={item.disabled}
+                      className={cn(
+                        "flex items-center justify-between px-2.5 py-1.5 text-sm cursor-pointer select-none outline-none transition-colors",
+                        item.disabled
+                          ? "opacity-40 cursor-not-allowed"
+                          : isPixelTheme
+                          ? cn(
+                              "rounded-xs hover:bg-muted font-mono data-[highlighted]:bg-muted data-[highlighted]:text-foreground",
+                              isSelected &&
+                                "bg-amber-100 dark:bg-amber-950/80 font-bold text-amber-950 dark:text-amber-100"
+                            )
+                          : cn(
+                              "rounded-md hover:bg-muted data-[highlighted]:bg-muted data-[highlighted]:text-foreground",
+                              isSelected && "bg-accent text-accent-foreground font-medium"
+                            )
+                      )}
+                    >
+                      <RadixSelect.ItemText>{item.label}</RadixSelect.ItemText>
+                      <RadixSelect.ItemIndicator>
+                        <Check size={14} className="shrink-0 ml-1 text-primary" />
+                      </RadixSelect.ItemIndicator>
+                    </RadixSelect.Item>
+                  );
+                })
+              )}
+            </RadixSelect.Viewport>
+          </RadixSelect.Content>
+        </RadixSelect.Portal>
+      </RadixSelect.Root>
     );
   }
 );

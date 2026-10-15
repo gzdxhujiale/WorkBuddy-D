@@ -36,6 +36,7 @@ let pool: WebviewWindow | null = null;
 let poolReady: Promise<void> | null = null;
 let readyResolve: (() => void) | null = null;
 let readyReject: ((e: unknown) => void) | null = null;
+let readyTimeoutTimer: ReturnType<typeof setTimeout> | null = null;
 let unlistenPoolFocus: UnlistenFn | null = null;
 let listenersInstalled = false;
 const listenerCleanups: UnlistenFn[] = [];
@@ -54,7 +55,7 @@ function scheduleFocusCheck(): void {
   focusTimer = window.setTimeout(() => {
     focusTimer = null;
     if (!currentSessionId || !popupEverFocused) return;
-    if (!mainFocused && !popupFocused) void emitTo(POOL_LABEL, 'tqe:close-all');
+    if (!mainFocused && !popupFocused) void emitTo(POOL_LABEL, 'tqe:close-all').catch(() => {});
   }, 150);
 }
 
@@ -75,6 +76,10 @@ async function installListeners(): Promise<void> {
 
   const cleanups = await Promise.all([
     listen('tqe:ready', () => {
+      if (readyTimeoutTimer) {
+        clearTimeout(readyTimeoutTimer);
+        readyTimeoutTimer = null;
+      }
       readyResolve?.();
       readyResolve = null;
       readyReject = null;
@@ -153,9 +158,10 @@ function ensurePool(): Promise<void> {
         pool = existing;
         void existing.hide().catch(() => {});
         attachPoolHandlers(existing, false);
-        void emitTo(POOL_LABEL, 'tqe:ping');
+        void emitTo(POOL_LABEL, 'tqe:ping').catch(() => {});
         readyResolve?.();
         readyResolve = null;
+        readyReject = null;
         return;
       }
 
@@ -177,7 +183,22 @@ function ensurePool(): Promise<void> {
       });
       pool = webview;
       attachPoolHandlers(webview, true);
+
+      if (readyTimeoutTimer) clearTimeout(readyTimeoutTimer);
+      readyTimeoutTimer = setTimeout(() => {
+        readyTimeoutTimer = null;
+        if (readyResolve) {
+          console.warn('[quick-edit] Window ready timeout reached; resolving ready promise');
+          readyResolve();
+          readyResolve = null;
+          readyReject = null;
+        }
+      }, 3000);
     } catch (err) {
+      if (readyTimeoutTimer) {
+        clearTimeout(readyTimeoutTimer);
+        readyTimeoutTimer = null;
+      }
       readyReject?.(err);
       readyResolve = null;
       readyReject = null;
@@ -189,6 +210,10 @@ function ensurePool(): Promise<void> {
 }
 
 function discardPool(): void {
+  if (readyTimeoutTimer) {
+    clearTimeout(readyTimeoutTimer);
+    readyTimeoutTimer = null;
+  }
   pool = null;
   poolReady = null;
   unlistenPoolFocus?.();
@@ -201,20 +226,27 @@ function discardPool(): void {
 }
 
 export function prewarmQuickEditWindow(): void {
+  if (!isTauriEnv()) return;
   void ensurePool().catch(() => {});
 }
 
 export function requestQuickEditCloseLayer(): void {
+  if (!isTauriEnv()) return;
   if (currentSessionId) {
-    void emitTo(POOL_LABEL, 'tqe:close-layer');
+    void emitTo(POOL_LABEL, 'tqe:close-layer').catch(() => {});
   }
 }
 
 export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise<void> {
+  if (!isTauriEnv()) {
+    console.warn('[quick-edit] Window manager requires Tauri desktop environment');
+    return;
+  }
+
   const prevSessionId = currentSessionId;
   if (prevSessionId) {
     // Flush any pending uncommitted draft of the previous session before starting new one
-    void emitTo(POOL_LABEL, 'tqe:flush', { session: prevSessionId });
+    void emitTo(POOL_LABEL, 'tqe:flush', { session: prevSessionId }).catch(() => {});
   }
 
   // A UUID keeps events from an old Vite-HMR module instance from matching a
@@ -243,14 +275,16 @@ export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise
   }
 
   const [factor, inner, mon] = await Promise.all([
-    main.scaleFactor(),
-    main.innerPosition(),
+    main.scaleFactor().catch(() => 1),
+    main.innerPosition().catch(() => ({ x: 0, y: 0 })),
     currentMonitor().catch(() => null),
   ]);
 
+  const scale = factor || 1;
+  const innerPos = inner || { x: 0, y: 0 };
   const anchorScreen = {
-    x: inner.x / factor + r.left,
-    y: inner.y / factor + r.top,
+    x: innerPos.x / scale + r.left,
+    y: innerPos.y / scale + r.top,
     w: r.width,
     h: r.height,
   };
@@ -258,10 +292,10 @@ export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise
   let winX = anchorScreen.x - ANCHOR_X;
   let winY = anchorScreen.y - ANCHOR_Y;
   if (mon) {
-    const mx = mon.position.x / factor;
-    const my = mon.position.y / factor;
-    const mw = mon.size.width / factor;
-    const mh = mon.size.height / factor;
+    const mx = mon.position.x / scale;
+    const my = mon.position.y / scale;
+    const mw = mon.size.width / scale;
+    const mh = mon.size.height / scale;
     winX = Math.min(Math.max(winX, mx), Math.max(mx, mx + mw - POPUP_W));
     winY = Math.min(Math.max(winY, my), Math.max(my, my + mh - POPUP_H));
   }
@@ -274,33 +308,43 @@ export async function openQuickEditWindow(opts: QuickEditWindowOptions): Promise
     width: anchorScreen.w,
   };
 
-  await readyP;
+  try {
+    await readyP;
+  } catch (err) {
+    console.error('[quick-edit] ensurePool failed:', err);
+  }
+
   if (latestRequestedSession !== session || !pool) {
     if (!pool) endSession(session);
     return;
   }
 
   popupEverFocused = false;
-  lastPos = { x: Math.round(winX * factor), y: Math.round(winY * factor) };
+  lastPos = { x: Math.round(winX * scale), y: Math.round(winY * scale) };
   await pool.setPosition(new PhysicalPosition(lastPos.x, lastPos.y)).catch(() => {});
-  void emitTo(POOL_LABEL, 'tqe:init', {
-    session,
-    task: opts.task ?? null,
-    quadrant: opts.quadrant ?? null,
-    projects: opts.projects ?? [],
-    stages: opts.stages ?? [],
-    anchor: localAnchor,
-    initialDate: opts.initialDate,
-  });
+  try {
+    await emitTo(POOL_LABEL, 'tqe:init', {
+      session,
+      task: opts.task ?? null,
+      quadrant: opts.quadrant ?? null,
+      projects: opts.projects ?? [],
+      stages: opts.stages ?? [],
+      anchor: localAnchor,
+      initialDate: opts.initialDate,
+    });
+  } catch (emitErr) {
+    console.error('[quick-edit] Failed to emit tqe:init:', emitErr);
+  }
 }
 
 /** Discard the active draft, e.g. during logout or a parent-window teardown. */
 export function discardQuickEditDraft(): void {
+  if (!isTauriEnv()) return;
   const session = currentSessionId;
   currentSessionId = null;
   if (session) {
     activeSessions.delete(session);
-    void emitTo(POOL_LABEL, 'tqe:discard', { session });
+    void emitTo(POOL_LABEL, 'tqe:discard', { session }).catch(() => {});
   }
 }
 

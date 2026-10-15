@@ -231,13 +231,14 @@ export const DesktopToolbar: React.FC<DesktopToolbarProps> = ({ onSettingsClick 
 
   return (
     <aside
-      className={`h-full flex flex-col items-center pb-3 pt-[38px] px-1 flex-shrink-0 select-none transition-colors ${
+      className={`h-full flex flex-col items-center pb-3 px-1 flex-shrink-0 select-none transition-colors ${
         isPixelTheme
           ? "w-[62px] bg-[#ebd9b5] dark:bg-[#181410] border-r-2 border-[#8c6239]/50 shadow-[2px_0px_0px_rgba(0,0,0,0.06)] font-mono"
           : "w-[58px] bg-[#f5f5f5] dark:bg-slate-900"
       }`}
-      data-tauri-drag-region
     >
+      {/* 顶部与标题栏平齐的桌面窗口拖拽区域 */}
+      <div className="h-[38px] w-full flex-shrink-0" data-tauri-drag-region />
       <nav className="flex flex-col gap-1.5 w-full items-center pt-1" aria-label="Main Navigation">
         {NAV_TOOLS.map((tool) => {
           const Icon = tool.icon;

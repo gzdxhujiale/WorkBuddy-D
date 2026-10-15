@@ -2,16 +2,18 @@ package database
 
 import (
 	"context"
-	_ "embed"
+	"embed"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 )
 
-//go:embed schema.sql
-var schemaSQL string
+//go:embed migrations/*.sql
+var embedMigrations embed.FS
 
 type DB struct {
 	Pool *pgxpool.Pool
@@ -39,16 +41,44 @@ func Connect(ctx context.Context, dsn string) (*DB, error) {
 		return nil, fmt.Errorf("ping database: %w", err)
 	}
 
-	log.Printf("[Database] Connected successfully to %s/%s with pgxpool", cfg.ConnConfig.Host, cfg.ConnConfig.Database)
+	slog.Info("connected to database",
+		slog.String("host", cfg.ConnConfig.Host),
+		slog.String("database", cfg.ConnConfig.Database),
+	)
 
-	// Ensure schema tables exist automatically
-	if _, err := pool.Exec(ctx, schemaSQL); err != nil {
-		log.Printf("[Database] Warning: auto schema migration returned: %v", err)
-	} else {
-		log.Println("[Database] Schema verified and up to date")
+	// Run versioned migrations via Goose
+	if err := runMigrations(pool); err != nil {
+		slog.Error("database migration failed", slog.Any("error", err))
+		return nil, fmt.Errorf("run goose migrations: %w", err)
 	}
 
 	return &DB{Pool: pool}, nil
+}
+
+func runMigrations(pool *pgxpool.Pool) error {
+	db := stdlib.OpenDBFromPool(pool)
+	defer db.Close()
+
+	goose.SetBaseFS(embedMigrations)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return fmt.Errorf("set dialect: %w", err)
+	}
+
+	goose.SetLogger(goose.NopLogger())
+
+	slog.Info("running database migrations via goose...")
+	if err := goose.Up(db, "migrations"); err != nil {
+		return fmt.Errorf("goose up: %w", err)
+	}
+
+	version, err := goose.GetDBVersion(db)
+	if err != nil {
+		slog.Warn("could not retrieve goose db version", slog.Any("error", err))
+	} else {
+		slog.Info("database schema up to date", slog.Int64("version", version))
+	}
+
+	return nil
 }
 
 func (db *DB) Close() {

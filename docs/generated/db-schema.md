@@ -1,6 +1,6 @@
 # Live database snapshot
 
-**Verified against:** Supabase project `workbuddy` (`cdrdmkojduynctaoymjl`)
+**Verified against:** Neon PostgreSQL (`workbuddy`)
 
 **Verified on:** 2026-08-16
 **Platform:** PostgreSQL 17, `ap-northeast-1`
@@ -12,7 +12,7 @@ This is a compact live-state reference, not a replacement for migration SQL. Rea
 | Question | Source to trust |
 | --- | --- |
 | What was installed and observed on the verification date? | This snapshot. |
-| What database behavior is proposed and versioned in the repository? | `supabase/migrations/`. |
+| What database behavior is proposed and versioned in the repository? | `server/internal/database/migrations/` & `db/migrations/`. |
 | Exact current columns, policies, functions, grants, indexes, and triggers after later work? | A new verified live inspection plus the applied migration history. |
 | Frontend mapping and loading behavior? | `src/services/`, `src/hooks/`, and [Frontend](../FRONTEND.md). |
 
@@ -34,7 +34,7 @@ All listed tables are user-owned `public` tables with RLS enabled.
 
 ## Field reference
 
-The tables below reproduce the verified application contract. `src/types/database.ts` is a frontend mapping aid, not a fully generated Supabase schema type; use a live schema inspection and the applied migration history to refresh this section.
+The tables below reproduce the verified application contract. Domain models are declared under `src/features/*/types`; use a live schema inspection and the applied Goose migration history to refresh this section.
 
 ### Common fields
 

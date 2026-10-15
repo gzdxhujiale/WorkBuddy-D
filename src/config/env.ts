@@ -1,13 +1,13 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  VITE_SUPABASE_URL: z.string().url().optional(),
-  VITE_SUPABASE_PUBLISHABLE_KEY: z.string().optional(),
+  VITE_API_BASE_URL: z.string().url().optional(),
+  VITE_WS_URL: z.string().optional(),
 });
 
 const parsed = envSchema.safeParse({
-  VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
-  VITE_SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+  VITE_API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+  VITE_WS_URL: import.meta.env.VITE_WS_URL,
 });
 
 if (!parsed.success) {
@@ -15,8 +15,8 @@ if (!parsed.success) {
 }
 
 export const env = {
-  SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL || "",
-  SUPABASE_PUBLISHABLE_KEY: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "",
+  API_BASE_URL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080",
+  WS_URL: import.meta.env.VITE_WS_URL || "ws://localhost:8080/ws",
   isDev: import.meta.env.DEV,
   isProd: import.meta.env.PROD,
 };

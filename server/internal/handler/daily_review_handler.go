@@ -1,12 +1,14 @@
 package handler
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"math"
 	"net/http"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -54,7 +56,15 @@ func (h *DailyReviewHandler) ListDailyReviewSummaries(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, summaries)
+
+	validSummaries := make([]sqlc.ListDailyReviewSummariesRow, 0, len(summaries))
+	for _, s := range summaries {
+		if !isReviewContentEmpty(s.Content) {
+			validSummaries = append(validSummaries, s)
+		}
+	}
+
+	c.JSON(http.StatusOK, validSummaries)
 }
 
 func (h *DailyReviewHandler) GetDailyReviewByDate(c *gin.Context) {
@@ -107,7 +117,19 @@ func (h *DailyReviewHandler) GetStats(c *gin.Context) {
 		return
 	}
 
-	if len(summaries) == 0 {
+	todayStr := time.Now().Format("2006-01-02")
+	dateSet := make(map[string]struct{})
+	for _, s := range summaries {
+		if isReviewContentEmpty(s.Content) {
+			continue
+		}
+		dStr := s.Date.Time.Format("2006-01-02")
+		if dStr <= todayStr {
+			dateSet[dStr] = struct{}{}
+		}
+	}
+
+	if len(dateSet) == 0 {
 		c.JSON(http.StatusOK, CompoundStatsResponse{
 			CurrentStreak: 0,
 			LongestStreak: 0,
@@ -115,15 +137,6 @@ func (h *DailyReviewHandler) GetStats(c *gin.Context) {
 			CompoundValue: 1.00,
 		})
 		return
-	}
-
-	todayStr := time.Now().Format("2006-01-02")
-	dateSet := make(map[string]struct{})
-	for _, s := range summaries {
-		dStr := s.Date.Time.Format("2006-01-02")
-		if dStr <= todayStr {
-			dateSet[dStr] = struct{}{}
-		}
 	}
 
 	var dates []string
@@ -219,6 +232,9 @@ func (h *DailyReviewHandler) GetHeatmap(c *gin.Context) {
 
 	days := make(map[string]gin.H)
 	for _, r := range rows {
+		if isReviewContentEmpty(r.Content) {
+			continue
+		}
 		dStr := r.Date.Time.Format("2006-01-02")
 		days[dStr] = gin.H{
 			"has_review": true,
@@ -265,6 +281,37 @@ func (h *DailyReviewHandler) UpsertReview(c *gin.Context) {
 		return
 	}
 
+	if isReviewContentEmpty(req.Content) {
+		err := h.queries.DeleteDailyReviewByDate(c.Request.Context(), sqlc.DeleteDailyReviewByDateParams{
+			UserID: pgtype.UUID{Bytes: userID, Valid: true},
+			Date:   pgtype.Date{Time: parsedDate, Valid: true},
+		})
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+
+		h.hub.BroadcastToUser(userID, nil, ws.DeltaMessage{
+			Type:   "ENTITY_DELTA",
+			Table:  "daily_reviews",
+			Action: ws.ActionDelete,
+			ID:     id.String(),
+			Data: gin.H{
+				"id":   id.String(),
+				"date": req.Date,
+			},
+		})
+
+		c.JSON(http.StatusOK, gin.H{
+			"id":           id.String(),
+			"date":         req.Date,
+			"content":      gin.H{"type": "doc", "content": []any{}},
+			"lock_version": req.LockVersion + 1,
+			"deleted":      true,
+		})
+		return
+	}
+
 	review, err := h.queries.UpsertDailyReview(c.Request.Context(), sqlc.UpsertDailyReviewParams{
 		ID:      pgtype.UUID{Bytes: id, Valid: true},
 		UserID:  pgtype.UUID{Bytes: userID, Valid: true},
@@ -286,3 +333,90 @@ func (h *DailyReviewHandler) UpsertReview(c *gin.Context) {
 
 	c.JSON(http.StatusOK, review)
 }
+
+type tiptapNode struct {
+	Type    string       `json:"type"`
+	Text    string       `json:"text"`
+	Content []tiptapNode `json:"content"`
+}
+
+type legacyWrapper struct {
+	Text *string `json:"text"`
+}
+
+func isReviewContentEmpty(raw json.RawMessage) bool {
+	if len(raw) == 0 {
+		return true
+	}
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || bytes.Equal(trimmed, []byte("{}")) || bytes.Equal(trimmed, []byte("null")) || bytes.Equal(trimmed, []byte(`""`)) {
+		return true
+	}
+
+	// 1. Direct canonical Tiptap Document
+	var doc tiptapNode
+	if err := json.Unmarshal(raw, &doc); err == nil && doc.Type == "doc" {
+		return isTiptapNodeEmpty(&doc)
+	}
+
+	// 2. Direct plain string
+	var textStr string
+	if err := json.Unmarshal(raw, &textStr); err == nil {
+		return isStringContentEmpty(textStr)
+	}
+
+	// 3. Legacy { "text": "..." } wrapper support
+	var wrapper legacyWrapper
+	if err := json.Unmarshal(raw, &wrapper); err == nil && wrapper.Text != nil {
+		return isStringContentEmpty(*wrapper.Text)
+	}
+
+	return false
+}
+
+func isTiptapNodeEmpty(node *tiptapNode) bool {
+	if strings.TrimSpace(node.Text) != "" {
+		return false
+	}
+	for i := range node.Content {
+		if !isTiptapNodeEmpty(&node.Content[i]) {
+			return false
+		}
+	}
+	return true
+}
+
+func isStringContentEmpty(str string) bool {
+	trimmed := strings.TrimSpace(str)
+	if trimmed == "" || trimmed == "{}" || trimmed == "null" || trimmed == `""` {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "{") && strings.HasSuffix(trimmed, "}") {
+		var innerDoc tiptapNode
+		if err := json.Unmarshal([]byte(trimmed), &innerDoc); err == nil && innerDoc.Type == "doc" {
+			return isTiptapNodeEmpty(&innerDoc)
+		}
+	}
+	stripped := stripSimpleHTML(trimmed)
+	return len(strings.TrimSpace(stripped)) == 0
+}
+
+func stripSimpleHTML(s string) string {
+	var b strings.Builder
+	inTag := false
+	for _, r := range s {
+		if r == '<' {
+			inTag = true
+			continue
+		}
+		if r == '>' {
+			inTag = false
+			continue
+		}
+		if !inTag {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+

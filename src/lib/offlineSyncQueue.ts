@@ -1,4 +1,4 @@
-import { DataSyncError, toDataSyncError } from "@/lib/sync";
+import { toDataSyncError, isVersionConflictError } from "@/lib/sync";
 import { userStorageKey } from "@/lib/userStorage";
 
 export type OfflineOperation = {
@@ -15,7 +15,6 @@ export type OfflineOperation = {
 type Executor = (payload: unknown) => Promise<void>;
 const executors = new Map<string, Executor>();
 const STORAGE_KEY = "workbuddy_offline_operations_v1";
-
 
 function readQueue(): OfflineOperation[] {
   try {
@@ -40,6 +39,7 @@ function readQueue(): OfflineOperation[] {
     return [];
   }
 }
+
 function writeQueue(items: OfflineOperation[]) {
   localStorage.setItem(userStorageKey(STORAGE_KEY), JSON.stringify(items));
 }
@@ -89,5 +89,5 @@ export async function flushOfflineQueue(): Promise<void> {
 }
 
 export function hasVersionConflict(error: unknown): boolean {
-  return error instanceof DataSyncError && /VERSION_CONFLICT/i.test(error.message);
+  return isVersionConflictError(error);
 }

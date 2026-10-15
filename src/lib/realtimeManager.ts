@@ -44,7 +44,7 @@ class RealtimeManager {
     this.lastInvalidatedAt.clear();
 
     try {
-      wsClient.connect(accessToken);
+      wsClient.connect(accessToken, userId);
       this.unsubscribeWs = wsClient.subscribe((event: DeltaEvent) => {
         if (event.table && TABLES.includes(event.table as typeof TABLES[number])) {
           this.notify(event.table, event);
@@ -60,7 +60,7 @@ class RealtimeManager {
       this.unsubscribeWs();
       this.unsubscribeWs = null;
     }
-    wsClient.disconnect();
+    wsClient.disconnect(true);
     this.userId = null;
     this.queryClient = null;
     if (this.invalidateTimer) clearTimeout(this.invalidateTimer);

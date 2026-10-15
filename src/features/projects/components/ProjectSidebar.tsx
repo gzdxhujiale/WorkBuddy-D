@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState, useDeferredValue } from "react";
 import { Plus, Search, FolderKanban, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
@@ -53,6 +53,13 @@ function ProgressRing({ completed, total, isPixelTheme }: { completed: number; t
   );
 }
 
+export interface ProjectTaskMetrics {
+  tasks: ProjectTask[];
+  doneCount: number;
+  overdueCount: number;
+  approachingCount: number;
+}
+
 export interface ProjectSidebarProps {
   projects: Project[];
   allTasks: ProjectTask[];
@@ -60,8 +67,8 @@ export interface ProjectSidebarProps {
   onSelectProject: (id: string) => void;
   statusFilter: SidebarStatusFilter;
   onStatusFilterChange: (status: SidebarStatusFilter) => void;
-  searchQuery: string;
-  onSearchQueryChange: (query: string) => void;
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
   onCreateProject: () => void;
   onManageTemplates: () => void;
 }
@@ -73,25 +80,76 @@ export function ProjectSidebar({
   onSelectProject,
   statusFilter,
   onStatusFilterChange,
-  searchQuery,
-  onSearchQueryChange,
+  searchQuery: searchQueryProp,
+  onSearchQueryChange: onSearchQueryChangeProp,
   onCreateProject,
   onManageTemplates,
 }: ProjectSidebarProps) {
   const { isPixelTheme } = useAppThemeStyle();
   const todayStr = useMemo(() => todayYMD(), []);
 
-  // Dynamically compute project status map based on task completion and archival state
+  // Localized search state with fallback to prop if controlled
+  const [internalSearchQuery, setInternalSearchQuery] = useState("");
+  const searchQuery = searchQueryProp !== undefined ? searchQueryProp : internalSearchQuery;
+  const handleSearchQueryChange = (val: string) => {
+    if (onSearchQueryChangeProp) {
+      onSearchQueryChangeProp(val);
+    } else {
+      setInternalSearchQuery(val);
+    }
+  };
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+
+  const todayMidnightMs = useMemo(() => {
+    const [y, m, d] = todayStr.split("-").map(Number);
+    return new Date(y, m - 1, d).getTime();
+  }, [todayStr]);
+
+  // Single-pass O(Tasks) aggregation map: pre-aggregates tasks, done count, overdue count, and approaching count per project
+  const taskMetricsByProjectId = useMemo(() => {
+    const map = new Map<string, ProjectTaskMetrics>();
+    for (const p of projects) {
+      map.set(p.id, { tasks: [], doneCount: 0, overdueCount: 0, approachingCount: 0 });
+    }
+    for (const task of allTasks) {
+      if (!task.projectId) continue;
+      let metrics = map.get(task.projectId);
+      if (!metrics) {
+        metrics = { tasks: [], doneCount: 0, overdueCount: 0, approachingCount: 0 };
+        map.set(task.projectId, metrics);
+      }
+      metrics.tasks.push(task);
+      if (task.completed) {
+        metrics.doneCount++;
+      } else {
+        const tTime = task.scheduledEndAt || task.scheduledStartAt;
+        if (tTime) {
+          const dStr = formatDateYMD(new Date(tTime));
+          if (dStr < todayStr) {
+            metrics.overdueCount++;
+          } else {
+            const diffDays = (new Date(dStr).getTime() - todayMidnightMs) / (24 * 3600 * 1000);
+            if (diffDays >= 0 && diffDays <= 3) {
+              metrics.approachingCount++;
+            }
+          }
+        }
+      }
+    }
+    return map;
+  }, [projects, allTasks, todayStr, todayMidnightMs]);
+
+  // Dynamically compute project status map using pre-grouped tasks (avoids repeated filtering)
   const statusMap = useMemo(() => {
     const map = new Map<string, ProjectStatus>();
     for (const p of projects) {
-      const pTasks = allTasks.filter((t) => t.projectId === p.id);
+      const pTasks = taskMetricsByProjectId.get(p.id)?.tasks ?? [];
       map.set(p.id, getProjectComputedStatus(p, pTasks));
     }
     return map;
-  }, [projects, allTasks]);
+  }, [projects, taskMetricsByProjectId]);
 
-  // Smart dynamic status derivation with risk awareness and clear contrast badges
+  // Smart dynamic status derivation with pre-aggregated counts
   const getProjectSmartStatus = (proj: Project) => {
     const computedStatus = statusMap.get(proj.id) || "in_progress";
     if (computedStatus === "archived") {
@@ -116,32 +174,20 @@ export function ProjectSidebar({
       };
     }
 
-    // For in_progress project, check risk & deadlines
-    const projTasks = allTasks.filter((t) => t.projectId === proj.id);
-    const overdueTasks = projTasks.filter((t) => {
-      if (t.completed) return false;
-      const tTime = t.scheduledEndAt || t.scheduledStartAt;
-      return Boolean(tTime && formatDateYMD(new Date(tTime)) < todayStr);
-    });
+    // For in_progress project, check pre-aggregated risk & deadlines
+    const metrics = taskMetricsByProjectId.get(proj.id);
+    const overdueCount = metrics?.overdueCount ?? 0;
+    const approachingCount = metrics?.approachingCount ?? 0;
 
     const isProjectOverdue = Boolean(proj.endDate && proj.endDate < todayStr);
-
-    const approachingTasks = projTasks.filter((t) => {
-      if (t.completed) return false;
-      const tTime = t.scheduledEndAt || t.scheduledStartAt;
-      if (!tTime) return false;
-      const dStr = formatDateYMD(new Date(tTime));
-      return dStr >= todayStr && (new Date(dStr).getTime() - new Date(todayStr).getTime()) / (24 * 3600 * 1000) <= 3;
-    });
-
     const isProjectApproaching = Boolean(
       !isProjectOverdue &&
       proj.endDate &&
-      (new Date(proj.endDate).getTime() - new Date(todayStr).getTime()) / (24 * 3600 * 1000) <= 3
+      (new Date(proj.endDate).getTime() - todayMidnightMs) / (24 * 3600 * 1000) <= 3
     );
 
-    if (overdueTasks.length > 0 || isProjectOverdue) {
-      const count = overdueTasks.length > 0 ? overdueTasks.length : 1;
+    if (overdueCount > 0 || isProjectOverdue) {
+      const count = overdueCount > 0 ? overdueCount : 1;
       return {
         key: "overdue" as const,
         label: `进行中 · 逾期（${count}）`,
@@ -152,8 +198,8 @@ export function ProjectSidebar({
       };
     }
 
-    if (approachingTasks.length > 0 || isProjectApproaching) {
-      const count = approachingTasks.length > 0 ? approachingTasks.length : 1;
+    if (approachingCount > 0 || isProjectApproaching) {
+      const count = approachingCount > 0 ? approachingCount : 1;
       return {
         key: "approaching" as const,
         label: `进行中 · 临近预期（${count}）`,
@@ -192,8 +238,9 @@ export function ProjectSidebar({
     [projects, statusMap]
   );
 
-  // Filtered projects sorted by priority first, then by time
+  // Filtered projects using deferred search query for non-blocking concurrent input
   const filteredProjects = useMemo(() => {
+    const q = deferredSearchQuery.trim().toLowerCase();
     return projects
       .filter((project) => {
         const st = statusMap.get(project.id) || "in_progress";
@@ -203,8 +250,7 @@ export function ProjectSidebar({
         return true;
       })
       .filter((project) => {
-        if (!searchQuery.trim()) return true;
-        const q = searchQuery.toLowerCase();
+        if (!q) return true;
         return (
           project.name.toLowerCase().includes(q) ||
           (project.description?.toLowerCase().includes(q) ?? false) ||
@@ -228,7 +274,7 @@ export function ProjectSidebar({
         const timeB = b.createdAt || b.updatedAt || 0;
         return timeB - timeA;
       });
-  }, [projects, statusFilter, searchQuery, statusMap]);
+  }, [projects, statusFilter, deferredSearchQuery, statusMap]);
 
   return (
     <aside
@@ -343,14 +389,14 @@ export function ProjectSidebar({
           <Search size={13} className="text-muted-foreground shrink-0" />
           <input
             value={searchQuery}
-            onChange={(e) => onSearchQueryChange(e.target.value)}
+            onChange={(e) => handleSearchQueryChange(e.target.value)}
             placeholder="搜索项目名称、标签..."
             className="w-full bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground/60"
           />
           {searchQuery && (
             <button
               type="button"
-              onClick={() => onSearchQueryChange("")}
+              onClick={() => handleSearchQueryChange("")}
               className="text-xs text-muted-foreground hover:text-foreground"
             >
               ✕
@@ -362,8 +408,9 @@ export function ProjectSidebar({
       {/* Project List */}
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-2.5">
         {filteredProjects.map((project) => {
-          const taskSet = allTasks.filter((task) => task.projectId === project.id);
-          const done = taskSet.filter((task) => task.completed).length;
+          const metrics = taskMetricsByProjectId.get(project.id);
+          const taskCount = metrics?.tasks.length ?? 0;
+          const done = metrics?.doneCount ?? 0;
           const isCurrent = selectedId === project.id;
           const smart = getProjectSmartStatus(project);
 
@@ -395,7 +442,7 @@ export function ProjectSidebar({
                 </span>
               )}
               <div className="flex items-start gap-2.5">
-                <ProgressRing completed={done} total={taskSet.length} isPixelTheme={isPixelTheme} />
+                <ProgressRing completed={done} total={taskCount} isPixelTheme={isPixelTheme} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-1.5">
                     <span className={cn("truncate text-xs font-bold text-foreground", isPixelTheme && "font-mono")}>
