@@ -208,3 +208,68 @@ type EntityChangeLog struct {
 	Payload    json.RawMessage    `json:"payload"`
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
+
+type AiChannel struct {
+	ID        pgtype.UUID        `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Name      string             `json:"name"`
+	Provider  string             `json:"provider"`
+	BaseUrl   string             `json:"base_url"`
+	ApiKey    string             `json:"api_key"`
+	Models    []byte             `json:"models"`
+	IsActive  bool               `json:"is_active"`
+	Priority  int32              `json:"priority"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AiInvocationLog struct {
+	ID               pgtype.UUID        `json:"id"`
+	UserID           pgtype.UUID        `json:"user_id"`
+	SkillCode        string             `json:"skill_code"`
+	ModelName        string             `json:"model_name"`
+	Provider         string             `json:"provider"`
+	PromptTokens     int32              `json:"prompt_tokens"`
+	CompletionTokens int32              `json:"completion_tokens"`
+	TotalLatencyMs   int64              `json:"total_latency_ms"`
+	TtftMs           int64              `json:"ttft_ms"`
+	StatusCode       int32              `json:"status_code"`
+	ErrorMsg         string             `json:"error_msg"`
+	CreatedAt        pgtype.Timestamptz `json:"created_at"`
+}
+
+type AiMessage struct {
+	ID                 pgtype.UUID        `json:"id"`
+	SessionID          pgtype.UUID        `json:"session_id"`
+	Role               string             `json:"role"`
+	Content            string             `json:"content"`
+	ReasoningContent   string             `json:"reasoning_content"`
+	ToolCalls          []byte             `json:"tool_calls"`
+	CreatedAt          pgtype.Timestamptz `json:"created_at"`
+	ThinkingDurationMs pgtype.Int8        `json:"thinking_duration_ms"`
+}
+
+type AiSession struct {
+	ID        pgtype.UUID        `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Title     string             `json:"title"`
+	SkillCode string             `json:"skill_code"`
+	ModelName string             `json:"model_name"`
+	IsPinned  bool               `json:"is_pinned"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type AiSkill struct {
+	ID           pgtype.UUID        `json:"id"`
+	UserID       pgtype.UUID        `json:"user_id"`
+	Code         string             `json:"code"`
+	Name         string             `json:"name"`
+	SystemPrompt string             `json:"system_prompt"`
+	Temperature  float64            `json:"temperature"`
+	BoundTools   []byte             `json:"bound_tools"`
+	IsEnabled    bool               `json:"is_enabled"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
+}
+

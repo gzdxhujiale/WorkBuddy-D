@@ -15,9 +15,9 @@ export class ApiHttpError extends Error {
 
 export type ApiError = ApiHttpError;
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
-function getAuthToken(): string | null {
+export function getAuthToken(): string | null {
   try {
     const raw = localStorage.getItem("workbuddy_auth_session");
     if (!raw) return null;

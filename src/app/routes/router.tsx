@@ -6,6 +6,7 @@ import { HabitPage } from "@/pages/HabitPage";
 import { DailyReviewPage } from "@/pages/DailyReviewPage";
 import { KnowledgePage } from "@/pages/KnowledgePage";
 import { ProjectsPage } from "@/pages/ProjectsPage";
+import { AIPage } from "@/pages/AIPage";
 
 const rootRoute = createRootRoute({
   component: AppLayout,
@@ -70,6 +71,12 @@ export const projectsRoute = createRoute({
   component: ProjectsPage,
 });
 
+export const aiRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/ai",
+  component: AIPage,
+});
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   todayRoute,
@@ -78,6 +85,7 @@ const routeTree = rootRoute.addChildren([
   dailyReviewRoute,
   listsRoute,
   projectsRoute,
+  aiRoute,
 ]);
 
 export const router = createRouter({

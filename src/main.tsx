@@ -1,8 +1,10 @@
+import "@douyinfe/semi-ui/react19-adapter";
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "@/app/App";
 import { AppProviders } from "@/app/providers/AppProviders";
 import "./index.css";
+import "@douyinfe/semi-ui/dist/css/semi.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>

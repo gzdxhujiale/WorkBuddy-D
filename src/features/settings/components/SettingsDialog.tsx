@@ -45,20 +45,22 @@ import {
 } from "@/components/pixel/PixelIcons";
 import { cn } from "@/lib/utils";
 
-type Tab = "account" | "general" | "templates";
+type Tab = "account" | "general" | "templates" | "ai";
 
 const tabs: Array<{ id: Tab; label: string; icon: typeof Settings2 }> = [
   { id: "account", label: "账号", icon: UserRound },
   { id: "general", label: "通用设置", icon: SlidersHorizontal },
   { id: "templates", label: "模板管理", icon: FileText },
+  { id: "ai", label: "AI配置", icon: Sparkles },
 ];
 
 export interface SettingsDialogProps {
   onClose: () => void;
   templatesContent?: React.ReactNode;
+  aiContent?: React.ReactNode;
 }
 
-export function SettingsDialog({ onClose, templatesContent }: SettingsDialogProps) {
+export function SettingsDialog({ onClose, templatesContent, aiContent }: SettingsDialogProps) {
   const { session } = useAuth();
   const [tab, setTab] = useState<Tab>("general");
   const [openFocusAssistantOnStart, setOpenFocusAssistantOnStart] = useState(shouldOpenFocusAssistantOnStart);
@@ -271,7 +273,9 @@ export function SettingsDialog({ onClose, templatesContent }: SettingsDialogProp
                   ? "冒险家账号档案"
                   : current.id === "general"
                   ? "核心系统设定"
-                  : "战术模板管理"
+                  : current.id === "templates"
+                  ? "战术模板管理"
+                  : "AI 智能算力工坊"
                 : current.label}
             </h2>
             <button
@@ -806,6 +810,18 @@ export function SettingsDialog({ onClose, templatesContent }: SettingsDialogProp
                   </div>
                 </div>
               </div>
+            ) : tab === "ai" ? (
+              aiContent ?? (
+                <div className="flex flex-col items-center justify-center py-16 px-4 text-center">
+                  <div className="flex size-14 items-center justify-center mb-4 rounded-xl bg-muted/60 text-muted-foreground">
+                    <Sparkles size={24} />
+                  </div>
+                  <h3 className="text-base font-semibold text-foreground mb-1">AI 模块就绪</h3>
+                  <p className="text-xs text-muted-foreground max-w-sm leading-relaxed mb-4">
+                    AI 网关与模型渠道配置已启用。
+                  </p>
+                </div>
+              )
             ) : (
               templatesContent ?? (
                 <div className="flex flex-col items-center justify-center py-16 px-4 text-center">

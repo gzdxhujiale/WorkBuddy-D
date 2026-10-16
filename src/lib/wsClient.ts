@@ -183,7 +183,9 @@ export class WebSocketClient {
       };
 
       this.ws.onerror = () => {
-        this.ws?.close();
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+          this.ws.close();
+        }
       };
     } catch {
       this.scheduleReconnect();
@@ -195,8 +197,15 @@ export class WebSocketClient {
     if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
     this.reconnectTimer = undefined;
     if (this.ws) {
-      this.ws.close();
+      const socket = this.ws;
       this.ws = null;
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.close();
+      } else if (socket.readyState === WebSocket.CONNECTING) {
+        socket.onopen = () => {
+          socket.close();
+        };
+      }
     }
     if (clearState) {
       this.clearSeqId();

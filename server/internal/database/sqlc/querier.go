@@ -92,6 +92,27 @@ type Querier interface {
 	UpsertProject(ctx context.Context, arg UpsertProjectParams) (Project, error)
 	UpsertProjectStage(ctx context.Context, arg UpsertProjectStageParams) (ProjectStage, error)
 	UpsertProjectTemplate(ctx context.Context, arg UpsertProjectTemplateParams) (ProjectTemplate, error)
+	CreateAIChannel(ctx context.Context, arg CreateAIChannelParams) (AiChannel, error)
+	CreateAIInvocationLog(ctx context.Context, arg CreateAIInvocationLogParams) (AiInvocationLog, error)
+	CreateAIMessage(ctx context.Context, arg CreateAIMessageParams) (AiMessage, error)
+	CreateAISession(ctx context.Context, arg CreateAISessionParams) (AiSession, error)
+	DeleteAIChannel(ctx context.Context, arg DeleteAIChannelParams) error
+	DeleteAIMessagesBySession(ctx context.Context, sessionID pgtype.UUID) error
+	DeleteAISession(ctx context.Context, arg DeleteAISessionParams) error
+	GetAIChannelByID(ctx context.Context, arg GetAIChannelByIDParams) (AiChannel, error)
+	GetAISessionByID(ctx context.Context, arg GetAISessionByIDParams) (AiSession, error)
+	GetAISkillByCode(ctx context.Context, arg GetAISkillByCodeParams) (AiSkill, error)
+	GetAIUsageMetrics(ctx context.Context, arg GetAIUsageMetricsParams) (GetAIUsageMetricsRow, error)
+	GetActiveAIChannels(ctx context.Context, userID pgtype.UUID) ([]AiChannel, error)
+	ListAIChannels(ctx context.Context, userID pgtype.UUID) ([]AiChannel, error)
+	ListAIInvocationLogs(ctx context.Context, arg ListAIInvocationLogsParams) ([]AiInvocationLog, error)
+	ListAIMessagesBySession(ctx context.Context, sessionID pgtype.UUID) ([]AiMessage, error)
+	ListAISessions(ctx context.Context, userID pgtype.UUID) ([]AiSession, error)
+	ListAISkills(ctx context.Context, userID pgtype.UUID) ([]AiSkill, error)
+	TouchAISession(ctx context.Context, arg TouchAISessionParams) error
+	UpdateAIChannel(ctx context.Context, arg UpdateAIChannelParams) (AiChannel, error)
+	UpdateAISession(ctx context.Context, arg UpdateAISessionParams) (AiSession, error)
+	UpsertAISkill(ctx context.Context, arg UpsertAISkillParams) (AiSkill, error)
 }
 
 var _ Querier = (*Queries)(nil)

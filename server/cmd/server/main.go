@@ -12,10 +12,14 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"workbuddy-server/internal/buffer"
+	"workbuddy-server/internal/ai/gateway"
+	"workbuddy-server/internal/ai/monitor"
+	"workbuddy-server/internal/ai/tools"
 	"workbuddy-server/internal/config"
 	"workbuddy-server/internal/database"
 	"workbuddy-server/internal/database/sqlc"
 	"workbuddy-server/internal/handler"
+	"workbuddy-server/internal/mcp"
 	"workbuddy-server/internal/middleware"
 	"workbuddy-server/internal/ws"
 )
@@ -43,6 +47,15 @@ func main() {
 	queries := sqlc.New(db.Pool)
 	hub := ws.NewHub(queries)
 
+	// Check if invoked via CLI for MCP stdio transport (e.g. `server mcp`)
+	if len(os.Args) > 1 && os.Args[1] == "mcp" {
+		if err := mcp.RunStdioServer(queries, hub); err != nil {
+			slog.Error("MCP stdio server error", slog.Any("error", err))
+			os.Exit(1)
+		}
+		return
+	}
+
 	noteBufferMgr := buffer.NewNoteBufferManager(queries, hub)
 	noteBufferMgr.Start()
 
@@ -65,6 +78,15 @@ func main() {
 	focusH := handler.NewFocusHandler(queries, hub)
 	projectH := handler.NewProjectHandler(queries, hub)
 	dailyReviewH := handler.NewDailyReviewHandler(queries, hub)
+	aiFactory := gateway.NewFactory()
+	aiRouter := gateway.NewRouter(queries, aiFactory)
+	aiRecorder := monitor.NewRecorder(queries)
+	aiToolsReg, err := tools.NewRegistry(queries, hub)
+	if err != nil {
+		slog.Error("failed to create AI tools registry", slog.Any("error", err))
+	}
+	aiH := handler.NewAIHandler(queries, aiFactory, aiRouter, aiRecorder, aiToolsReg)
+	mcpH := mcp.NewMCPHandler(queries, hub)
 
 	// Public Routes
 	api := r.Group("/api/v1")
@@ -161,6 +183,28 @@ func main() {
 		protected.GET("/daily-reviews/heatmap", dailyReviewH.GetHeatmap)
 		protected.GET("/daily-reviews/:date", dailyReviewH.GetDailyReviewByDate)
 		protected.POST("/daily-reviews", dailyReviewH.UpsertReview)
+
+		// AI Gateway, Channels, Metrics, Skills & Chat
+		protected.GET("/ai/channels", aiH.ListChannels)
+		protected.POST("/ai/channels", aiH.CreateChannel)
+		protected.PUT("/ai/channels/:id", aiH.UpdateChannel)
+		protected.DELETE("/ai/channels/:id", aiH.DeleteChannel)
+		protected.POST("/ai/channels/:id/ping", aiH.PingChannel)
+		protected.GET("/ai/metrics", aiH.GetMetrics)
+		protected.GET("/ai/skills", aiH.ListSkills)
+		protected.POST("/ai/chat", aiH.ChatStream)
+
+		// AI Conversation Sessions & History
+		protected.GET("/ai/sessions", aiH.ListSessions)
+		protected.POST("/ai/sessions", aiH.CreateSession)
+		protected.GET("/ai/sessions/:id", aiH.GetSession)
+		protected.PUT("/ai/sessions/:id", aiH.UpdateSession)
+		protected.DELETE("/ai/sessions/:id", aiH.DeleteSession)
+		protected.GET("/ai/sessions/:id/messages", aiH.ListSessionMessages)
+
+		// MCP Protocol Endpoints (SSE & JSON-RPC message calls)
+		protected.GET("/mcp/sse", mcpH.HandleSSE)
+		protected.POST("/mcp/messages", mcpH.HandleMessages)
 	}
 
 	srv := &http.Server{

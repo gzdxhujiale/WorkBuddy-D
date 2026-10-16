@@ -11,6 +11,7 @@ const features = [
   "knowledge",
   "auth",
   "settings",
+  "ai",
 ];
 
 const crossFeatureZones = [];

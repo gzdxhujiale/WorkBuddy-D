@@ -14,6 +14,7 @@ import {
   Square,
   X,
   Timer,
+  Bot,
   type LucideIcon,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,6 +22,7 @@ import { authService, useAuth } from "@/features/auth";
 import { realtimeManager } from "@/lib/realtimeManager";
 import { SettingsDialog } from "@/features/settings";
 import { ProjectTemplateManager } from "@/features/projects/components/ProjectTemplateManager";
+import { AIConfigTab } from "@/features/ai";
 import { Toaster, toast } from "../ui/toast";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -46,6 +48,7 @@ export const NAV_TOOLS: NavigationTool[] = [
   { id: "habit", name: "习惯追踪", to: "/habit", icon: Sparkles },
   { id: "lists", name: "知识库", to: "/lists", icon: Library },
   { id: "daily-review", name: "每日复盘", to: "/daily-review", icon: BookCheck },
+  { id: "ai", name: "AI 助理", to: "/ai", icon: Bot },
 ];
 
 // ============================================================
@@ -504,6 +507,7 @@ export const AppLayout: React.FC = () => {
         <SettingsDialog
           onClose={() => setIsSettingsOpen(false)}
           templatesContent={<ProjectTemplateManager />}
+          aiContent={<AIConfigTab />}
         />
       )}
       <Toaster />

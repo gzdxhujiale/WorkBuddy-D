@@ -87,7 +87,7 @@ func (h *DailyReviewHandler) GetDailyReviewByDate(c *gin.Context) {
 	})
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "review not found"})
+			c.JSON(http.StatusOK, nil)
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
