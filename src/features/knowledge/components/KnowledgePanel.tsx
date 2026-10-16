@@ -1,22 +1,33 @@
 import React, { useState, useEffect, useMemo, useRef, type ReactNode, memo, startTransition } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { createPortal } from 'react-dom';
 import {
   MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen, Search,
   ChevronDown, FileText, Cloud, LoaderCircle,
-  Folder as FolderIcon, Library
+  Folder as FolderIcon, Library, Maximize2, ExternalLink, Upload,
+  Check, PanelRight, LayoutTemplate,
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverEvent, useDroppable } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-import { useKnowledgeFolderContents, useKnowledgeData, useKnowledgeActions } from '../hooks/useKnowledgeQuery';
+import { useKnowledgeFolderContents, useKnowledgeData, useKnowledgeActions, type KnowledgeQueryData } from '../hooks/useKnowledgeQuery';
 import { sortKnowledgeFolders, sortKnowledgeBases, getNotesByFolderId, getNoteGroups } from '../utils/knowledgeSelectors';
 import { KnowledgeFolder, KnowledgeBase, Note, NoteGroup, KnowledgeTemplate } from '../types';
 
 import { TemplateModal, useTemplateData, useTemplateActions } from './KnowledgeTemplateDialog';
 import { useKnowledgeUiStore } from '../stores/knowledgeUiStore';
 import * as knowledgeService from '../api/knowledgeService';
+import { extractTitleFromMarkdown } from '../api/markdownIo';
+import {
+  openStandaloneNoteWindow,
+  focusStandaloneNoteWindow,
+  closeStandaloneNoteWindow,
+  getActiveStandaloneNoteIds,
+  isTauriEnv,
+} from '../utils/noteWindowManager';
+import { FullNoteEditor } from './FullNoteEditor';
 import { logSilent } from '@/lib/syncEngine';
 import { computeNoteReorder, computeKnowledgeFolderReorder } from '../utils/knowledgeReorder';
 import {
@@ -34,6 +45,10 @@ import {
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
 } from '@/components/ui/dropdown-menu';
 import { toast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
@@ -399,17 +414,22 @@ interface NoteItemProps {
   onClick: () => void;
   onDuplicate: (note: Note) => void;
   onDelete: (note: Note) => void;
+  onOpenWindow?: (note: Note) => void;
+  onOpenMode?: (note: Note, mode: 'drawer' | 'full' | 'window') => void;
   isPixelTheme?: boolean;
 }
 
-function NoteItem({ note, onClick, onDuplicate, onDelete, isPixelTheme }: NoteItemProps) {
+function NoteItem({ note, onClick, onDuplicate, onDelete, onOpenWindow, onOpenMode, isPixelTheme }: NoteItemProps) {
+  const isStandalone = useKnowledgeUiStore((state) => state.standaloneNoteIds.includes(note.id));
+
   return (
     <div
       className={cn(
         "group relative flex items-center gap-3 border transition-all duration-200 mb-2.5 cursor-pointer text-card-foreground select-none",
         isPixelTheme
           ? "bg-card border-2 border-border/90 hover:bg-amber-50/70 dark:hover:bg-amber-950/40 rounded-xs px-4 py-2.5 shadow-[3px_3px_0px_rgba(0,0,0,0.1)] hover:shadow-[4px_4px_0px_rgba(217,119,6,0.3)] hover:-translate-x-0.5 hover:-translate-y-0.5 font-mono"
-          : "bg-card border-border hover:border-muted-foreground/30 rounded-lg px-4 py-3 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)]"
+          : "bg-card border-border hover:border-muted-foreground/30 rounded-lg px-4 py-3 hover:shadow-[0_4px_12px_rgba(0,0,0,0.05)]",
+        isStandalone && (isPixelTheme ? "border-amber-500/80 bg-amber-50/20" : "border-primary/40 bg-accent/20")
       )}
       onClick={onClick}
     >
@@ -418,8 +438,22 @@ function NoteItem({ note, onClick, onDuplicate, onDelete, isPixelTheme }: NoteIt
       ) : (
         <FileText size={16} className="text-muted-foreground group-hover:text-primary transition-colors shrink-0" />
       )}
-      <div className={cn("flex-1 truncate", isPixelTheme ? "font-mono font-bold text-sm text-foreground" : "text-sm font-medium text-foreground")}>
-        {note.title || (isPixelTheme ? '📜 无标题卷轴' : '无标题笔记')}
+      <div className={cn("flex-1 min-w-0 flex items-center gap-2", isPixelTheme ? "font-mono font-bold text-sm text-foreground" : "text-sm font-medium text-foreground")}>
+        <span className="truncate">{note.title || (isPixelTheme ? '📜 无标题卷轴' : '无标题笔记')}</span>
+        {isStandalone && (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded-full select-none shrink-0 font-normal transition-colors",
+              isPixelTheme
+                ? "bg-amber-200/90 text-amber-900 border border-amber-800/40 font-mono text-[10px]"
+                : "bg-primary/10 text-primary border border-primary/20"
+            )}
+            title="该笔记正在独立窗口中编辑"
+          >
+            <ExternalLink size={10} className="stroke-[2.5]" />
+            <span>独立窗口</span>
+          </span>
+        )}
       </div>
 
       <div className="relative shrink-0" onClick={e => e.stopPropagation()}>
@@ -433,16 +467,49 @@ function NoteItem({ note, onClick, onDuplicate, onDelete, isPixelTheme }: NoteIt
               <MoreHorizontal size={16} />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="min-w-32">
+          <DropdownMenuContent align="end" className="min-w-36">
             <DropdownMenuItem onClick={() => onDuplicate(note)}>
               创建副本
             </DropdownMenuItem>
-            <DropdownMenuItem
-              destructive
-              onClick={() => onDelete(note)}
+            {onOpenMode ? (
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger>
+                  <LayoutTemplate size={14} />
+                  <span>打开方式</span>
+                </DropdownMenuSubTrigger>
+                <DropdownMenuSubContent className="w-36">
+                  <DropdownMenuItem onClick={() => onOpenMode(note, 'drawer')}>
+                    <PanelRight size={14} className="mr-1.5" />
+                    <span>侧边抽屉</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onOpenMode(note, 'full')}>
+                    <Maximize2 size={14} className="mr-1.5" />
+                    <span>主区域铺满</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onOpenMode(note, 'window')}>
+                    <ExternalLink size={14} className="mr-1.5" />
+                    <span>独立窗口</span>
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuSub>
+            ) : onOpenWindow ? (
+              <DropdownMenuItem onClick={() => onOpenWindow(note)}>
+                <ExternalLink size={14} className="mr-2" />
+                在独立窗口打开
+              </DropdownMenuItem>
+            ) : null}
+            <Popconfirm
+              title={`确定要删除笔记 "${note.title || '未命名笔记'}" 吗？`}
+              okText="删除"
+              cancelText="取消"
+              okType="danger"
+              position="bottomRight"
+              onOk={() => onDelete(note)}
             >
-              删除
-            </DropdownMenuItem>
+              <DropdownMenuItem destructive closeOnClick={false}>
+                删除
+              </DropdownMenuItem>
+            </Popconfirm>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -461,9 +528,11 @@ interface NoteGroupViewProps {
   onNoteClick: (note: Note) => void;
   onDuplicateNote: (note: Note) => void;
   onDeleteNote: (note: Note) => void;
+  onOpenNoteWindow?: (note: Note) => void;
+  onOpenNoteMode?: (note: Note, mode: 'drawer' | 'full' | 'window') => void;
 }
 
-function NoteGroupView({ group, notes, isUngrouped, isDragOverTarget, isPixelTheme, onRenameGroup, onDeleteGroup, onNoteClick, onDuplicateNote, onDeleteNote }: NoteGroupViewProps) {
+function NoteGroupView({ group, notes, isUngrouped, isDragOverTarget, isPixelTheme, onRenameGroup, onDeleteGroup, onNoteClick, onDuplicateNote, onDeleteNote, onOpenNoteWindow, onOpenNoteMode }: NoteGroupViewProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editName, setEditName] = useState(group.name);
@@ -594,6 +663,8 @@ function NoteGroupView({ group, notes, isUngrouped, isDragOverTarget, isPixelThe
                     onClick={() => onNoteClick(note)}
                     onDuplicate={onDuplicateNote}
                     onDelete={onDeleteNote}
+                    onOpenWindow={onOpenNoteWindow}
+                    onOpenMode={onOpenNoteMode}
                   />
                 </SortableItem>
               ))}
@@ -618,6 +689,9 @@ interface NoteDrawerProps {
   onSaveAsTemplate: (note: Note) => void;
   onDelete: (note: Note) => void;
   onOpenTemplate?: () => void;
+  onSwitchToFull?: () => void;
+  onOpenStandaloneWindow?: () => void;
+  autoFocusEditor?: boolean;
   isPixelTheme?: boolean;
 }
 
@@ -630,6 +704,9 @@ function NoteDrawerContent({
   onDuplicate,
   onSaveAsTemplate,
   onDelete,
+  onSwitchToFull,
+  onOpenStandaloneWindow,
+  autoFocusEditor,
   isPixelTheme,
 }: {
   note: Note;
@@ -640,6 +717,9 @@ function NoteDrawerContent({
   onDuplicate: (note: Note) => void;
   onSaveAsTemplate: (note: Note) => void;
   onDelete: (note: Note) => void;
+  onSwitchToFull?: () => void;
+  onOpenStandaloneWindow?: () => void;
+  autoFocusEditor?: boolean;
   isPixelTheme?: boolean;
 }) {
   const [title, setTitle] = useState(note.title);
@@ -783,6 +863,28 @@ function NoteDrawerContent({
                 : (saveStatus === 'saving' ? '保存中' : '已保存')}
             </span>
           </span>
+          {onSwitchToFull && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={isPixelTheme ? "rounded-xs" : "rounded-lg"}
+              onClick={onSwitchToFull}
+              title="铺满主内容区"
+            >
+              <Maximize2 size={16} />
+            </Button>
+          )}
+          {onOpenStandaloneWindow && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={isPixelTheme ? "rounded-xs" : "rounded-lg"}
+              onClick={onOpenStandaloneWindow}
+              title="在独立窗口中打开"
+            >
+              <ExternalLink size={16} />
+            </Button>
+          )}
           <div className="relative">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -807,6 +909,27 @@ function NoteDrawerContent({
                 <DropdownMenuItem onClick={handleExport}>
                   导出MD
                 </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <LayoutTemplate size={14} />
+                    <span>切换模式</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className="w-36">
+                    {onSwitchToFull && (
+                      <DropdownMenuItem onClick={onSwitchToFull}>
+                        <Maximize2 size={14} className="mr-1.5" />
+                        <span>主区域铺满</span>
+                      </DropdownMenuItem>
+                    )}
+                    {onOpenStandaloneWindow && (
+                      <DropdownMenuItem onClick={onOpenStandaloneWindow}>
+                        <ExternalLink size={14} className="mr-1.5" />
+                        <span>独立窗口</span>
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
                 <Popconfirm
                   title={`确定要删除笔记 "${note.title || '未命名笔记'}" 吗？`}
                   okText="删除"
@@ -835,6 +958,7 @@ function NoteDrawerContent({
         <ReactjsTiptapEditor
           content={content}
           onChange={setContent}
+          autofocus={autoFocusEditor ? 'start' : undefined}
           placeholder={isPixelTheme ? "📜 展开羊皮纸卷轴，开始书写魔法笔记..." : "开始撰写笔记，或输入 / 使用命令..."}
         />
       </div>
@@ -852,6 +976,9 @@ function NoteDrawer({
   onDuplicate,
   onSaveAsTemplate,
   onDelete,
+  onSwitchToFull,
+  onOpenStandaloneWindow,
+  autoFocusEditor,
   isPixelTheme,
 }: NoteDrawerProps & { isLoading?: boolean; isPixelTheme?: boolean }) {
   const [drawerWidth, setDrawerWidth] = useState(600);
@@ -912,6 +1039,9 @@ function NoteDrawer({
             onDuplicate={onDuplicate}
             onSaveAsTemplate={onSaveAsTemplate}
             onDelete={onDelete}
+            onSwitchToFull={onSwitchToFull}
+            onOpenStandaloneWindow={onOpenStandaloneWindow}
+            autoFocusEditor={autoFocusEditor}
             isPixelTheme={isPixelTheme}
           />
         ) : (
@@ -1342,6 +1472,111 @@ export function KnowledgePanel() {
   const setActiveNoteId = useKnowledgeUiStore((state) => state.setActiveNoteId);
   const isDrawerOpen = useKnowledgeUiStore((state) => state.isDrawerOpen);
   const setIsDrawerOpen = useKnowledgeUiStore((state) => state.setDrawerOpen);
+  const viewMode = useKnowledgeUiStore((state) => state.viewMode);
+  const setViewMode = useKnowledgeUiStore((state) => state.setViewMode);
+  const defaultOpenMode = useKnowledgeUiStore((state) => state.defaultOpenMode);
+  const setDefaultOpenMode = useKnowledgeUiStore((state) => state.setDefaultOpenMode);
+  const autoFocusEditor = useKnowledgeUiStore((state) => state.autoFocusEditor);
+  const setAutoFocusEditor = useKnowledgeUiStore((state) => state.setAutoFocusEditor);
+  const addStandaloneNoteId = useKnowledgeUiStore((state) => state.addStandaloneNoteId);
+  const removeStandaloneNoteId = useKnowledgeUiStore((state) => state.removeStandaloneNoteId);
+  const setStandaloneNoteIds = useKnowledgeUiStore((state) => state.setStandaloneNoteIds);
+  const queryClient = useQueryClient();
+
+  // Synchronize standalone note windows and IPC events
+  useEffect(() => {
+    if (!isTauriEnv()) return;
+
+    // Initialize currently open standalone note windows
+    void getActiveStandaloneNoteIds().then((ids) => {
+      if (ids.length > 0) {
+        setStandaloneNoteIds(ids);
+      }
+    });
+
+    let unlistenUpdated: UnlistenFn | undefined;
+    let unlistenWindowState: UnlistenFn | undefined;
+
+    const setupListeners = async () => {
+      try {
+        unlistenUpdated = await listen<{
+          id: string;
+          title?: string;
+          content?: string;
+          lockVersion?: number;
+          updatedAt?: number;
+        }>('knowledge:note-updated', (event) => {
+          const payload = event.payload;
+          if (!payload?.id) return;
+
+          // In-memory update of lists.all cache
+          queryClient.setQueryData<KnowledgeQueryData>(queryKeys.lists.all(userId), (prev) => {
+            if (!prev) return prev;
+            const noteIndex = prev.notes.findIndex((n) => n.id === payload.id);
+            if (noteIndex === -1) return prev;
+            const updatedNotes = [...prev.notes];
+            updatedNotes[noteIndex] = {
+              ...updatedNotes[noteIndex],
+              ...(payload.title !== undefined ? { title: payload.title } : {}),
+              ...(payload.content !== undefined ? { content: payload.content, contentLoaded: true } : {}),
+              ...(payload.lockVersion !== undefined ? { lockVersion: payload.lockVersion } : {}),
+              updatedAt: payload.updatedAt ?? Date.now(),
+            };
+            return {
+              ...prev,
+              notes: updatedNotes,
+            };
+          });
+
+          // Also update lists.contents cache for activeListId
+          if (activeListId) {
+            queryClient.setQueryData<{ noteGroups: NoteGroup[]; notes: Note[] }>(
+              queryKeys.lists.contents(userId, activeListId),
+              (prev) => {
+                if (!prev) return prev;
+                const noteIndex = prev.notes.findIndex((n) => n.id === payload.id);
+                if (noteIndex === -1) return prev;
+                const updatedNotes = [...prev.notes];
+                updatedNotes[noteIndex] = {
+                  ...updatedNotes[noteIndex],
+                  ...(payload.title !== undefined ? { title: payload.title } : {}),
+                  ...(payload.content !== undefined ? { content: payload.content, contentLoaded: true } : {}),
+                  ...(payload.lockVersion !== undefined ? { lockVersion: payload.lockVersion } : {}),
+                  updatedAt: payload.updatedAt ?? Date.now(),
+                };
+                return {
+                  ...prev,
+                  notes: updatedNotes,
+                };
+              }
+            );
+          }
+        });
+
+        unlistenWindowState = await listen<{ id: string; isOpen: boolean }>(
+          'knowledge:note-window-state',
+          (event) => {
+            const { id, isOpen } = event.payload || {};
+            if (!id) return;
+            if (isOpen) {
+              addStandaloneNoteId(id);
+            } else {
+              removeStandaloneNoteId(id);
+            }
+          }
+        );
+      } catch (err) {
+        console.error('Failed to setup Tauri IPC note listeners:', err);
+      }
+    };
+
+    void setupListeners();
+
+    return () => {
+      if (unlistenUpdated) unlistenUpdated();
+      if (unlistenWindowState) unlistenWindowState();
+    };
+  }, [queryClient, userId, activeListId, addStandaloneNoteId, removeStandaloneNoteId, setStandaloneNoteIds]);
   const activeNote = useMemo(() => {
     if (!activeNoteId) return null;
     return noteMap.get(activeNoteId) || null;
@@ -1357,7 +1592,7 @@ export function KnowledgePanel() {
   const { data: activeNoteDetail } = useQuery({
     queryKey: queryKeys.lists.note(userId, activeNoteId ?? 'none'),
     queryFn: () => knowledgeService.loadNote(activeNoteId!),
-    enabled: isDrawerOpen && Boolean(activeNoteId) && !activeNote?.contentLoaded,
+    enabled: (isDrawerOpen || viewMode === 'full') && Boolean(activeNoteId) && !activeNote?.contentLoaded,
   });
   const drawerNote = activeNote?.contentLoaded ? activeNote : activeNoteDetail ?? null;
   const [newNoteTitle, setNewNoteTitle] = useState('');
@@ -1649,16 +1884,155 @@ export function KnowledgePanel() {
     if (activeListId === list.id) setActiveListId(null);
   };
 
+  // --- Native File Drag & Drop ---
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const dragCounterRef = useRef(0);
+
+  // Prevent browser default behavior of opening dropped files on unhandled window areas
+  useEffect(() => {
+    const preventFileDropDefault = (e: DragEvent) => {
+      if (e.dataTransfer?.types && Array.from(e.dataTransfer.types).includes('Files')) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('dragover', preventFileDropDefault);
+    window.addEventListener('drop', preventFileDropDefault);
+    return () => {
+      window.removeEventListener('dragover', preventFileDropDefault);
+      window.removeEventListener('drop', preventFileDropDefault);
+    };
+  }, []);
+
+  const isFileDrag = (e: React.DragEvent) => {
+    const types = e.dataTransfer?.types;
+    if (!types) return false;
+    return Array.from(types).includes('Files') || Array.from(types).includes('application/x-moz-file');
+  };
+
+  const handleNativeDragEnter = (e: React.DragEvent) => {
+    if (isFileDrag(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounterRef.current += 1;
+      setIsDraggingFiles(true);
+    }
+  };
+
+  const handleNativeDragOver = (e: React.DragEvent) => {
+    if (isFileDrag(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.dataTransfer.dropEffect = 'copy';
+    }
+  };
+
+  const handleNativeDragLeave = (e: React.DragEvent) => {
+    if (isFileDrag(e)) {
+      e.preventDefault();
+      e.stopPropagation();
+      dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+      if (dragCounterRef.current === 0) {
+        setIsDraggingFiles(false);
+      }
+    }
+  };
+
+  const handleNativeDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current = 0;
+    setIsDraggingFiles(false);
+
+    const rawFiles = Array.from(e.dataTransfer?.files || []);
+    if (rawFiles.length === 0) {
+      return;
+    }
+
+    if (!activeListId) {
+      toast.error('请先在左侧选择一个文件夹再导入文件。');
+      return;
+    }
+
+    const files = rawFiles.filter((f) => {
+      const lower = f.name.toLowerCase();
+      return lower.endsWith('.md') || lower.endsWith('.txt') || lower.endsWith('.markdown');
+    });
+
+    if (files.length === 0) {
+      toast.info('仅支持导入 .md、.markdown 或 .txt 格式的 Markdown 文件。');
+      return;
+    }
+
+    let count = 0;
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        const title = extractTitleFromMarkdown(file.name, text);
+        const jsonContent = convertMarkdownToTipTapJson(text);
+        addNote({
+          folderId: activeListId,
+          title,
+          content: jsonContent,
+          contentLoaded: true,
+        });
+        count++;
+      } catch (err) {
+        logSilent('listsPanel', 'Failed to read dropped file', err);
+      }
+    }
+
+    if (count > 0) {
+      toast.success(`成功拖拽导入 ${count} 篇 Markdown 笔记！`);
+    }
+  };
+
   // --- Note Actions ---
-  const handleOpenNote = (noteId: string, _noteTitle?: string) => {
+  const handleOpenNote = async (
+    noteId: string,
+    noteTitle?: string,
+    options?: { forceMode?: 'drawer' | 'full' | 'window'; focusEditor?: boolean }
+  ) => {
+    const targetMode = options?.forceMode || defaultOpenMode;
+
+    if (targetMode === 'window') {
+      await openStandaloneNoteWindow(noteId, noteTitle);
+      addStandaloneNoteId(noteId);
+      setActiveNoteId(null);
+      setIsDrawerOpen(false);
+      return;
+    }
+
+    // Anti-conflict: if already open in standalone window, bring it to front
+    const isAlreadyOpen = await focusStandaloneNoteWindow(noteId);
+    if (isAlreadyOpen) {
+      addStandaloneNoteId(noteId);
+      toast.info('该笔记正在独立窗口中编辑，已为您前置聚焦。如需在主窗口中打开，请先关闭独立窗口。');
+      return;
+    }
+
+    if (options?.focusEditor) {
+      setAutoFocusEditor(true);
+    } else {
+      setAutoFocusEditor(false);
+    }
+
     startTransition(() => {
       setActiveNoteId(noteId);
-      setIsDrawerOpen(true);
+      if (targetMode === 'full') {
+        setViewMode('full');
+        setIsDrawerOpen(false);
+      } else {
+        setViewMode('drawer');
+        setIsDrawerOpen(true);
+      }
     });
   };
 
-  const handleAddNote = () => {
+  const handleAddNote = (e?: React.KeyboardEvent<HTMLInputElement>) => {
     if (!activeListId || !newNoteTitle.trim()) return;
+    if (e) {
+      e.currentTarget.blur();
+    }
     const newNote = addNote({
       folderId: activeListId,
       title: newNoteTitle.trim(),
@@ -1666,7 +2040,7 @@ export function KnowledgePanel() {
       contentLoaded: true,
     });
     setNewNoteTitle('');
-    handleOpenNote(newNote.id, newNote.title);
+    handleOpenNote(newNote.id, newNote.title, { focusEditor: true });
   };
 
   const handleBatchImport = async () => {
@@ -1722,11 +2096,16 @@ export function KnowledgePanel() {
     handleOpenNote(newNote.id, newNote.title);
   };
 
-  const handleDeleteNote = (note: Note) => {
+  const handleDeleteNote = async (note: Note) => {
     deleteNote(note.id);
     if (activeNoteId === note.id) {
       setActiveNoteId(null);
       setIsDrawerOpen(false);
+    }
+    removeStandaloneNoteId(note.id);
+    await closeStandaloneNoteWindow(note.id);
+    if (isTauriEnv()) {
+      void emit('knowledge:note-deleted', { id: note.id });
     }
   };
 
@@ -1790,7 +2169,27 @@ export function KnowledgePanel() {
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-      <section className="flex h-full w-full bg-transparent overflow-hidden text-foreground">
+      <section
+        className="flex h-full w-full bg-transparent overflow-hidden text-foreground relative"
+        onDragEnter={handleNativeDragEnter}
+        onDragOver={handleNativeDragOver}
+        onDragLeave={handleNativeDragLeave}
+        onDrop={handleNativeDrop}
+      >
+        {isDraggingFiles && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-background/85 backdrop-blur-xs border-2 border-dashed border-primary m-3 rounded-lg pointer-events-none animate-in fade-in duration-150">
+            <div className="flex flex-col items-center gap-3 p-6 text-center">
+              <div className="p-3.5 rounded-full bg-primary/10 text-primary">
+                <Upload size={32} />
+              </div>
+              <p className="text-base font-bold text-foreground">松开鼠标直接导入 Markdown 笔记</p>
+              <p className="text-xs text-muted-foreground">
+                {activeList ? `将导入至当前文件夹「${activeList.name}」` : '请先在左侧选择目标文件夹'}
+              </p>
+            </div>
+          </div>
+        )}
+
         <ListsSidebar
           lists={lists}
           folders={folders}
@@ -1810,12 +2209,44 @@ export function KnowledgePanel() {
         />
 
         <main className="flex-1 flex flex-col bg-transparent relative overflow-hidden">
+
           {activeList ? (
-            <>
-              <div className={cn(
-                "flex h-12 items-center justify-between border-b bg-card px-6 shrink-0 z-30 relative",
-                isPixelTheme ? "border-b-2 border-border font-mono" : "border-border"
-              )}>
+            viewMode === 'full' && activeNoteId ? (
+              drawerNote ? (
+                <FullNoteEditor
+                  note={drawerNote}
+                  folderName={activeList.name}
+                  isPixelTheme={isPixelTheme}
+                  autoFocusEditor={autoFocusEditor}
+                  onBackToList={() => {
+                    setActiveNoteId(null);
+                    setAutoFocusEditor(false);
+                  }}
+                  onUpdate={handleNoteUpdate}
+                  onFlush={flushNote}
+                  onDuplicate={handleDuplicateNote}
+                  onSaveAsTemplate={handleSaveAsTemplate}
+                  onDelete={handleDeleteNote}
+                  onSwitchToDrawer={() => {
+                    setViewMode('drawer');
+                    setIsDrawerOpen(true);
+                  }}
+                  onOpenStandaloneWindow={() => {
+                    void handleOpenNote(drawerNote.id, drawerNote.title, { forceMode: 'window' });
+                  }}
+                />
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center text-sm text-muted-foreground gap-2">
+                  <LoaderCircle size={20} className="animate-spin text-primary" />
+                  <span>正在加载笔记正文...</span>
+                </div>
+              )
+            ) : (
+              <>
+                <div className={cn(
+                  "flex h-12 items-center justify-between border-b bg-card px-6 shrink-0 z-30 relative",
+                  isPixelTheme ? "border-b-2 border-border font-mono" : "border-border"
+                )}>
                 <div className="flex items-center gap-2 text-base font-bold text-foreground">
                   <Button variant="ghost" size="icon" className={isPixelTheme ? "rounded-xs" : "rounded-lg"} onClick={toggleSidebar} title={isSidebarCollapsed ? "展开侧边栏" : "收起侧边栏"}>
                     <MenuIcon isCollapsed={isSidebarCollapsed} />
@@ -1855,6 +2286,48 @@ export function KnowledgePanel() {
                       <DropdownMenuItem onClick={handleAddGroupClick}>新建分组</DropdownMenuItem>
                       <DropdownMenuItem onClick={handleBatchImport}>批量导入MD</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => setBatchExportModalOpen(true)}>批量导出MD</DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuSub>
+                        <DropdownMenuSubTrigger>
+                          <LayoutTemplate size={14} />
+                          <span>默认打开模式</span>
+                        </DropdownMenuSubTrigger>
+                        <DropdownMenuSubContent className="w-40">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setDefaultOpenMode('drawer');
+                              toast.success('默认打开模式已设为：侧边抽屉');
+                            }}
+                            className={cn(defaultOpenMode === 'drawer' && "font-bold text-primary")}
+                          >
+                            <PanelRight size={14} className="mr-1.5" />
+                            <span>侧边抽屉</span>
+                            {defaultOpenMode === 'drawer' && <Check size={14} className="ml-auto" />}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setDefaultOpenMode('full');
+                              toast.success('默认打开模式已设为：主区域铺满');
+                            }}
+                            className={cn(defaultOpenMode === 'full' && "font-bold text-primary")}
+                          >
+                            <Maximize2 size={14} className="mr-1.5" />
+                            <span>主区域铺满</span>
+                            {defaultOpenMode === 'full' && <Check size={14} className="ml-auto" />}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => {
+                              setDefaultOpenMode('window');
+                              toast.success('默认打开模式已设为：独立窗口');
+                            }}
+                            className={cn(defaultOpenMode === 'window' && "font-bold text-primary")}
+                          >
+                            <ExternalLink size={14} className="mr-1.5" />
+                            <span>独立窗口</span>
+                            {defaultOpenMode === 'window' && <Check size={14} className="ml-auto" />}
+                          </DropdownMenuItem>
+                        </DropdownMenuSubContent>
+                      </DropdownMenuSub>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -1914,7 +2387,7 @@ export function KnowledgePanel() {
                     placeholder={isPixelTheme ? "📜 撰写新的魔法卷轴 / 笔记... (按 Enter 保存)" : "添加笔记..."}
                     value={newNoteTitle}
                     onChange={e => setNewNoteTitle(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter') handleAddNote(); }}
+                    onKeyDown={e => { if (e.key === 'Enter') handleAddNote(e); }}
                     className={cn(
                       "border-none bg-transparent shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 px-0 h-auto",
                       isPixelTheme && "font-mono text-sm"
@@ -1968,6 +2441,8 @@ export function KnowledgePanel() {
                               onClick={() => handleOpenNote(note.id, note.title)}
                               onDuplicate={handleDuplicateNote}
                               onDelete={handleDeleteNote}
+                              onOpenWindow={(n) => void handleOpenNote(n.id, n.title, { forceMode: 'window' })}
+                              onOpenMode={(n, mode) => handleOpenNote(n.id, n.title, { forceMode: mode })}
                             />
                           </SortableItem>
                         ))}
@@ -1989,6 +2464,8 @@ export function KnowledgePanel() {
                               onNoteClick={(note) => handleOpenNote(note.id, note.title)}
                               onDuplicateNote={handleDuplicateNote}
                               onDeleteNote={handleDeleteNote}
+                              onOpenNoteWindow={(n) => void handleOpenNote(n.id, n.title, { forceMode: 'window' })}
+                              onOpenNoteMode={(n, mode) => handleOpenNote(n.id, n.title, { forceMode: mode })}
                             />
                           );
                         })}
@@ -2005,6 +2482,8 @@ export function KnowledgePanel() {
                             onNoteClick={(note) => handleOpenNote(note.id, note.title)}
                             onDuplicateNote={handleDuplicateNote}
                             onDeleteNote={handleDeleteNote}
+                            onOpenNoteWindow={(n) => void handleOpenNote(n.id, n.title, { forceMode: 'window' })}
+                            onOpenNoteMode={(n, mode) => handleOpenNote(n.id, n.title, { forceMode: mode })}
                           />
                         )}
                       </>
@@ -2026,8 +2505,19 @@ export function KnowledgePanel() {
                 onDuplicate={handleDuplicateNote}
                 onSaveAsTemplate={handleSaveAsTemplate}
                 onDelete={handleDeleteNote}
+                onSwitchToFull={() => {
+                  setIsDrawerOpen(false);
+                  setViewMode('full');
+                }}
+                onOpenStandaloneWindow={() => {
+                  if (drawerNote) {
+                    void handleOpenNote(drawerNote.id, drawerNote.title, { forceMode: 'window' });
+                  }
+                }}
+                autoFocusEditor={autoFocusEditor}
               />
             </>
+            )
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center text-sm text-muted-foreground py-16 font-mono">
               {isPixelTheme ? (

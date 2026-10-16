@@ -21,6 +21,7 @@ export default defineConfig(async () => ({
         quickEdit: path.resolve(__dirname, "quick-edit.html"),
         focusAssistant: path.resolve(__dirname, "focus-assistant.html"),
         notificationToast: path.resolve(__dirname, "notification-toast.html"),
+        noteWindow: path.resolve(__dirname, "note-window.html"),
       },
       output: {
         manualChunks: (id) => {

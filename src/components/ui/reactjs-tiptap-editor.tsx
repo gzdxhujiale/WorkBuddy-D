@@ -106,6 +106,7 @@ export interface ReactjsTiptapEditorProps {
   showToolbar?: boolean;
   hideHighlight?: boolean;
   hideCallout?: boolean;
+  autofocus?: "start" | "end" | "all" | boolean | number;
 }
 
 type EditorContentValue = string | Record<string, unknown>;
@@ -249,6 +250,7 @@ export function ReactjsTiptapEditor({
   showToolbar = true,
   hideHighlight = false,
   hideCallout = false,
+  autofocus,
 }: ReactjsTiptapEditorProps) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -321,6 +323,7 @@ export function ReactjsTiptapEditor({
   const editor = useEditor({
     immediatelyRender: true,
     editable,
+    autofocus: autofocus ?? false,
     extensions,
     content: parseContent(content),
     onUpdate: ({ editor: currentEditor }) => {

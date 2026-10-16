@@ -8,7 +8,8 @@
     "quick-edit-pool",
     "focus-assistant",
     "notify-center-modal",
-    "notify-toast-*"
+    "notify-toast-*",
+    "note-window-*"
   ],
   "permissions": [
     "core:default",

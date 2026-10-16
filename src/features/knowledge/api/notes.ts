@@ -273,16 +273,21 @@ export async function searchNotes(query: string): Promise<NoteSearchResult[]> {
 }
 
 export async function bufferPatchNote(
-  patch: ListNotePatch
+  patch: ListNotePatch,
+  options?: RequestInit
 ): Promise<{ status: string; id: string; lockVersion?: number }> {
-  const res = await apiClient.patch<any>(`/api/v1/notes/${patch.id}/buffer`, {
-    title: patch.title,
-    content: patch.content,
-    sort_order: patch.sortOrder,
-    folder_id: patch.folderId,
-    group_id: patch.groupId,
-    lock_version: patch.lockVersion ?? 1,
-  });
+  const res = await apiClient.patch<any>(
+    `/api/v1/notes/${patch.id}/buffer`,
+    {
+      title: patch.title,
+      content: patch.content,
+      sort_order: patch.sortOrder,
+      folder_id: patch.folderId,
+      group_id: patch.groupId,
+      lock_version: patch.lockVersion ?? 1,
+    },
+    options
+  );
   return {
     status: res.status || "buffered",
     id: res.id,

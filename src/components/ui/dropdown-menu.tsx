@@ -1,5 +1,6 @@
 import React, { createContext, useContext, forwardRef } from "react";
 import * as RadixDropdownMenu from "@radix-ui/react-dropdown-menu";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 
@@ -187,3 +188,63 @@ export const DropdownMenuLabel = forwardRef<
 DropdownMenuLabel.displayName = "DropdownMenuLabel";
 
 export const DropdownMenuGroup = RadixDropdownMenu.Group;
+
+export const DropdownMenuSub = RadixDropdownMenu.Sub;
+
+export interface DropdownMenuSubTriggerProps
+  extends React.ComponentPropsWithoutRef<typeof RadixDropdownMenu.SubTrigger> {
+  inset?: boolean;
+}
+
+export const DropdownMenuSubTrigger = forwardRef<
+  React.ElementRef<typeof RadixDropdownMenu.SubTrigger>,
+  DropdownMenuSubTriggerProps
+>(({ className, inset, children, ...props }, ref) => {
+  const { isPixelTheme } = useAppThemeStyle();
+  return (
+    <RadixDropdownMenu.SubTrigger
+      ref={ref}
+      className={cn(
+        "flex w-full cursor-pointer select-none items-center justify-between gap-2 px-2.5 py-1.5 text-xs outline-none transition-colors data-[state=open]:bg-muted data-[highlighted]:bg-muted",
+        inset && "pl-8",
+        isPixelTheme ? "rounded-xs font-mono" : "rounded-lg",
+        className
+      )}
+      {...props}
+    >
+      <div className="flex items-center gap-2">{children}</div>
+      <ChevronRight size={13} className="text-muted-foreground ml-auto shrink-0 opacity-70" />
+    </RadixDropdownMenu.SubTrigger>
+  );
+});
+DropdownMenuSubTrigger.displayName = "DropdownMenuSubTrigger";
+
+export interface DropdownMenuSubContentProps
+  extends React.ComponentPropsWithoutRef<typeof RadixDropdownMenu.SubContent> {
+  sideOffset?: number;
+}
+
+export const DropdownMenuSubContent = forwardRef<
+  React.ElementRef<typeof RadixDropdownMenu.SubContent>,
+  DropdownMenuSubContentProps
+>(({ className, sideOffset = 4, ...props }, ref) => {
+  const { isPixelTheme } = useAppThemeStyle();
+  return (
+    <RadixDropdownMenu.Portal>
+      <RadixDropdownMenu.SubContent
+        ref={ref}
+        sideOffset={sideOffset}
+        collisionPadding={8}
+        className={cn(
+          "z-[1100] min-w-36 p-1 bg-popover text-popover-foreground flex flex-col animate-in fade-in zoom-in-95 duration-100 outline-none",
+          isPixelTheme
+            ? "rounded-xs border-2 border-border font-mono shadow-[3px_3px_0px_#000]"
+            : "border border-border rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)]",
+          className
+        )}
+        {...props}
+      />
+    </RadixDropdownMenu.Portal>
+  );
+});
+DropdownMenuSubContent.displayName = "DropdownMenuSubContent";

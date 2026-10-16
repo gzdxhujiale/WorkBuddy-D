@@ -15,7 +15,8 @@
         "title": "WorkBuddy",
         "width": 1030,
         "height": 750,
-        "decorations": false
+        "decorations": false,
+        "dragDropEnabled": false
       }
     ],
     "security": {
