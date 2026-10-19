@@ -106,9 +106,26 @@ class RealtimeManager {
       case "habit_checkins":
         this.addPendingTarget(["habits", this.userId], false);
         break;
-      case "daily_reviews":
-        this.addPendingTarget(["dailyReviews", this.userId], false);
+      case "daily_reviews": {
+        this.addPendingTarget(["dailyReviews", this.userId, "summaries"], true);
+        this.addPendingTarget(["dailyReviews", this.userId, "stats"], true);
+        this.addPendingTarget(["dailyReviews", this.userId, "all"], true);
+        const reviewData = payload.data as { date?: string } | undefined;
+        const targetDate = reviewData?.date ? String(reviewData.date).slice(0, 10) : undefined;
+        if (targetDate) {
+          const detailKey: QueryKey = ["dailyReviews", this.userId, "detail", targetDate];
+          if (!isQueryPending(detailKey) && !isPendingScope(`dailyReview:${this.userId}:${targetDate}`)) {
+            this.addPendingTarget(detailKey, true);
+          }
+          const year = Number(targetDate.slice(0, 4));
+          if (year) {
+            this.addPendingTarget(["dailyReviews", this.userId, "heatmap", year], true);
+          }
+        } else {
+          this.addPendingTarget(["dailyReviews", this.userId, "heatmap"], false);
+        }
         break;
+      }
       case "time_management_tasks":
         this.addPendingTarget(["time-management-tasks", this.userId], false);
         this.addPendingTarget(["focus-assistant-tasks", this.userId], false);
@@ -151,9 +168,16 @@ class RealtimeManager {
       const keyId = JSON.stringify(target);
       if (now - (this.lastInvalidatedAt.get(keyId) ?? 0) < RealtimeManager.INVALIDATION_COOLDOWN_MS) continue;
       const isKnowledgeTarget = target.queryKey[0] === "lists";
+      const isDailyReviewDetail =
+        target.queryKey[0] === "dailyReviews" &&
+        target.queryKey[2] === "detail" &&
+        typeof target.queryKey[3] === "string";
+      const dailyReviewDate = isDailyReviewDetail ? (target.queryKey[3] as string) : undefined;
+
       if (
         isQueryPending(target.queryKey) ||
-        (isKnowledgeTarget && isPendingScope(`knowledge:${this.userId}`))
+        (isKnowledgeTarget && isPendingScope(`knowledge:${this.userId}`)) ||
+        (isDailyReviewDetail && dailyReviewDate && isPendingScope(`dailyReview:${this.userId}:${dailyReviewDate}`))
       ) {
         this.dirtyTargets.set(keyId, target);
         hasDeferred = true;

@@ -365,14 +365,33 @@ export function ReactjsTiptapEditor({
     const nextContent = parseContent(content);
     if (typeof nextContent === "string") {
       if (editor.getHTML() !== nextContent) {
+        const { from, to } = editor.state.selection;
+        const isFocused = editor.isFocused;
         editor.commands.setContent(nextContent, { emitUpdate: false });
+        if (isFocused) {
+          editor.commands.setTextSelection({ from, to });
+        }
       }
       return;
     }
 
-    const currentJson = JSON.stringify(editor.getJSON());
-    if (currentJson !== JSON.stringify(nextContent)) {
-      editor.commands.setContent(nextContent, { emitUpdate: false });
+    try {
+      const nextDoc = editor.schema.nodeFromJSON(nextContent);
+      if (editor.state.doc.eq(nextDoc)) {
+        return;
+      }
+    } catch {
+      const currentJson = JSON.stringify(editor.getJSON());
+      if (currentJson === JSON.stringify(nextContent)) {
+        return;
+      }
+    }
+
+    const { from, to } = editor.state.selection;
+    const isFocused = editor.isFocused;
+    editor.commands.setContent(nextContent, { emitUpdate: false });
+    if (isFocused) {
+      editor.commands.setTextSelection({ from, to });
     }
   }, [content, editor]);
 

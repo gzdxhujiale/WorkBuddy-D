@@ -6,6 +6,7 @@ import {
   useDailyReviewDetail,
   useDailyReviewStats,
   useReviewActions,
+  extractReviewPlainText,
 } from "../hooks/useDailyReview";
 import { DailyReviewItem, DailyReviewSummary, CompoundStats as CompoundStatsType } from "../types";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
@@ -57,6 +58,10 @@ function useReviewAutoSave({
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
 
+  // Track the date currently hydrated from remote data to distinguish
+  // initial asynchronous hydration from post-save local echoes.
+  const hydratedDateRef = useRef<string>(initialContent ? date : "");
+
   useEffect(() => {
     stateRef.current = { content, date };
   }, [content, date]);
@@ -67,6 +72,7 @@ function useReviewAutoSave({
     const prev = stateRef.current;
     const last = lastSavedRef.current;
 
+    // Case 1: Switching to a different date
     if (prev.date !== date) {
       if (prev.content !== last.content) {
         onSaveRef.current(prev.date, prev.content);
@@ -75,11 +81,36 @@ function useReviewAutoSave({
       setSaveStatus("saved");
       lastSavedRef.current = { content: initialContent, date };
       stateRef.current = { content: initialContent, date };
+      hydratedDateRef.current = initialContent ? date : "";
       return;
     }
 
-    // Remote data hydrated asynchronously for the current date
+    // Case 2: Remote data hydrated asynchronously for the current date
+    if (hydratedDateRef.current !== date) {
+      if (initialContent) {
+        const isPristine = prev.content === last.content;
+        if (isPristine) {
+          setContent(initialContent);
+          setSaveStatus("saved");
+          lastSavedRef.current = { content: initialContent, date };
+          stateRef.current = { content: initialContent, date };
+        }
+        hydratedDateRef.current = date;
+      }
+      return;
+    }
+
+    // Case 3: Already hydrated date receives an updated initialContent
+    // If it's semantically identical to our last saved or current content, avoid echoing.
     if (initialContent !== last.content) {
+      const isSemanticallySame =
+        extractReviewPlainText(initialContent) === extractReviewPlainText(prev.content);
+      if (isSemanticallySame) {
+        lastSavedRef.current = { content: initialContent, date };
+        return;
+      }
+
+      // If genuine external content arrived while local content has no unsaved edits
       const isPristine = prev.content === last.content;
       if (isPristine) {
         setContent(initialContent);

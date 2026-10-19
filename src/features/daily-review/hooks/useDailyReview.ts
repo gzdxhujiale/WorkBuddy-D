@@ -7,6 +7,7 @@ import { useOptimisticSync } from "@/hooks/useOptimisticSync";
 import { queryKeys } from "@/lib/syncEngine";
 import { useAuth } from "@/features/auth";
 import { createDailyReviewId } from "@/lib/entityIds";
+import { markPendingScope, clearPendingScope } from "@/lib/queryPending";
 
 export function extractReviewPlainText(content?: string): string {
   if (!content) return "";
@@ -134,52 +135,56 @@ export function useReviewActions() {
       return nextList;
     },
     syncFn: async (review) => {
-      const isEmpty = isReviewEmpty(review.content);
-      const savedEntity = await dailyReviewApi.upsertReview(review);
-      if (savedEntity === undefined) return;
+      try {
+        const isEmpty = isReviewEmpty(review.content);
+        const savedEntity = await dailyReviewApi.upsertReview(review);
+        if (savedEntity === undefined) return;
 
-      if (isEmpty) {
-        queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
-          old?.filter((item) => item.date !== review.date) ?? old
-        );
-        queryClient.setQueryData<DailyReviewItem | null>(queryKeys.dailyReviews.detail(userId, review.date), null);
-        queryClient.setQueryData<DailyReviewSummary[]>(queryKeys.dailyReviews.summaries(userId), (prevSummaries) =>
-          prevSummaries?.filter((s) => s.date !== review.date) ?? []
-        );
-      } else {
-        queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
-          old?.map((item) =>
-            item.date === review.date
+        if (isEmpty) {
+          queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
+            old?.filter((item) => item.date !== review.date) ?? old
+          );
+          queryClient.setQueryData<DailyReviewItem | null>(queryKeys.dailyReviews.detail(userId, review.date), null);
+          queryClient.setQueryData<DailyReviewSummary[]>(queryKeys.dailyReviews.summaries(userId), (prevSummaries) =>
+            prevSummaries?.filter((s) => s.date !== review.date) ?? []
+          );
+        } else {
+          queryClient.setQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY, (old) =>
+            old?.map((item) =>
+              item.date === review.date
+                ? {
+                    ...item,
+                    id: savedEntity.id,
+                    updatedAt: savedEntity.updatedAt,
+                    baseUpdatedAt: savedEntity.updatedAt,
+                    lockVersion: savedEntity.lockVersion,
+                    isNew: false,
+                  }
+                : item,
+            ) ?? old,
+          );
+
+          queryClient.setQueryData<DailyReviewItem | null>(queryKeys.dailyReviews.detail(userId, review.date), (prev) =>
+            prev
               ? {
-                  ...item,
+                  ...prev,
                   id: savedEntity.id,
                   updatedAt: savedEntity.updatedAt,
                   baseUpdatedAt: savedEntity.updatedAt,
                   lockVersion: savedEntity.lockVersion,
                   isNew: false,
                 }
-              : item,
-          ) ?? old,
-        );
+              : prev
+          );
+        }
 
-        queryClient.setQueryData<DailyReviewItem | null>(queryKeys.dailyReviews.detail(userId, review.date), (prev) =>
-          prev
-            ? {
-                ...prev,
-                id: savedEntity.id,
-                updatedAt: savedEntity.updatedAt,
-                baseUpdatedAt: savedEntity.updatedAt,
-                lockVersion: savedEntity.lockVersion,
-                isNew: false,
-              }
-            : prev
-        );
+        // Invalidate server stats and heatmap to sync streak and compound growth accurately
+        queryClient.invalidateQueries({ queryKey: queryKeys.dailyReviews.stats(userId) });
+        const year = Number(review.date.slice(0, 4)) || new Date().getFullYear();
+        queryClient.invalidateQueries({ queryKey: queryKeys.dailyReviews.heatmap(userId, year) });
+      } finally {
+        clearPendingScope(`dailyReview:${userId}:${review.date}`);
       }
-
-      // Invalidate server stats and heatmap to sync streak and compound growth accurately
-      queryClient.invalidateQueries({ queryKey: queryKeys.dailyReviews.stats(userId) });
-      const year = Number(review.date.slice(0, 4)) || new Date().getFullYear();
-      queryClient.invalidateQueries({ queryKey: queryKeys.dailyReviews.heatmap(userId, year) });
     },
     getSyncKey: (review) => review.date,
   });
@@ -207,6 +212,7 @@ export function useReviewActions() {
           updatedAt: Date.now(),
           baseUpdatedAt: existing?.baseUpdatedAt,
         };
+        markPendingScope(`dailyReview:${userId}:${date}`);
         triggerUpsert(clearedReview);
         return clearedReview;
       }
@@ -226,6 +232,7 @@ export function useReviewActions() {
             updatedAt: Date.now(),
           };
 
+      markPendingScope(`dailyReview:${userId}:${date}`);
       triggerUpsert(review);
       return review;
     },
@@ -237,6 +244,7 @@ export function useReviewActions() {
       const existing = (queryClient.getQueryData<DailyReviewItem[]>(DAILY_REVIEW_QUERY_KEY) ?? [])
         .find((review) => review.id === id);
       if (!existing) return;
+      markPendingScope(`dailyReview:${userId}:${existing.date}`);
       triggerUpsert({
         ...existing,
         content: "",
@@ -244,7 +252,7 @@ export function useReviewActions() {
         baseUpdatedAt: existing.baseUpdatedAt,
       });
     },
-    [queryClient, triggerUpsert, DAILY_REVIEW_QUERY_KEY]
+    [queryClient, triggerUpsert, DAILY_REVIEW_QUERY_KEY, userId]
   );
 
   return { saveReview, deleteReview };
