@@ -7,6 +7,7 @@ import {
   MoreHorizontal,
   FileDown,
   FileUp,
+  History,
   PanelRight,
   LayoutTemplate,
 } from "lucide-react";
@@ -33,6 +34,8 @@ import { toast } from "@/components/ui/toast";
 import { logSilent } from "@/lib/syncEngine";
 import { cn } from "@/lib/utils";
 import * as knowledgeService from "../api/knowledgeService";
+import { useNoteCollab } from "../hooks/useNoteCollab";
+import { NoteVersionHistoryDrawer } from "./NoteVersionHistoryDrawer";
 import type { Note } from "../types";
 
 export interface FullNoteEditorProps {
@@ -71,6 +74,13 @@ export function FullNoteEditor({
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || "");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  const { status: collabStatus, collabExtensions, ydoc } = useNoteCollab({
+    noteId: note.id,
+    enabled: true,
+    user: { name: "主窗口编辑者", color: "#2563eb" },
+  });
 
   const isDirtyRef = useRef(false);
   const activeEditingNoteIdRef = useRef(note.id);
@@ -217,6 +227,50 @@ export function FullNoteEditor({
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* Collaboration Status Badge */}
+          <span
+            title={
+              collabStatus === "connected"
+                ? "多窗口实时协同连接成功"
+                : collabStatus === "connecting"
+                ? "正在连接多窗口协同服务..."
+                : "单机离线模式"
+            }
+            className={cn(
+              "flex items-center gap-1.5 px-2.5 py-1 text-xs transition-all",
+              isPixelTheme
+                ? "border border-amber-900/40 rounded-xs font-mono font-bold"
+                : "rounded-lg border",
+              collabStatus === "connected"
+                ? isPixelTheme
+                  ? "bg-emerald-100 text-emerald-950 dark:bg-emerald-900/60 dark:text-emerald-100"
+                  : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                : collabStatus === "connecting"
+                ? isPixelTheme
+                  ? "bg-amber-100 text-amber-950 dark:bg-amber-900/60 dark:text-amber-100"
+                  : "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                : "bg-muted text-muted-foreground border-border"
+            )}
+          >
+            <span
+              className={cn(
+                "w-2 h-2 rounded-full",
+                collabStatus === "connected"
+                  ? "bg-emerald-500 animate-pulse"
+                  : collabStatus === "connecting"
+                  ? "bg-amber-500 animate-ping"
+                  : "bg-muted-foreground/40"
+              )}
+            />
+            <span>
+              {collabStatus === "connected"
+                ? "实时协同"
+                : collabStatus === "connecting"
+                ? "协同连接中"
+                : "单机模式"}
+            </span>
+          </span>
+
           {/* Save Status Badge */}
           <span
             title={saveStatus === "saving" ? "保存中..." : "已自动保存"}
@@ -255,6 +309,17 @@ export function FullNoteEditor({
             </span>
           </span>
 
+          {/* History Snapshots & Diff Drawer Button */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsHistoryOpen(true)}
+            title="版本历史与可视化对比"
+            className={isPixelTheme ? "rounded-xs" : "rounded-lg"}
+          >
+            <History size={17} />
+          </Button>
+
           {/* Mode Switch: Switch back to Drawer */}
           <Button
             variant="ghost"
@@ -289,6 +354,10 @@ export function FullNoteEditor({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="min-w-36">
+              <DropdownMenuItem onClick={() => setIsHistoryOpen(true)}>
+                <History size={14} className="mr-2" />
+                版本历史对比
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onDuplicate(note)}>
                 创建副本
               </DropdownMenuItem>
@@ -361,6 +430,7 @@ export function FullNoteEditor({
               preset="full"
               content={content}
               onChange={setContent}
+              collabExtensions={collabExtensions}
               autofocus={autoFocusEditor ? "start" : undefined}
               notesForWikilinks={notesForWikilinks}
               onNavigateNote={onNavigateNote}
@@ -373,6 +443,23 @@ export function FullNoteEditor({
           </div>
         </div>
       </main>
+
+      {/* Version History & Diff Comparison Drawer */}
+      <NoteVersionHistoryDrawer
+        open={isHistoryOpen}
+        onOpenChange={setIsHistoryOpen}
+        noteId={note.id}
+        noteTitle={title}
+        ydoc={ydoc}
+        currentContent={content}
+        onRestoreContent={(restored) => {
+          setContent(restored);
+          isDirtyRef.current = true;
+          setSaveStatus("saving");
+          onUpdateRef.current(note.id, title, restored);
+          setSaveStatus("saved");
+        }}
+      />
     </div>
   );
 }

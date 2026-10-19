@@ -17,10 +17,18 @@ type Querier interface {
 	CreateHabit(ctx context.Context, arg CreateHabitParams) (Habit, error)
 	CreateKnowledgeBase(ctx context.Context, arg CreateKnowledgeBaseParams) (KnowledgeBasis, error)
 	CreateNote(ctx context.Context, arg CreateNoteParams) (Note, error)
+	CreateNoteSnapshot(ctx context.Context, arg CreateNoteSnapshotParams) (NoteSnapshot, error)
+	DeleteNoteSnapshot(ctx context.Context, arg DeleteNoteSnapshotParams) error
+	GetNoteSnapshotByID(ctx context.Context, arg GetNoteSnapshotByIDParams) (NoteSnapshot, error)
+	ListNoteSnapshots(ctx context.Context, arg ListNoteSnapshotsParams) ([]ListNoteSnapshotsRow, error)
 	CreateTask(ctx context.Context, arg CreateTaskParams) (TimeManagementTask, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DetachFoldersFromKnowledgeBase(ctx context.Context, arg DetachFoldersFromKnowledgeBaseParams) error
 	DeleteDailyReviewByDate(ctx context.Context, arg DeleteDailyReviewByDateParams) error
+	CreateDailyReviewSnapshot(ctx context.Context, arg CreateDailyReviewSnapshotParams) (DailyReviewSnapshot, error)
+	DeleteDailyReviewSnapshot(ctx context.Context, arg DeleteDailyReviewSnapshotParams) error
+	GetDailyReviewSnapshotByID(ctx context.Context, arg GetDailyReviewSnapshotByIDParams) (DailyReviewSnapshot, error)
+	ListDailyReviewSnapshots(ctx context.Context, arg ListDailyReviewSnapshotsParams) ([]ListDailyReviewSnapshotsRow, error)
 	GetDailyReviewByDate(ctx context.Context, arg GetDailyReviewByDateParams) (DailyReview, error)
 	GetDailyReviewDatesInRange(ctx context.Context, arg GetDailyReviewDatesInRangeParams) ([]GetDailyReviewDatesInRangeRow, error)
 	GetFolderByID(ctx context.Context, arg GetFolderByIDParams) (KnowledgeBaseFolder, error)

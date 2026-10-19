@@ -29,20 +29,30 @@ export function extractReviewPlainText(content?: string): string {
         parsed = parsed.text;
       }
 
-      const texts: string[] = [];
+      const lines: string[] = [];
       const extractText = (node: any) => {
         if (!node || typeof node !== "object") return;
         if (typeof node.text === "string") {
-          texts.push(node.text);
+          lines.push(node.text);
         }
         if (Array.isArray(node.content)) {
           for (const child of node.content) {
             extractText(child);
           }
         }
+        if (
+          node.type === "paragraph" ||
+          node.type === "heading" ||
+          node.type === "listItem" ||
+          node.type === "taskItem" ||
+          node.type === "blockquote" ||
+          node.type === "codeBlock"
+        ) {
+          lines.push("\n");
+        }
       };
       extractText(parsed);
-      return texts.join("").trim();
+      return lines.join("").trim();
     }
   } catch {
     // Plain text or legacy HTML

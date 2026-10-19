@@ -21,6 +21,7 @@ import (
 	"workbuddy-server/internal/handler"
 	"workbuddy-server/internal/mcp"
 	"workbuddy-server/internal/middleware"
+	yjssync "workbuddy-server/internal/sync"
 	"workbuddy-server/internal/ws"
 )
 
@@ -46,6 +47,7 @@ func main() {
 
 	queries := sqlc.New(db.Pool)
 	hub := ws.NewHub(queries)
+	yjsHub := yjssync.NewYjsHub(queries)
 
 	// Check if invoked via CLI for MCP stdio transport (e.g. `server mcp`)
 	if len(os.Args) > 1 && os.Args[1] == "mcp" {
@@ -100,6 +102,7 @@ func main() {
 
 	// WebSocket Route (Authenticated via query token or Bearer)
 	r.GET("/ws", middleware.Auth(cfg.JWTSecret), hub.HandleWebSocket)
+	r.GET("/api/v1/notes/:id/collab", middleware.Auth(cfg.JWTSecret), yjsHub.HandleWebSocket)
 
 	// Protected Routes
 	protected := api.Group("")
@@ -136,6 +139,11 @@ func main() {
 		protected.POST("/notes/:id/move", noteH.MoveNote)
 		protected.POST("/notes/reorder", noteH.ReorderNotes)
 		protected.DELETE("/notes/:id", noteH.DeleteNote)
+
+		// Note Snapshots
+		protected.GET("/notes/:id/snapshots", noteH.ListNoteSnapshots)
+		protected.POST("/notes/:id/snapshots", noteH.CreateNoteSnapshot)
+		protected.GET("/notes/:id/snapshots/:snapshotId", noteH.GetNoteSnapshot)
 
 		// Knowledge Base Templates
 		protected.GET("/templates", noteH.ListTemplates)
@@ -183,6 +191,12 @@ func main() {
 		protected.GET("/daily-reviews/heatmap", dailyReviewH.GetHeatmap)
 		protected.GET("/daily-reviews/:date", dailyReviewH.GetDailyReviewByDate)
 		protected.POST("/daily-reviews", dailyReviewH.UpsertReview)
+		protected.GET("/daily-reviews/:date/snapshots", dailyReviewH.ListDailyReviewSnapshots)
+		protected.POST("/daily-reviews/:date/snapshots", dailyReviewH.CreateDailyReviewSnapshot)
+		protected.GET("/daily-reviews/:date/snapshots/:snapshotId", dailyReviewH.GetDailyReviewSnapshot)
+		protected.GET("/reviews/:date/snapshots", dailyReviewH.ListDailyReviewSnapshots)
+		protected.POST("/reviews/:date/snapshots", dailyReviewH.CreateDailyReviewSnapshot)
+		protected.GET("/reviews/:date/snapshots/:snapshotId", dailyReviewH.GetDailyReviewSnapshot)
 
 		// AI Gateway, Channels, Metrics, Skills & Chat
 		protected.GET("/ai/channels", aiH.ListChannels)

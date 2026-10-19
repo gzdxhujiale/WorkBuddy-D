@@ -66,3 +66,26 @@ The editor SHALL dynamically conform all typographic elements, code blocks, tabl
 #### Scenario: Displaying editor in Retro Pixel mode
 - **WHEN** the active application theme transitions to Retro Pixel mode
 - **THEN** the editor content, toolbar buttons, floating bubble menus, and command palettes adopt pixel-bordered outlines, monospace headings, parchment background accents, and tactile press states
+
+### Requirement: External Rich-Text and Office Clipboard Sanitization
+The rich-text editor SHALL sanitize incoming rich-text content pasted from external applications (including Microsoft Word, Excel, and office document tools), stripping redundant XML tags, proprietary styling metadata, and normalizing nested structures into semantic nodes.
+
+#### Scenario: Pasting formatted text from Microsoft Word
+- **WHEN** a user copies formatted content from Microsoft Word and pastes it into the active editor
+- **THEN** proprietary office tags (such as `o:p` and `mso-*` styles) are purged while bold, italic, headings, lists, and table structures are normalized into clean native document nodes
+
+#### Scenario: Pasting table data from spreadsheets
+- **WHEN** a user copies a multi-cell range from a spreadsheet and pastes it into the editor
+- **THEN** the editor converts the tabular data into standard table rows and cells preserving text alignment and column bounds without extraneous background styles
+
+### Requirement: Editor Snapshot Commands and Milestone Keyboard Shortcuts
+The rich-text editor SHALL provide programmable commands for saving named snapshots and opening history, and SHALL bind a global editor shortcut (`Mod-Shift-S`) to prompt for milestone naming and trigger instant snapshot persistence.
+
+#### Scenario: Triggering milestone snapshot via keyboard shortcut
+- **WHEN** a user presses `Mod-Shift-S` (`Ctrl+Shift+S` or `Cmd+Shift+S`) inside an active editor
+- **THEN** the editor triggers a snapshot save dialog or prompt, allowing the user to provide a custom milestone name and persist the snapshot
+
+#### Scenario: Invoking snapshot commands programmatically
+- **WHEN** host containers execute `editor.commands.saveSnapshot(name)` or `editor.commands.openVersionHistory()`
+- **THEN** the editor delegates to the registered snapshot handler without throwing errors
+

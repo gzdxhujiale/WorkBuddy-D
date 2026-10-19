@@ -218,3 +218,26 @@ WHERE user_id = $1 AND deleted_at IS NULL
   AND (title ILIKE '%' || $2 || '%' OR content ILIKE '%' || $2 || '%')
 ORDER BY updated_at DESC
 LIMIT 50;
+
+-- name: CreateNoteSnapshot :one
+INSERT INTO note_snapshots (id, note_id, user_id, snapshot_data, summary, created_at)
+VALUES ($1, $2, $3, $4, $5, now())
+RETURNING *;
+
+-- name: ListNoteSnapshots :many
+SELECT id, note_id, user_id, summary, created_at
+FROM note_snapshots
+WHERE note_id = $1 AND user_id = $2
+ORDER BY created_at DESC
+LIMIT $3;
+
+-- name: GetNoteSnapshotByID :one
+SELECT *
+FROM note_snapshots
+WHERE id = $1 AND note_id = $2 AND user_id = $3
+LIMIT 1;
+
+-- name: DeleteNoteSnapshot :exec
+DELETE FROM note_snapshots
+WHERE id = $1 AND note_id = $2 AND user_id = $3;
+

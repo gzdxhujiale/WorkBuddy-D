@@ -35,3 +35,25 @@ WHERE user_id = $1 AND date = $2;
 DELETE FROM daily_reviews
 WHERE user_id = $1 AND id = $2;
 
+-- name: CreateDailyReviewSnapshot :one
+INSERT INTO daily_review_snapshots (id, user_id, review_date, content, summary, created_at)
+VALUES ($1, $2, $3, $4, $5, now())
+RETURNING id, user_id, review_date, content, summary, created_at;
+
+-- name: ListDailyReviewSnapshots :many
+SELECT id, user_id, review_date, summary, created_at
+FROM daily_review_snapshots
+WHERE user_id = $1 AND review_date = $2
+ORDER BY created_at DESC
+LIMIT $3;
+
+-- name: GetDailyReviewSnapshotByID :one
+SELECT id, user_id, review_date, content, summary, created_at
+FROM daily_review_snapshots
+WHERE id = $1 AND user_id = $2 AND review_date = $3
+LIMIT 1;
+
+-- name: DeleteDailyReviewSnapshot :exec
+DELETE FROM daily_review_snapshots
+WHERE id = $1 AND user_id = $2;
+

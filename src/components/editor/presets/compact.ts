@@ -16,6 +16,8 @@ import { CustomCallout } from "../extensions/CustomCallout";
 import { CustomDetails, DetailsSummary, DetailsContent } from "../extensions/CustomDetails";
 import { CustomCodeBlockLowlight } from "../extensions/CodeBlockWithLowlight";
 import { CustomImage } from "../extensions/CustomImage";
+import { PasteHandler } from "../extensions/paste-handler";
+import { SnapshotExtension } from "../extensions/snapshot/snapshotExtension";
 
 export function createCompactExtensions(placeholder = "输入 / 使用命令...") {
   return [
@@ -51,6 +53,8 @@ export function createCompactExtensions(placeholder = "输入 / 使用命令..."
     DetailsContent,
     CustomCodeBlockLowlight,
     CustomImage,
+    PasteHandler,
+    SnapshotExtension,
     CharacterCount,
     Placeholder.configure({
       placeholder,

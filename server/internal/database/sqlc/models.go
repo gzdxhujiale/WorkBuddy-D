@@ -20,6 +20,15 @@ type DailyReview struct {
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 }
 
+type DailyReviewSnapshot struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	ReviewDate pgtype.Date        `json:"review_date"`
+	Content    json.RawMessage    `json:"content"`
+	Summary    pgtype.Text        `json:"summary"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type FocusSession struct {
 	ID             pgtype.UUID        `json:"id"`
 	UserID         pgtype.UUID        `json:"user_id"`
@@ -121,6 +130,15 @@ type Note struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt   pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt   pgtype.Timestamptz `json:"deleted_at"`
+}
+
+type NoteSnapshot struct {
+	ID           pgtype.UUID        `json:"id"`
+	NoteID       pgtype.UUID        `json:"note_id"`
+	UserID       pgtype.UUID        `json:"user_id"`
+	SnapshotData []byte             `json:"snapshot_data"`
+	Summary      pgtype.Text        `json:"summary"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 }
 
 type Project struct {

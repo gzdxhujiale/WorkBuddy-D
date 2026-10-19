@@ -1,0 +1,45 @@
+{
+  "name": "@tiptap-pro/extension-collaboration-history",
+  "description": "Collaboration history extension for Tiptap",
+  "version": "2.21.6",
+  "homepage": "https://tiptap.dev/api/extensions/collaboration-history",
+  "keywords": [
+    "tiptap",
+    "tiptap extension"
+  ],
+  "license": "SEE LICENSE IN LICENSE.md",
+  "funding": {
+    "type": "github",
+    "url": "https://github.com/sponsors/ueberdosis"
+  },
+  "main": "dist/index.cjs.js",
+  "umd": "dist/index.umd.js",
+  "module": "dist/index.esm.js",
+  "types": "dist/tiptap-pro/packages/extension-collaboration-history/src/index.d.ts",
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "LICENSE.md"
+  ],
+  "peerDependencies": {
+    "@hocuspocus/provider": "^2.13.0",
+    "@hocuspocus/transformer": "^2.13.0",
+    "@tiptap/core": "^2.0.0",
+    "@tiptap/pm": "^2.0.0",
+    "yjs": "^13.6.7"
+  },
+  "publishConfig": {
+    "registry": "https://registry.tiptap.dev"
+  },
+  "devDependencies": {
+    "@hocuspocus/provider": "^2.13.7",
+    "@hocuspocus/transformer": "^2.13.7",
+    "@tiptap/core": "^2.0.0",
+    "@tiptap/pm": "^2.0.0",
+    "yjs": "^13.6.20"
+  },
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "npm run clean && rollup -c"
+  }
+}

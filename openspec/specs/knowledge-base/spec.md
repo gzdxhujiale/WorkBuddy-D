@@ -196,5 +196,46 @@ The knowledge base SHALL support embedded note links within document content, al
 - **WHEN** a user activates an embedded note wikilink referencing another note in the knowledge base
 - **THEN** the system resolves the target note and updates the active presentation view to render the target note document
 
+### Requirement: Multi-Window Real-Time CRDT Collaborative Editing
+The knowledge base SHALL support real-time collaborative editing across concurrent editing sessions (such as main workspace and detached standalone windows) for the same note via Yjs CRDT message relay, synchronizing character-level changes and cursor presence without overwrite conflicts.
 
+#### Scenario: Concurrent typing across detached window and main editor
+- **WHEN** a user opens the same note simultaneously in the main workspace and a detached standalone window and types in either view
+- **THEN** character insertions and deletions are reflected in both windows with sub-second latency without triggering optimistic locking conflicts or content resets
 
+#### Scenario: Awareness cursor presence indicator
+- **WHEN** an additional editor session connects to the same active note
+- **THEN** remote cursor positions and selection bounds are displayed in contrasting client colors within the editor viewport
+
+### Requirement: Visual Rich-Text Version Comparison via Document Snapshots
+The knowledge base SHALL maintain historical document snapshots and provide a visual diff comparison interface, rendering additions and deletions with distinctive typographic highlights and strikethroughs while preserving block structures.
+
+#### Scenario: Opening visual version diff for a historical snapshot
+- **WHEN** a user selects a historical snapshot from the note version history panel
+- **THEN** the system displays a side-by-side or inline rich-text diff highlighting newly added text in green and removed text in red strikethrough without corrupting table or list layouts
+
+#### Scenario: Restoring a historical snapshot
+- **WHEN** a user confirms restoration of a selected historical snapshot
+- **THEN** the active document content reverts to the state captured in that snapshot and propagates the update across all active collaborative sessions
+
+### Requirement: Automatic Inactivity-Debounced Note Snapshots
+The knowledge base SHALL automatically capture and persist a document snapshot when editing activity ceases for an inactivity debounce period (default 5 minutes) or upon session lifecycle termination, avoiding duplicate entries when document content remains unchanged.
+
+#### Scenario: Background snapshot capture after typing pause
+- **WHEN** a user modifies a note in any editing context and ceases typing for 5 minutes
+- **THEN** the system silently generates a Yjs document snapshot, persists it to `note_snapshots` with a timestamped summary (e.g. `自动快照 - HH:mm`), and makes it available in the version history
+
+#### Scenario: Session lifecycle boundary flush
+- **WHEN** a user closes a detached note window or navigates away while uncommitted edits exist
+- **THEN** the system immediately persists a final snapshot point before session disposal
+
+### Requirement: Multi-Context Version History Access
+The knowledge base SHALL provide accessible version history entry points across all editing presentations, including the detached standalone window and the side drawer, rendering historical snapshots, visual diffs, and one-click rollback without requiring full-screen workspace mode.
+
+#### Scenario: Opening version history in detached window
+- **WHEN** a user clicks the history button in the header of a detached note window
+- **THEN** the system displays the version history drawer within the window, showing historical snapshots and visual text diffs
+
+#### Scenario: Opening version history in side drawer
+- **WHEN** a user clicks the history action in the note drawer header or menu
+- **THEN** the system presents the version history interface overlaying or adjacent to the drawer view

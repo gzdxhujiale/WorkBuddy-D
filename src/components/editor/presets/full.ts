@@ -19,6 +19,8 @@ import { CustomDetails, DetailsSummary, DetailsContent } from "../extensions/Cus
 import { CustomCodeBlockLowlight } from "../extensions/CodeBlockWithLowlight";
 import { CustomImage } from "../extensions/CustomImage";
 import { WikilinkExtension } from "../extensions/WikilinkExtension";
+import { PasteHandler } from "../extensions/paste-handler";
+import { SnapshotExtension } from "../extensions/snapshot/snapshotExtension";
 import type { NoteWikilinkItem } from "../types";
 
 import type { SuggestionOptions } from "@tiptap/suggestion";
@@ -77,6 +79,8 @@ export function createFullExtensions(options: FullPresetOptions = {}) {
     DetailsContent,
     CustomCodeBlockLowlight,
     CustomImage,
+    PasteHandler,
+    SnapshotExtension,
     CharacterCount,
     Placeholder.configure({
       placeholder,

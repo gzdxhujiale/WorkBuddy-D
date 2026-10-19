@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo, startTransition } from "react";
-import { ChevronLeft, ChevronRight, Cloud, Zap, Award, BarChart3 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Cloud, Zap, Award, BarChart3, History } from "lucide-react";
 import dayjs from "dayjs";
 import {
   useDailyReviewSummaries,
@@ -11,6 +11,7 @@ import {
 import { DailyReviewItem, DailyReviewSummary, CompoundStats as CompoundStatsType } from "../types";
 import { formatDateYMD, todayYMD } from "@/lib/dateUtils";
 import { ReactjsTiptapEditor } from "@/components/ui/reactjs-tiptap-editor";
+import { Button } from "@/components/ui/button";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
 import {
@@ -22,6 +23,8 @@ import {
   PixelHourglass,
 } from "@/components/pixel/PixelIcons";
 import { PixelAchievementHall } from "@/components/pixel/PixelBadge";
+import { dailyReviewApi } from "../api/dailyReviewService";
+import { DailyReviewHistoryDrawer } from "./DailyReviewHistoryDrawer";
 
 // Hoisted constants outside component rendering path (Vercel Best Practice: rendering-hoist-jsx)
 const WEEK_DAYS = ["日", "一", "二", "三", "四", "五", "六"] as const;
@@ -41,26 +44,33 @@ interface UseReviewAutoSaveOptions {
   initialContent: string;
   date: string;
   debounceMs?: number;
+  snapshotDebounceMs?: number;
   onSave: (date: string, content: string) => void;
+  onDraftChange?: (content: string) => void;
 }
 
 function useReviewAutoSave({
   initialContent,
   date,
   debounceMs = 1000,
+  snapshotDebounceMs = 5 * 60 * 1000,
   onSave,
+  onDraftChange,
 }: UseReviewAutoSaveOptions) {
   const [content, setContent] = useState(initialContent);
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
 
   const stateRef = useRef({ content, date });
   const lastSavedRef = useRef({ content: initialContent, date });
+  const lastSnapshotContentRef = useRef<string>(initialContent);
+  const snapshotTimerRef = useRef<NodeJS.Timeout | null>(null);
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
 
   useEffect(() => {
     stateRef.current = { content, date };
-  }, [content, date]);
+    onDraftChange?.(content);
+  }, [content, date, onDraftChange]);
 
   // When remote content arrives asynchronously for the current date, reconcile it safely
   useEffect(() => {
@@ -83,23 +93,46 @@ function useReviewAutoSave({
       setContent(initialContent);
       setSaveStatus("saved");
       lastSavedRef.current = { content: initialContent, date };
+      lastSnapshotContentRef.current = initialContent;
       stateRef.current = { content: initialContent, date };
     }
   }, [date, initialContent]);
 
-  // Flush on unmount with safety guard
+  // Flush on unmount and window exit with safety guard
   useEffect(() => {
-    return () => {
+    const flushChanges = (summaryReason: string) => {
       const current = stateRef.current;
       const last = lastSavedRef.current;
       if (current.content !== last.content) {
-        // SAFETY GUARD: Never delete non-empty content during unmount
+        // SAFETY GUARD: Never delete non-empty content during exit
         if (extractReviewPlainText(current.content).length === 0 && extractReviewPlainText(last.content).length > 0) {
-          console.warn("[DailyReview] Prevented accidental clearing of review content during unmount");
+          console.warn("[DailyReview] Prevented accidental clearing of review content during exit");
           return;
         }
         onSaveRef.current(current.date, current.content);
+        lastSavedRef.current = { content: current.content, date: current.date };
       }
+
+      // Flush snapshot on unmount / date change / app exit if dirty
+      const currentPlainText = extractReviewPlainText(current.content);
+      const lastSnapshotPlainText = extractReviewPlainText(lastSnapshotContentRef.current);
+      if (currentPlainText && currentPlainText !== lastSnapshotPlainText) {
+        lastSnapshotContentRef.current = current.content;
+        void dailyReviewApi.createSnapshot(current.date, current.content, summaryReason).catch((err) => {
+          console.error("[DailyReview] Snapshot flush error:", err);
+        });
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      flushChanges("应用退出自动快照");
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      flushChanges("会话结束保存点");
     };
   }, []);
 
@@ -120,6 +153,34 @@ function useReviewAutoSave({
     return () => clearTimeout(timer);
   }, [content, date, debounceMs]);
 
+  // Debounced auto-snapshot (5 minutes inactivity)
+  useEffect(() => {
+    if (snapshotTimerRef.current) {
+      clearTimeout(snapshotTimerRef.current);
+      snapshotTimerRef.current = null;
+    }
+
+    const currentPlainText = extractReviewPlainText(content);
+    const lastSnapshotPlainText = extractReviewPlainText(lastSnapshotContentRef.current);
+
+    if (currentPlainText && currentPlainText !== lastSnapshotPlainText) {
+      snapshotTimerRef.current = setTimeout(() => {
+        void dailyReviewApi.createSnapshot(date, content, "自动保存快照").then(() => {
+          lastSnapshotContentRef.current = content;
+        }).catch((err) => {
+          console.error("[DailyReview] Auto-snapshot error:", err);
+        });
+      }, snapshotDebounceMs);
+    }
+
+    return () => {
+      if (snapshotTimerRef.current) {
+        clearTimeout(snapshotTimerRef.current);
+        snapshotTimerRef.current = null;
+      }
+    };
+  }, [content, date, snapshotDebounceMs]);
+
   return {
     content,
     saveStatus,
@@ -134,14 +195,16 @@ interface ReviewEditorProps {
   date: string;
   review?: DailyReviewItem;
   onSave: (date: string, content: string) => void;
+  onDraftChange?: (content: string) => void;
 }
 
-const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }) => {
+const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave, onDraftChange }) => {
   const { isPixelTheme } = useAppThemeStyle();
   const { content, saveStatus, setContent } = useReviewAutoSave({
     initialContent: review?.content || "",
     date,
     onSave,
+    onDraftChange,
   });
 
   const statusContent = (
@@ -471,6 +534,10 @@ CompoundStats.displayName = "CompoundStats";
 export const DailyReviewPanel: React.FC = () => {
   const { isPixelTheme } = useAppThemeStyle();
   const [selectedDate, setSelectedDate] = useState<string>(todayYMD());
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
+  const [restoredOverride, setRestoredOverride] = useState<{ date: string; content: string } | null>(null);
+  const liveDraftRef = useRef<string>("");
 
   const { data: summariesData } = useDailyReviewSummaries();
   const summaries = summariesData ?? [];
@@ -493,6 +560,12 @@ export const DailyReviewPanel: React.FC = () => {
   const handleSave = useCallback((date: string, content: string) => {
     saveReview(date, content);
   }, [saveReview]);
+
+  const handleRestoreContent = useCallback((restoredContent: string) => {
+    handleSave(selectedDate, restoredContent);
+    setRestoredOverride({ date: selectedDate, content: restoredContent });
+    setEditorKey((k) => k + 1);
+  }, [handleSave, selectedDate]);
 
   const handleSelectDate = useCallback((date: string) => {
     startTransition(() => {
@@ -527,12 +600,13 @@ export const DailyReviewPanel: React.FC = () => {
       {/* Top Bar: Date Navigation */}
       <header
         className={cn(
-          "flex h-12 items-center justify-center px-6 bg-card shrink-0 select-none",
+          "flex h-12 items-center justify-between px-6 bg-card shrink-0 select-none",
           isPixelTheme
             ? "border-b-2 border-border/90 shadow-[0_2px_0px_rgba(0,0,0,0.04)] font-mono"
             : "border-b border-border"
         )}
       >
+        <div className="w-20" />
         <nav className="flex items-center gap-2.5">
           <button
             type="button"
@@ -604,6 +678,21 @@ export const DailyReviewPanel: React.FC = () => {
             <ChevronRight size={18} />
           </button>
         </nav>
+        <div className="w-20 flex justify-end">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsHistoryOpen(true)}
+            className={cn(
+              "h-8 text-xs flex items-center gap-1.5",
+              isPixelTheme && "font-mono rounded-xs border border-border shadow-[1px_1px_0px_#000]"
+            )}
+            title="查看复盘版本历史与对比"
+          >
+            <History size={14} />
+            <span>历史</span>
+          </Button>
+        </div>
       </header>
 
       {/* Main Layout: Left Editor + Right Stats */}
@@ -611,10 +700,27 @@ export const DailyReviewPanel: React.FC = () => {
         {/* Left: Persistent Review Editor instance */}
         <section className="flex-1 flex flex-col p-4 md:p-5 min-w-0 overflow-hidden">
           <ReviewEditor
-            key={selectedDate}
+            key={`${selectedDate}-${editorKey}`}
             date={selectedDate}
-            review={currentReview}
+            review={
+              restoredOverride && restoredOverride.date === selectedDate
+                ? {
+                    ...(currentReview || {
+                      id: "",
+                      date: selectedDate,
+                      createdAt: 0,
+                      updatedAt: 0,
+                      lockVersion: 1,
+                      baseUpdatedAt: 0,
+                    }),
+                    content: restoredOverride.content,
+                  }
+                : currentReview
+            }
             onSave={handleSave}
+            onDraftChange={(c) => {
+              liveDraftRef.current = c;
+            }}
           />
         </section>
 
@@ -635,6 +741,15 @@ export const DailyReviewPanel: React.FC = () => {
           />
         </aside>
       </section>
+
+      {/* Daily Review Version History & Diff Drawer */}
+      <DailyReviewHistoryDrawer
+        open={isHistoryOpen}
+        onOpenChange={setIsHistoryOpen}
+        date={selectedDate}
+        currentContent={liveDraftRef.current || currentReview?.content || ""}
+        onRestoreContent={handleRestoreContent}
+      />
     </section>
   );
 };

@@ -42,4 +42,20 @@ export const dailyReviewQueries = {
       enabled: Boolean(userId),
       staleTime: 1000 * 60 * 5,
     }),
+
+  snapshots: (userId: string, date: string) =>
+    queryOptions({
+      queryKey: queryKeys.dailyReviews.snapshots(userId, date),
+      queryFn: () => dailyReviewApi.listSnapshots(date),
+      enabled: Boolean(userId) && Boolean(date),
+      staleTime: 1000 * 60 * 5,
+    }),
+
+  snapshotDetail: (userId: string, date: string, snapshotId: string) =>
+    queryOptions({
+      queryKey: queryKeys.dailyReviews.snapshotDetail(userId, date, snapshotId),
+      queryFn: () => dailyReviewApi.getSnapshot(date, snapshotId),
+      enabled: Boolean(userId) && Boolean(date) && Boolean(snapshotId),
+      staleTime: 1000 * 60 * 10,
+    }),
 };

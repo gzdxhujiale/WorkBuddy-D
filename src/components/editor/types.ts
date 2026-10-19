@@ -21,6 +21,7 @@ export interface RichTextEditorProps {
   onNavigateNote?: (noteId: string) => void;
   notesForWikilinks?: NoteWikilinkItem[];
   footerLeft?: React.ReactNode;
+  collabExtensions?: any[];
 }
 
 export type EditorContentValue = string | Record<string, unknown>;

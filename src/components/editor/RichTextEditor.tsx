@@ -36,6 +36,7 @@ export function RichTextEditor({
   onNavigateNote,
   notesForWikilinks = [],
   footerLeft,
+  collabExtensions = [],
 }: RichTextEditorProps) {
   const { isPixelTheme } = useAppThemeStyle();
 
@@ -130,58 +131,61 @@ export function RichTextEditor({
       },
     });
 
+    let baseExtensions: any[] = [];
     if (preset === "minimal") {
-      return createMinimalExtensions(placeholder);
-    }
-
-    if (preset === "compact") {
-      return [...createCompactExtensions(placeholder), slashExt];
-    }
-
-    // full preset
-    return [
-      ...createFullExtensions({
-        placeholder,
-        getNotesForWikilinks: () => notesForWikilinksRef.current,
-        onNavigateNote: (noteId) => onNavigateNoteRef.current?.(noteId),
-        renderWikilinkPopup: () => ({
-          onStart: (props: any) => {
-            setWikilinkState({
-              isOpen: true,
-              items: props.items,
-              command: props.command,
-              rect: props.clientRect?.() || null,
-            });
-          },
-          onUpdate: (props: any) => {
-            setWikilinkState((prev) => ({
-              ...prev,
-              isOpen: true,
-              items: props.items,
-              command: props.command,
-              rect: props.clientRect?.() || null,
-            }));
-          },
-          onKeyDown: (props: any) => {
-            if (props.event.key === "Escape") {
-              setWikilinkState((prev) => ({ ...prev, isOpen: false }));
-              return true;
-            }
-            return wikilinkListRef.current?.onKeyDown(props) || false;
-          },
-          onExit: () => {
-            setWikilinkState({
-              isOpen: false,
-              items: [],
-              command: () => {},
-              rect: null,
-            });
-          },
+      baseExtensions = createMinimalExtensions(placeholder);
+    } else if (preset === "compact") {
+      baseExtensions = [...createCompactExtensions(placeholder), slashExt];
+    } else {
+      // full preset
+      baseExtensions = [
+        ...createFullExtensions({
+          placeholder,
+          getNotesForWikilinks: () => notesForWikilinksRef.current,
+          onNavigateNote: (noteId) => onNavigateNoteRef.current?.(noteId),
+          renderWikilinkPopup: () => ({
+            onStart: (props: any) => {
+              setWikilinkState({
+                isOpen: true,
+                items: props.items,
+                command: props.command,
+                rect: props.clientRect?.() || null,
+              });
+            },
+            onUpdate: (props: any) => {
+              setWikilinkState((prev) => ({
+                ...prev,
+                isOpen: true,
+                items: props.items,
+                command: props.command,
+                rect: props.clientRect?.() || null,
+              }));
+            },
+            onKeyDown: (props: any) => {
+              if (props.event.key === "Escape") {
+                setWikilinkState((prev) => ({ ...prev, isOpen: false }));
+                return true;
+              }
+              return wikilinkListRef.current?.onKeyDown(props) || false;
+            },
+            onExit: () => {
+              setWikilinkState({
+                isOpen: false,
+                items: [],
+                command: () => {},
+                rect: null,
+              });
+            },
+          }),
         }),
-      }),
-      slashExt,
-    ];
-  }, [preset, placeholder]);
+        slashExt,
+      ];
+    }
+
+    return collabExtensions && collabExtensions.length > 0
+      ? [...baseExtensions, ...collabExtensions]
+      : baseExtensions;
+  }, [preset, placeholder, collabExtensions]);
 
   const editor = useEditor(
     {
@@ -189,7 +193,7 @@ export function RichTextEditor({
       editable,
       autofocus: autofocus ?? false,
       extensions,
-      content: parseContent(content),
+      content: collabExtensions && collabExtensions.length > 0 ? undefined : parseContent(content),
       onUpdate: ({ editor: currentEditor }) => {
         // Debounce serialization to 150ms to eliminate per-keystroke full-tree lag
         if (debounceTimerRef.current) {
@@ -244,6 +248,7 @@ export function RichTextEditor({
   // Synchronize incoming content changes from outside
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
+    if (collabExtensions && collabExtensions.length > 0) return;
     if (isUpdatingFromEditorRef.current) return;
     if (content === lastContentRef.current) return;
 

@@ -214,4 +214,73 @@ export const dailyReviewApi = {
   upsertReview: async (review: DailyReviewItem): Promise<SavedDailyReviewEntity | undefined> => {
     return runOrQueue({ kind: "daily-review:save", key: `daily-review:${review.date}`, payload: review }, () => saveRemote(review));
   },
+
+  createSnapshot: async (date: string, content: string, summary?: string): Promise<DailyReviewSnapshot> => {
+    let contentPayload: unknown = content;
+    if (typeof content === "string") {
+      try {
+        contentPayload = JSON.parse(content);
+      } catch {
+        const trimmed = content.trim();
+        contentPayload = trimmed
+          ? {
+              type: "doc",
+              content: [{ type: "paragraph", content: [{ type: "text", text: trimmed }] }],
+            }
+          : EMPTY_TIPTAP_DOC;
+      }
+    }
+    const res = await apiClient.post<any>(`/api/v1/daily-reviews/${date}/snapshots`, {
+      content: contentPayload,
+      summary,
+    });
+    return {
+      id: res.id,
+      userId: res.user_id || res.userId,
+      reviewDate: typeof res.review_date === "string" ? res.review_date.substring(0, 10) : date,
+      content: readReviewContent(res.content),
+      summary: res.summary?.String || (typeof res.summary === "string" ? res.summary : undefined),
+      createdAt: res.created_at || new Date().toISOString(),
+    };
+  },
+
+  listSnapshots: async (date: string, limit = 50): Promise<DailyReviewSnapshot[]> => {
+    try {
+      const res = await apiClient.get<any[]>(`/api/v1/daily-reviews/${date}/snapshots?limit=${limit}`);
+      if (Array.isArray(res)) {
+        return res.map((s) => ({
+          id: s.id,
+          userId: s.user_id || s.userId,
+          reviewDate: typeof s.review_date === "string" ? s.review_date.substring(0, 10) : date,
+          content: s.content ? readReviewContent(s.content) : "",
+          summary: s.summary?.String || (typeof s.summary === "string" ? s.summary : undefined),
+          createdAt: s.created_at || new Date().toISOString(),
+        }));
+      }
+    } catch (err) {
+      console.error("[DailyReview] Error loading snapshots:", err);
+    }
+    return [];
+  },
+
+  getSnapshot: async (date: string, snapshotId: string): Promise<DailyReviewSnapshot> => {
+    const res = await apiClient.get<any>(`/api/v1/daily-reviews/${date}/snapshots/${snapshotId}`);
+    return {
+      id: res.id,
+      userId: res.user_id || res.userId,
+      reviewDate: typeof res.review_date === "string" ? res.review_date.substring(0, 10) : date,
+      content: readReviewContent(res.content),
+      summary: res.summary?.String || (typeof res.summary === "string" ? res.summary : undefined),
+      createdAt: res.created_at || new Date().toISOString(),
+    };
+  },
 };
+
+export interface DailyReviewSnapshot {
+  id: string;
+  userId: string;
+  reviewDate: string;
+  content: string;
+  summary?: string;
+  createdAt: string;
+}

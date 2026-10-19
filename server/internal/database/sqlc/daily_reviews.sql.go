@@ -212,3 +212,128 @@ func (q *Queries) DeleteDailyReviewByDate(ctx context.Context, arg DeleteDailyRe
 	_, err := q.db.Exec(ctx, deleteDailyReviewByDate, arg.UserID, arg.Date)
 	return err
 }
+
+const createDailyReviewSnapshot = `-- name: CreateDailyReviewSnapshot :one
+INSERT INTO daily_review_snapshots (id, user_id, review_date, content, summary, created_at)
+VALUES ($1, $2, $3, $4, $5, now())
+RETURNING id, user_id, review_date, content, summary, created_at
+`
+
+type CreateDailyReviewSnapshotParams struct {
+	ID         pgtype.UUID `json:"id"`
+	UserID     pgtype.UUID `json:"user_id"`
+	ReviewDate pgtype.Date `json:"review_date"`
+	Content    []byte      `json:"content"`
+	Summary    pgtype.Text `json:"summary"`
+}
+
+func (q *Queries) CreateDailyReviewSnapshot(ctx context.Context, arg CreateDailyReviewSnapshotParams) (DailyReviewSnapshot, error) {
+	row := q.db.QueryRow(ctx, createDailyReviewSnapshot,
+		arg.ID,
+		arg.UserID,
+		arg.ReviewDate,
+		arg.Content,
+		arg.Summary,
+	)
+	var i DailyReviewSnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ReviewDate,
+		&i.Content,
+		&i.Summary,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listDailyReviewSnapshots = `-- name: ListDailyReviewSnapshots :many
+SELECT id, user_id, review_date, summary, created_at
+FROM daily_review_snapshots
+WHERE user_id = $1 AND review_date = $2
+ORDER BY created_at DESC
+LIMIT $3
+`
+
+type ListDailyReviewSnapshotsParams struct {
+	UserID     pgtype.UUID `json:"user_id"`
+	ReviewDate pgtype.Date `json:"review_date"`
+	Limit      int32       `json:"limit"`
+}
+
+type ListDailyReviewSnapshotsRow struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	ReviewDate pgtype.Date        `json:"review_date"`
+	Summary    pgtype.Text        `json:"summary"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListDailyReviewSnapshots(ctx context.Context, arg ListDailyReviewSnapshotsParams) ([]ListDailyReviewSnapshotsRow, error) {
+	rows, err := q.db.Query(ctx, listDailyReviewSnapshots, arg.UserID, arg.ReviewDate, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListDailyReviewSnapshotsRow
+	for rows.Next() {
+		var i ListDailyReviewSnapshotsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.ReviewDate,
+			&i.Summary,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getDailyReviewSnapshotByID = `-- name: GetDailyReviewSnapshotByID :one
+SELECT id, user_id, review_date, content, summary, created_at
+FROM daily_review_snapshots
+WHERE id = $1 AND user_id = $2 AND review_date = $3
+LIMIT 1
+`
+
+type GetDailyReviewSnapshotByIDParams struct {
+	ID         pgtype.UUID `json:"id"`
+	UserID     pgtype.UUID `json:"user_id"`
+	ReviewDate pgtype.Date `json:"review_date"`
+}
+
+func (q *Queries) GetDailyReviewSnapshotByID(ctx context.Context, arg GetDailyReviewSnapshotByIDParams) (DailyReviewSnapshot, error) {
+	row := q.db.QueryRow(ctx, getDailyReviewSnapshotByID, arg.ID, arg.UserID, arg.ReviewDate)
+	var i DailyReviewSnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.ReviewDate,
+		&i.Content,
+		&i.Summary,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const deleteDailyReviewSnapshot = `-- name: DeleteDailyReviewSnapshot :exec
+DELETE FROM daily_review_snapshots
+WHERE id = $1 AND user_id = $2
+`
+
+type DeleteDailyReviewSnapshotParams struct {
+	ID     pgtype.UUID `json:"id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteDailyReviewSnapshot(ctx context.Context, arg DeleteDailyReviewSnapshotParams) error {
+	_, err := q.db.Exec(ctx, deleteDailyReviewSnapshot, arg.ID, arg.UserID)
+	return err
+}
+

@@ -57,10 +57,24 @@ func (h *DailyReviewHandler) ListDailyReviewSummaries(c *gin.Context) {
 		return
 	}
 
-	validSummaries := make([]sqlc.ListDailyReviewSummariesRow, 0, len(summaries))
+	type DailyReviewSummaryDTO struct {
+		ID          string `json:"id"`
+		Date        string `json:"date"`
+		LockVersion int64  `json:"lock_version"`
+		CreatedAt   string `json:"created_at"`
+		UpdatedAt   string `json:"updated_at"`
+	}
+
+	validSummaries := make([]DailyReviewSummaryDTO, 0, len(summaries))
 	for _, s := range summaries {
 		if !isReviewContentEmpty(s.Content) {
-			validSummaries = append(validSummaries, s)
+			validSummaries = append(validSummaries, DailyReviewSummaryDTO{
+				ID:          uuid.UUID(s.ID.Bytes).String(),
+				Date:        s.Date.Time.Format("2006-01-02"),
+				LockVersion: s.LockVersion,
+				CreatedAt:   s.CreatedAt.Time.Format(time.RFC3339),
+				UpdatedAt:   s.UpdatedAt.Time.Format(time.RFC3339),
+			})
 		}
 	}
 
@@ -418,5 +432,120 @@ func stripSimpleHTML(s string) string {
 		}
 	}
 	return b.String()
+}
+
+// --- Daily Review Snapshots ---
+
+type CreateDailyReviewSnapshotRequest struct {
+	Content json.RawMessage `json:"content" binding:"required"`
+	Summary string          `json:"summary"`
+}
+
+func (h *DailyReviewHandler) CreateDailyReviewSnapshot(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	dateParam := c.Param("date")
+	parsedDate, err := time.Parse("2006-01-02", dateParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format (YYYY-MM-DD)"})
+		return
+	}
+
+	var req CreateDailyReviewSnapshotRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	snapshotID := uuid.New()
+	snapshot, err := h.queries.CreateDailyReviewSnapshot(c.Request.Context(), sqlc.CreateDailyReviewSnapshotParams{
+		ID:         pgtype.UUID{Bytes: snapshotID, Valid: true},
+		UserID:     pgtype.UUID{Bytes: userID, Valid: true},
+		ReviewDate: pgtype.Date{Time: parsedDate, Valid: true},
+		Content:    req.Content,
+		Summary:    pgtype.Text{String: req.Summary, Valid: req.Summary != ""},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, snapshot)
+}
+
+func (h *DailyReviewHandler) ListDailyReviewSnapshots(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	dateParam := c.Param("date")
+	parsedDate, err := time.Parse("2006-01-02", dateParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format (YYYY-MM-DD)"})
+		return
+	}
+
+	limit := int32(50)
+	if l := c.Query("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil && parsed > 0 {
+			limit = int32(parsed)
+		}
+	}
+
+	snapshots, err := h.queries.ListDailyReviewSnapshots(c.Request.Context(), sqlc.ListDailyReviewSnapshotsParams{
+		UserID:     pgtype.UUID{Bytes: userID, Valid: true},
+		ReviewDate: pgtype.Date{Time: parsedDate, Valid: true},
+		Limit:      limit,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, snapshots)
+}
+
+func (h *DailyReviewHandler) GetDailyReviewSnapshot(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	dateParam := c.Param("date")
+	parsedDate, err := time.Parse("2006-01-02", dateParam)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid date format (YYYY-MM-DD)"})
+		return
+	}
+
+	snapshotIDStr := c.Param("snapshotId")
+	snapshotID, err := uuid.Parse(snapshotIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid snapshot id"})
+		return
+	}
+
+	snapshot, err := h.queries.GetDailyReviewSnapshotByID(c.Request.Context(), sqlc.GetDailyReviewSnapshotByIDParams{
+		ID:         pgtype.UUID{Bytes: snapshotID, Valid: true},
+		UserID:     pgtype.UUID{Bytes: userID, Valid: true},
+		ReviewDate: pgtype.Date{Time: parsedDate, Valid: true},
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "snapshot not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, snapshot)
 }
 

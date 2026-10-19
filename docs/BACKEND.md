@@ -26,8 +26,8 @@ Go 服务端采用清晰的垂直分层包结构，各层职责内聚、单向�
 - `server/internal/config/` — 配置管理包，通过 `bufio.Scanner` 解析 `.env` 与系统环境变量，封装 `Config` 结构体。
 - `server/internal/database/` — 数据持久化基础设施包：
   - `db.go`：管理 `pgxpool.Pool` 连接池生命周期与 Goose 嵌入式自动迁移执行。
-  - `migrations/`：包含 `000001_init_schema.sql` 与 `000002_upgrade_sync_kb_review.sql` 版本化 SQL 脚本。
-  - `queries/`：业务 SQL 查询文件（`tasks.sql`、`notes.sql`、`sync.sql`、`habits.sql`、`focus.sql`、`projects.sql`、`daily_reviews.sql`、`users.sql`）。
+  - `migrations/`：包含 `000001_init_schema.sql` 至 `000009_add_daily_review_snapshots.sql` 版本化 SQL 脚本。
+  - `queries/`：业务 SQL 查询文件（`tasks.sql`、`notes.sql`、`sync.sql`、`habits.sql`、`focus.sql`、`projects.sql`、`daily_reviews.sql`、`users.sql`、`ai.sql`）。
   - `sqlc/`：sqlc 自动生成的类型安全数据模型与 `Querier` 接口。
 - `server/internal/buffer/` — 写后缓冲池包，提供 `NoteBufferManager`，去抖暂存高频笔记更新并在 2.5 秒定时器或系统关机时批量事务刷盘。
 - `server/internal/ws/` — WebSocket 实时同步包：
@@ -38,11 +38,11 @@ Go 服务端采用清晰的垂直分层包结构，各层职责内聚、单向�
 - `server/internal/handler/` — 领域请求处理器：
   - `auth_handler.go`：注册、登录与 `/auth/me`。
   - `task_handler.go`：任务 CRUD 与乐观锁版本控制。
-  - `note_handler.go`：知识库、目录、分组、笔记（CRUD、搜索、缓冲 Patch、重排序与移动）。
+  - `note_handler.go`：知识库、目录、分组、笔记（CRUD、搜索、缓冲 Patch、重排序与移动）以及笔记快照版本管理。
   - `habit_handler.go`：习惯与打卡 CRUD。
   - `focus_handler.go`：专注会话创建、更新与未完成会话中断。
   - `project_handler.go`：项目、阶段看板与项目模板。
-  - `daily_review_handler.go`：复盘元数据摘要、日期懒加载正文、统计数据与热力图矩阵。
+  - `daily_review_handler.go`：复盘元数据摘要、日期懒加载正文、统计数据、热力图矩阵与复盘版本快照。
   - `sync_handler.go`：基于单调递增序列 `seq_id` 的增量日志查询重放（`/api/v1/sync?since_seq=`）。
 
 ### 单向依赖流动边界

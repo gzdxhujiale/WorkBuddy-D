@@ -25,11 +25,11 @@ WorkBuddy-D 的前端运行于 Tauri 2 多 Webview 桌面宿主环境，支持�
 - `src/pages/` — 页面路由视图组合看板（如 `TodayPage.tsx` 装配各 Feature 导出的 Section 组件；`ProjectsPage.tsx` 组合侧边栏与看板），并包裹局部容错边界（`SectionErrorBoundary`）。
 - `src/components/ui/` 与 `src/components/pixel/` — 跨特性通用基础 UI（包括声明式表单基建 `form.tsx`、按钮、对话框、抽屉、选择器）、像素图标及局部容错边界（`SectionErrorBoundary.tsx`）。
 - `src/components/layout/` — 桌面主布局与侧边栏导航组件（`AppLayout.tsx`）。
-- `src/lib/` — 核心基础设施：统一 HTTP 客户端（`apiClient.ts`）、WebSocket 增量客户端（`wsClient.ts`）、查询键工厂与延时常量（`syncEngine.ts`）、实时管理器（`realtimeManager.ts`）、离线持久化队列（`offlineSyncQueue.ts`）与通用工具。
+- `src/lib/` — 核心基础设施：统一 HTTP 客户端（`apiClient.ts`）、WebSocket 增量客户端（`wsClient.ts`）、查询键工厂与延时常量（`syncEngine.ts`）、实时管理器（`realtimeManager.ts`）、离线持久化队列（`offlineSyncQueue.ts`）、文档快照版本对比引擎（`snapshotDiff.ts`）与通用工具。
 - `src/stores/` — 跨特性的全局客户端纯净 UI 状态（如 `uiStore.ts`）。
 - `src/types/` — 共享跨领域核心实体与数据库模式契约类型（`task.ts`、`project.ts`、`database.ts`）。
 - `src/hooks/` — 跨领域通用共享客户端 Hooks（如 `useAppThemeStyle.ts`、`useDebouncedMutation.ts`、`useOptimisticSync.ts`）。
-- 顶层 Webview 窗口载体与入口：`index.html`（`src/main.tsx`）、`quick-edit.html`（`src/quick-edit-window.tsx`）、`focus-assistant.html`（`src/focus-assistant-window.tsx`）、`notification-toast.html`（`src/notification-toast-window.tsx`）。
+- 顶层 Webview 窗口载体与入口：`index.html`（`src/main.tsx`）、`note-window.html`（`src/note-window.tsx`）、`quick-edit.html`（`src/quick-edit-window.tsx`）、`focus-assistant.html`（`src/focus-assistant-window.tsx`）、`notification-toast.html`（`src/notification-toast-window.tsx`）。
 
 ### 领域内聚与单向依赖规则
 

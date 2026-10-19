@@ -1220,3 +1220,129 @@ func (q *Queries) SearchNotes(ctx context.Context, arg SearchNotesParams) ([]Sea
 	}
 	return items, nil
 }
+
+const createNoteSnapshot = `-- name: CreateNoteSnapshot :one
+INSERT INTO note_snapshots (id, note_id, user_id, snapshot_data, summary, created_at)
+VALUES ($1, $2, $3, $4, $5, now())
+RETURNING id, note_id, user_id, snapshot_data, summary, created_at
+`
+
+type CreateNoteSnapshotParams struct {
+	ID           pgtype.UUID `json:"id"`
+	NoteID       pgtype.UUID `json:"note_id"`
+	UserID       pgtype.UUID `json:"user_id"`
+	SnapshotData []byte      `json:"snapshot_data"`
+	Summary      pgtype.Text `json:"summary"`
+}
+
+func (q *Queries) CreateNoteSnapshot(ctx context.Context, arg CreateNoteSnapshotParams) (NoteSnapshot, error) {
+	row := q.db.QueryRow(ctx, createNoteSnapshot,
+		arg.ID,
+		arg.NoteID,
+		arg.UserID,
+		arg.SnapshotData,
+		arg.Summary,
+	)
+	var i NoteSnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.NoteID,
+		&i.UserID,
+		&i.SnapshotData,
+		&i.Summary,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listNoteSnapshots = `-- name: ListNoteSnapshots :many
+SELECT id, note_id, user_id, summary, created_at
+FROM note_snapshots
+WHERE note_id = $1 AND user_id = $2
+ORDER BY created_at DESC
+LIMIT $3
+`
+
+type ListNoteSnapshotsParams struct {
+	NoteID pgtype.UUID `json:"note_id"`
+	UserID pgtype.UUID `json:"user_id"`
+	Limit  int32       `json:"limit"`
+}
+
+type ListNoteSnapshotsRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	NoteID    pgtype.UUID        `json:"note_id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Summary   pgtype.Text        `json:"summary"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
+func (q *Queries) ListNoteSnapshots(ctx context.Context, arg ListNoteSnapshotsParams) ([]ListNoteSnapshotsRow, error) {
+	rows, err := q.db.Query(ctx, listNoteSnapshots, arg.NoteID, arg.UserID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListNoteSnapshotsRow
+	for rows.Next() {
+		var i ListNoteSnapshotsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.NoteID,
+			&i.UserID,
+			&i.Summary,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getNoteSnapshotByID = `-- name: GetNoteSnapshotByID :one
+SELECT id, note_id, user_id, snapshot_data, summary, created_at
+FROM note_snapshots
+WHERE id = $1 AND note_id = $2 AND user_id = $3
+LIMIT 1
+`
+
+type GetNoteSnapshotByIDParams struct {
+	ID     pgtype.UUID `json:"id"`
+	NoteID pgtype.UUID `json:"note_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) GetNoteSnapshotByID(ctx context.Context, arg GetNoteSnapshotByIDParams) (NoteSnapshot, error) {
+	row := q.db.QueryRow(ctx, getNoteSnapshotByID, arg.ID, arg.NoteID, arg.UserID)
+	var i NoteSnapshot
+	err := row.Scan(
+		&i.ID,
+		&i.NoteID,
+		&i.UserID,
+		&i.SnapshotData,
+		&i.Summary,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const deleteNoteSnapshot = `-- name: DeleteNoteSnapshot :exec
+DELETE FROM note_snapshots
+WHERE id = $1 AND note_id = $2 AND user_id = $3
+`
+
+type DeleteNoteSnapshotParams struct {
+	ID     pgtype.UUID `json:"id"`
+	NoteID pgtype.UUID `json:"note_id"`
+	UserID pgtype.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteNoteSnapshot(ctx context.Context, arg DeleteNoteSnapshotParams) error {
+	_, err := q.db.Exec(ctx, deleteNoteSnapshot, arg.ID, arg.NoteID, arg.UserID)
+	return err
+}
+

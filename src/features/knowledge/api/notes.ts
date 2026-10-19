@@ -294,3 +294,56 @@ export async function bufferPatchNote(
     lockVersion: res.lock_version ? Number(res.lock_version) : undefined,
   };
 }
+
+export interface NoteSnapshot {
+  id: string;
+  noteId: string;
+  userId: string;
+  snapshotData: string;
+  summary?: string;
+  createdAt: string;
+}
+
+export async function createNoteSnapshot(
+  noteId: string,
+  snapshotData: string,
+  summary?: string
+): Promise<NoteSnapshot> {
+  const res = await apiClient.post<any>(`/api/v1/notes/${noteId}/snapshots`, {
+    snapshot_data: snapshotData,
+    summary: summary || "",
+  });
+  return {
+    id: res.id,
+    noteId: res.note_id || res.noteId,
+    userId: res.user_id || res.userId,
+    snapshotData: res.snapshot_data || res.snapshotData || "",
+    summary: typeof res.summary === "object" ? res.summary?.String || "" : res.summary || "",
+    createdAt: res.created_at || res.createdAt,
+  };
+}
+
+export async function listNoteSnapshots(noteId: string): Promise<NoteSnapshot[]> {
+  const res = await apiClient.get<any[]>(`/api/v1/notes/${noteId}/snapshots`);
+  return (res || []).map((item) => ({
+    id: item.id,
+    noteId: item.note_id || item.noteId,
+    userId: item.user_id || item.userId,
+    snapshotData: item.snapshot_data || item.snapshotData || "",
+    summary: typeof item.summary === "object" ? item.summary?.String || "" : item.summary || "",
+    createdAt: item.created_at || item.createdAt,
+  }));
+}
+
+export async function getNoteSnapshot(noteId: string, snapshotId: string): Promise<NoteSnapshot> {
+  const res = await apiClient.get<any>(`/api/v1/notes/${noteId}/snapshots/${snapshotId}`);
+  return {
+    id: res.id,
+    noteId: res.note_id || res.noteId,
+    userId: res.user_id || res.userId,
+    snapshotData: res.snapshot_data || res.snapshotData || "",
+    summary: typeof res.summary === "object" ? res.summary?.String || "" : res.summary || "",
+    createdAt: res.created_at || res.createdAt,
+  };
+}
+

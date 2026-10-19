@@ -9,6 +9,7 @@ import {
   Minus,
   Square,
   X,
+  History,
   MoreHorizontal,
   FileDown,
   FileUp,
@@ -29,6 +30,8 @@ import {
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { useAuth } from "@/features/auth";
 import * as knowledgeService from "../api/knowledgeService";
+import { useNoteCollab } from "../hooks/useNoteCollab";
+import { NoteVersionHistoryDrawer } from "./NoteVersionHistoryDrawer";
 import { cn } from "@/lib/utils";
 
 export function NoteStandaloneEditor() {
@@ -46,6 +49,16 @@ export function NoteStandaloneEditor() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [saveStatus, setSaveStatus] = useState<"saved" | "saving">("saved");
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  const { status: collabStatus, collabExtensions, ydoc } = useNoteCollab({
+    noteId: noteId || "",
+    enabled: Boolean(noteId),
+    user: {
+      name: "独立窗口编辑者",
+      color: "#f59e0b",
+    },
+  });
 
   const lockVersionRef = useRef<number>(1);
   const isDirtyRef = useRef(false);
@@ -350,6 +363,50 @@ export function NoteStandaloneEditor() {
         </div>
 
         <div className="flex items-center gap-1.5 shrink-0">
+          {/* Collaboration Status Badge */}
+          <span
+            title={
+              collabStatus === "connected"
+                ? "多窗口实时协同连接成功"
+                : collabStatus === "connecting"
+                ? "正在连接多窗口协同服务..."
+                : "单机离线模式"
+            }
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-0.5 text-xs transition-all mr-1",
+              isPixelTheme
+                ? "border border-amber-900/40 rounded-xs font-mono font-bold"
+                : "rounded-md border",
+              collabStatus === "connected"
+                ? isPixelTheme
+                  ? "bg-emerald-100 text-emerald-950 dark:bg-emerald-900/60 dark:text-emerald-100"
+                  : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                : collabStatus === "connecting"
+                ? isPixelTheme
+                  ? "bg-amber-100 text-amber-950 dark:bg-amber-900/60 dark:text-amber-100"
+                  : "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                : "bg-muted text-muted-foreground border-border"
+            )}
+          >
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                collabStatus === "connected"
+                  ? "bg-emerald-500 animate-pulse"
+                  : collabStatus === "connecting"
+                  ? "bg-amber-500 animate-ping"
+                  : "bg-muted-foreground/50"
+              )}
+            />
+            <span>
+              {collabStatus === "connected"
+                ? "协同中"
+                : collabStatus === "connecting"
+                ? "连接中"
+                : "单机"}
+            </span>
+          </span>
+
           <span
             title={saveStatus === "saving" ? "保存中..." : "已自动保存"}
             className={cn(
@@ -369,6 +426,16 @@ export function NoteStandaloneEditor() {
             <span>{saveStatus === "saving" ? "保存中" : "已保存"}</span>
           </span>
 
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setIsHistoryOpen(true)}
+            title="版本历史与可视化对比"
+            className="h-7 w-7 rounded-md"
+          >
+            <History size={14} />
+          </Button>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-7 w-7 rounded-md">
@@ -376,6 +443,10 @@ export function NoteStandaloneEditor() {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => setIsHistoryOpen(true)}>
+                <History size={14} className="mr-2" />
+                版本历史对比
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={handleImport}>
                 <FileUp size={14} className="mr-2" />
                 导入 MD
@@ -426,10 +497,28 @@ export function NoteStandaloneEditor() {
           preset="full"
           content={content}
           onChange={handleContentChange}
+          collabExtensions={collabExtensions}
           autofocus="start"
           placeholder={isPixelTheme ? "📜 开始书写笔记..." : "开始撰写笔记，或输入 / 使用命令..."}
         />
       </main>
+
+      {/* Version History & Diff Comparison Drawer */}
+      <NoteVersionHistoryDrawer
+        open={isHistoryOpen}
+        onOpenChange={setIsHistoryOpen}
+        noteId={noteId}
+        noteTitle={title}
+        ydoc={ydoc}
+        currentContent={content}
+        onRestoreContent={(restored) => {
+          setContent(restored);
+          latestDataRef.current.content = restored;
+          isDirtyRef.current = true;
+          setSaveStatus("saving");
+          void saveNote(latestDataRef.current.title, restored);
+        }}
+      />
     </div>
   );
 }

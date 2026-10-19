@@ -6,7 +6,7 @@ import {
   MoreHorizontal, Plus, PanelLeftClose, PanelLeftOpen, Search,
   ChevronDown, FileText, Cloud, LoaderCircle,
   Folder as FolderIcon, Library, Maximize2, ExternalLink, Upload,
-  Check, PanelRight, LayoutTemplate,
+  Check, PanelRight, LayoutTemplate, History,
 } from 'lucide-react';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent, DragStartEvent, DragOverEvent, useDroppable } from '@dnd-kit/core';
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
@@ -28,6 +28,8 @@ import {
   isTauriEnv,
 } from '../utils/noteWindowManager';
 import { FullNoteEditor } from './FullNoteEditor';
+import { NoteVersionHistoryDrawer } from './NoteVersionHistoryDrawer';
+import { useNoteCollab } from '../hooks/useNoteCollab';
 import { logSilent } from '@/lib/syncEngine';
 import { computeNoteReorder, computeKnowledgeFolderReorder } from '../utils/knowledgeReorder';
 import {
@@ -725,6 +727,13 @@ function NoteDrawerContent({
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || '');
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving'>('saved');
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+
+  const { status: collabStatus, collabExtensions, ydoc } = useNoteCollab({
+    noteId: note.id,
+    enabled: isOpen,
+    user: { name: "侧边抽屉编辑者", color: "#0891b2" },
+  });
 
   const isDirtyRef = useRef(false);
   const wasOpenRef = useRef(isOpen);
@@ -838,6 +847,48 @@ function NoteDrawerContent({
         />
         <div className="flex items-center gap-2 shrink-0">
           <span
+            title={
+              collabStatus === "connected"
+                ? "多窗口实时协同连接成功"
+                : collabStatus === "connecting"
+                ? "正在连接多窗口协同服务..."
+                : "单机离线模式"
+            }
+            className={cn(
+              "flex items-center gap-1.5 px-2 py-0.5 text-xs transition-all",
+              isPixelTheme
+                ? "border border-amber-900/40 rounded-xs font-mono font-bold"
+                : "rounded-md border",
+              collabStatus === "connected"
+                ? isPixelTheme
+                  ? "bg-emerald-100 text-emerald-950 dark:bg-emerald-900/60 dark:text-emerald-100"
+                  : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border-emerald-300 dark:border-emerald-800"
+                : collabStatus === "connecting"
+                ? isPixelTheme
+                  ? "bg-amber-100 text-amber-950 dark:bg-amber-900/60 dark:text-amber-100"
+                  : "bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border-amber-300 dark:border-amber-800"
+                : "bg-muted text-muted-foreground border-border"
+            )}
+          >
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                collabStatus === "connected"
+                  ? "bg-emerald-500 animate-pulse"
+                  : collabStatus === "connecting"
+                  ? "bg-amber-500 animate-ping"
+                  : "bg-muted-foreground/50"
+              )}
+            />
+            <span>
+              {collabStatus === "connected"
+                ? "协同中"
+                : collabStatus === "connecting"
+                ? "连接中"
+                : "单机"}
+            </span>
+          </span>
+          <span
             title={saveStatus === 'saving' ? '保存中...' : '已自动保存'}
             aria-live="polite"
             className={cn(
@@ -863,6 +914,15 @@ function NoteDrawerContent({
                 : (saveStatus === 'saving' ? '保存中' : '已保存')}
             </span>
           </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={isPixelTheme ? "rounded-xs" : "rounded-lg"}
+            onClick={() => setIsHistoryOpen(true)}
+            title="版本历史 (Ctrl+Shift+H)"
+          >
+            <History size={16} />
+          </Button>
           {onSwitchToFull && (
             <Button
               variant="ghost"
@@ -897,6 +957,10 @@ function NoteDrawerContent({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-36">
+                <DropdownMenuItem onClick={() => setIsHistoryOpen(true)}>
+                  <History size={14} className="mr-1.5" />
+                  <span>版本历史对比</span>
+                </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => onDuplicate(note)}>
                   创建副本
                 </DropdownMenuItem>
@@ -959,10 +1023,26 @@ function NoteDrawerContent({
           preset="compact"
           content={content}
           onChange={setContent}
+          collabExtensions={collabExtensions}
           autofocus={autoFocusEditor ? 'start' : undefined}
           placeholder={isPixelTheme ? "📜 展开羊皮纸卷轴，开始书写魔法笔记..." : "开始撰写笔记，或输入 / 使用命令..."}
         />
       </div>
+
+      <NoteVersionHistoryDrawer
+        open={isHistoryOpen}
+        onOpenChange={setIsHistoryOpen}
+        noteId={note.id}
+        noteTitle={title}
+        ydoc={ydoc}
+        currentContent={content}
+        onRestoreContent={(restored) => {
+          setContent(restored);
+          isDirtyRef.current = true;
+          onUpdateRef.current(note.id, title, restored);
+          toast.success("已恢复到所选历史版本");
+        }}
+      />
     </>
   );
 }

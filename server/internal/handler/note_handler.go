@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 
@@ -1064,4 +1065,113 @@ func (h *NoteHandler) UpdateNote(c *gin.Context) {
 
 	c.JSON(http.StatusOK, note)
 }
+
+// --- Note Snapshots ---
+
+type CreateSnapshotRequest struct {
+	SnapshotData string `json:"snapshot_data" binding:"required"`
+	Summary      string `json:"summary"`
+}
+
+func (h *NoteHandler) CreateNoteSnapshot(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	noteIDStr := c.Param("id")
+	noteID, err := uuid.Parse(noteIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid note id"})
+		return
+	}
+
+	var req CreateSnapshotRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	dataBytes, err := base64.StdEncoding.DecodeString(req.SnapshotData)
+	if err != nil {
+		dataBytes = []byte(req.SnapshotData)
+	}
+
+	var summary pgtype.Text
+	if req.Summary != "" {
+		summary = pgtype.Text{String: req.Summary, Valid: true}
+	}
+
+	snapshot, err := h.queries.CreateNoteSnapshot(c.Request.Context(), sqlc.CreateNoteSnapshotParams{
+		ID:           pgtype.UUID{Bytes: uuid.New(), Valid: true},
+		NoteID:       pgtype.UUID{Bytes: noteID, Valid: true},
+		UserID:       pgtype.UUID{Bytes: userID, Valid: true},
+		SnapshotData: dataBytes,
+		Summary:      summary,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusCreated, snapshot)
+}
+
+func (h *NoteHandler) ListNoteSnapshots(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	noteIDStr := c.Param("id")
+	noteID, err := uuid.Parse(noteIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid note id"})
+		return
+	}
+
+	limit := int32(50)
+	snapshots, err := h.queries.ListNoteSnapshots(c.Request.Context(), sqlc.ListNoteSnapshotsParams{
+		NoteID: pgtype.UUID{Bytes: noteID, Valid: true},
+		UserID: pgtype.UUID{Bytes: userID, Valid: true},
+		Limit:  limit,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, snapshots)
+}
+
+func (h *NoteHandler) GetNoteSnapshot(c *gin.Context) {
+	userID, err := middleware.GetUserID(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+	noteIDStr := c.Param("id")
+	noteID, err := uuid.Parse(noteIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid note id"})
+		return
+	}
+	snapshotIDStr := c.Param("snapshotId")
+	snapshotID, err := uuid.Parse(snapshotIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid snapshot id"})
+		return
+	}
+
+	snapshot, err := h.queries.GetNoteSnapshotByID(c.Request.Context(), sqlc.GetNoteSnapshotByIDParams{
+		ID:     pgtype.UUID{Bytes: snapshotID, Valid: true},
+		NoteID: pgtype.UUID{Bytes: noteID, Valid: true},
+		UserID: pgtype.UUID{Bytes: userID, Valid: true},
+	})
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "snapshot not found"})
+		return
+	}
+	c.JSON(http.StatusOK, snapshot)
+}
+
 

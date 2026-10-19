@@ -13,8 +13,14 @@ export const queryKeys = {
       detail: (userId: string, date: string) => ['dailyReviews', userId, 'detail', date] as const,
       stats: (userId: string) => ['dailyReviews', userId, 'stats'] as const,
       heatmap: (userId: string, year: number) => ['dailyReviews', userId, 'heatmap', year] as const,
+      snapshots: (userId: string, date: string) => ['dailyReviews', userId, 'snapshots', date] as const,
+      snapshotDetail: (userId: string, date: string, snapshotId: string) => ['dailyReviews', userId, 'snapshotDetail', date, snapshotId] as const,
     }
   ),
+  notes: {
+    snapshots: (noteId: string) => ['notes', noteId, 'snapshots'] as const,
+    snapshotDetail: (noteId: string, snapshotId: string) => ['notes', noteId, 'snapshotDetail', snapshotId] as const,
+  },
   templates: (userId: string) => ['knowledge_base_templates', userId] as const,
   timeManagement: (userId: string) => ['time-management-tasks', userId] as const,
   focusAssistantTasks: (userId: string) => ['focus-assistant-tasks', userId] as const,
