@@ -65,3 +65,32 @@ describe("Timezone-Consistent Date Utilities", () => {
     expect(parsed?.getDate()).toBe(16);
   });
 });
+
+describe("Editor CustomKeymap Extension", () => {
+  it("exports standard CustomKeymap with Mod-1..9 and Mod-0 bindings", async () => {
+    const { CustomKeymap } = await import("@/components/editor/extensions/CustomKeymapExtensions");
+    expect(CustomKeymap.name).toBe("customKeymap");
+    expect(typeof CustomKeymap.config.addKeyboardShortcuts).toBe("function");
+
+    const shortcuts = CustomKeymap.config.addKeyboardShortcuts.call({
+      editor: {
+        commands: {
+          toggleHeading: () => true,
+          setParagraph: () => true,
+          toggleBulletList: () => true,
+          toggleOrderedList: () => true,
+          toggleTaskList: () => true,
+        },
+      },
+    });
+
+    expect(shortcuts).toHaveProperty("Mod-1");
+    expect(shortcuts).toHaveProperty("Mod-2");
+    expect(shortcuts).toHaveProperty("Mod-3");
+    expect(shortcuts).toHaveProperty("Mod-0");
+    expect(shortcuts).toHaveProperty("Mod-7");
+    expect(shortcuts).toHaveProperty("Mod-8");
+    expect(shortcuts).toHaveProperty("Mod-9");
+  });
+});
+

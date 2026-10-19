@@ -100,11 +100,11 @@ The system SHALL support collapsible details content blocks within rich-text not
 - **THEN** the system re-renders the collapsible structure with summary headings, body elements, and disclosure states preserved without content truncation
 
 ### Requirement: Fidelity Markdown Document Import
-The system SHALL parse imported Markdown documents into structured rich-text document AST nodes (including headings level 1 to 6, bullet lists, ordered lists, task lists, code blocks, blockquotes, and inline formatting). The system SHALL automatically extract the note title strictly from the selected file name (with file extension removed) and retain all original document content and headings in the note body.
+The system SHALL parse imported Markdown documents into structured rich-text document AST nodes (including headings level 1 to 6, bullet lists, ordered lists, task lists, code blocks with language identifiers, blockquotes, callouts, details disclosure blocks, image references, and inline formatting). The system SHALL automatically extract the note title strictly from the selected file name (with file extension removed) and retain all original document content and headings in the note body.
 
 #### Scenario: Single Markdown file imported into active note
 - **WHEN** user selects a valid Markdown file via the note import action
-- **THEN** system populates the rich-text editor with corresponding structured nodes preserving headings, lists, code blocks, and marks
+- **THEN** system populates the rich-text editor with corresponding structured nodes preserving headings, lists, code blocks, images, callouts, details disclosures, and marks
 - **AND** system sets the note title to the clean file name without file extension
 
 #### Scenario: File dialog cancelled during single import
@@ -188,5 +188,13 @@ The system SHALL support viewing and editing notes across slide-over drawer mode
 - **THEN** system opens a dedicated native desktop window displaying the note editor
 - **AND** system closes any open drawer or main content editor for that note in the primary window
 - **AND** modifications made in the detached window synchronize back to persistent storage and update open views via WebSocket deltas
+
+### Requirement: Note-to-Note Navigation via Embedded Wikilinks
+The knowledge base SHALL support embedded note links within document content, allowing users to jump directly between related notes in the active workspace or open targets in dedicated windows.
+
+#### Scenario: Clicking an embedded note wikilink
+- **WHEN** a user activates an embedded note wikilink referencing another note in the knowledge base
+- **THEN** the system resolves the target note and updates the active presentation view to render the target note document
+
 
 

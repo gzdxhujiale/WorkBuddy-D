@@ -956,6 +956,7 @@ function NoteDrawerContent({
         onKeyDown={(e) => e.stopPropagation()}
       >
         <ReactjsTiptapEditor
+          preset="compact"
           content={content}
           onChange={setContent}
           autofocus={autoFocusEditor ? 'start' : undefined}
@@ -2233,6 +2234,10 @@ export function KnowledgePanel() {
                   }}
                   onOpenStandaloneWindow={() => {
                     void handleOpenNote(drawerNote.id, drawerNote.title, { forceMode: 'window' });
+                  }}
+                  notesForWikilinks={rawNotes.map((n) => ({ id: n.id, title: n.title }))}
+                  onNavigateNote={(targetId) => {
+                    void handleOpenNote(targetId, "");
                   }}
                 />
               ) : (

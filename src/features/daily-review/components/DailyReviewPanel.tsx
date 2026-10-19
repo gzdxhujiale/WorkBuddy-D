@@ -58,75 +58,46 @@ function useReviewAutoSave({
   const onSaveRef = useRef(onSave);
   onSaveRef.current = onSave;
 
-  // Track the date currently hydrated from remote data to distinguish
-  // initial asynchronous hydration from post-save local echoes.
-  const hydratedDateRef = useRef<string>(initialContent ? date : "");
-
   useEffect(() => {
     stateRef.current = { content, date };
   }, [content, date]);
 
-  // When switching to a different date, save any dirty work from previous date and load new content.
-  // When remote content arrives asynchronously for the current date, reconcile it safely.
+  // When remote content arrives asynchronously for the current date, reconcile it safely
   useEffect(() => {
-    const prev = stateRef.current;
-    const last = lastSavedRef.current;
+    if (!initialContent) return;
+    const current = stateRef.current.content;
+    const lastSaved = lastSavedRef.current.content;
 
-    // Case 1: Switching to a different date
-    if (prev.date !== date) {
-      if (prev.content !== last.content) {
-        onSaveRef.current(prev.date, prev.content);
-      }
+    // If semantically identical to our last saved or current content, avoid echoing
+    if (
+      extractReviewPlainText(initialContent) === extractReviewPlainText(current) ||
+      extractReviewPlainText(initialContent) === extractReviewPlainText(lastSaved)
+    ) {
+      lastSavedRef.current = { content: initialContent, date };
+      return;
+    }
+
+    // Hydrate if pristine (no unsaved edits in progress)
+    const isPristine = current === lastSaved || current === "";
+    if (isPristine) {
       setContent(initialContent);
       setSaveStatus("saved");
       lastSavedRef.current = { content: initialContent, date };
       stateRef.current = { content: initialContent, date };
-      hydratedDateRef.current = initialContent ? date : "";
-      return;
-    }
-
-    // Case 2: Remote data hydrated asynchronously for the current date
-    if (hydratedDateRef.current !== date) {
-      if (initialContent) {
-        const isPristine = prev.content === last.content;
-        if (isPristine) {
-          setContent(initialContent);
-          setSaveStatus("saved");
-          lastSavedRef.current = { content: initialContent, date };
-          stateRef.current = { content: initialContent, date };
-        }
-        hydratedDateRef.current = date;
-      }
-      return;
-    }
-
-    // Case 3: Already hydrated date receives an updated initialContent
-    // If it's semantically identical to our last saved or current content, avoid echoing.
-    if (initialContent !== last.content) {
-      const isSemanticallySame =
-        extractReviewPlainText(initialContent) === extractReviewPlainText(prev.content);
-      if (isSemanticallySame) {
-        lastSavedRef.current = { content: initialContent, date };
-        return;
-      }
-
-      // If genuine external content arrived while local content has no unsaved edits
-      const isPristine = prev.content === last.content;
-      if (isPristine) {
-        setContent(initialContent);
-        setSaveStatus("saved");
-        lastSavedRef.current = { content: initialContent, date };
-        stateRef.current = { content: initialContent, date };
-      }
     }
   }, [date, initialContent]);
 
-  // Flush on unmount
+  // Flush on unmount with safety guard
   useEffect(() => {
     return () => {
       const current = stateRef.current;
       const last = lastSavedRef.current;
       if (current.content !== last.content) {
+        // SAFETY GUARD: Never delete non-empty content during unmount
+        if (extractReviewPlainText(current.content).length === 0 && extractReviewPlainText(last.content).length > 0) {
+          console.warn("[DailyReview] Prevented accidental clearing of review content during unmount");
+          return;
+        }
         onSaveRef.current(current.date, current.content);
       }
     };
@@ -173,61 +144,55 @@ const ReviewEditor: React.FC<ReviewEditorProps> = memo(({ date, review, onSave }
     onSave,
   });
 
+  const statusContent = (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      {isPixelTheme ? (
+        saveStatus === "saving" ? (
+          <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-bold">
+            <PixelHourglass size={14} className="animate-spin" />
+            <span>⏳ 刻印中...</span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-bold">
+            <PixelSparkle size={14} />
+            <span>✨ 冒险日志已刻印封存</span>
+          </div>
+        )
+      ) : (
+        <>
+          <span>{saveStatus === "saving" ? "保存中..." : "已自动保存"}</span>
+          <Cloud
+            size={15}
+            className={cn(
+              "transition-all duration-300",
+              saveStatus === "saved"
+                ? "text-blue-500 fill-blue-500/20"
+                : "text-muted-foreground animate-pulse"
+            )}
+          />
+        </>
+      )}
+    </div>
+  );
+
   return (
     <article
       className={cn(
         "flex-1 flex flex-col bg-card overflow-hidden transition-colors",
         isPixelTheme
           ? "border-2 border-border/90 rounded-xs shadow-[3px_3px_0px_rgba(0,0,0,0.08)] font-mono"
-          : "border border-border rounded-t-2xl rounded-b-none shadow-2xs"
+          : "border border-border rounded-xl shadow-2xs"
       )}
     >
       <ReactjsTiptapEditor
+        preset="full"
         content={content}
         onChange={setContent}
         placeholder={isPixelTheme ? "📜 撰写今日冒险日志... (输入 / 使用魔法指令)" : "输入 / 使用命令..."}
         hideHighlight
         hideCallout
+        footerLeft={statusContent}
       />
-
-      {/* Footer: Save Status */}
-      <footer
-        className={cn(
-          "flex items-center justify-between px-4 py-2.5 border-t shrink-0 select-none",
-          isPixelTheme
-            ? "border-t-2 border-border/90 bg-amber-50/40 dark:bg-amber-950/40 font-mono"
-            : "border-border bg-muted/40"
-        )}
-      >
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {isPixelTheme ? (
-            saveStatus === "saving" ? (
-              <div className="flex items-center gap-1.5 text-amber-700 dark:text-amber-300 font-bold">
-                <PixelHourglass size={14} className="animate-spin" />
-                <span>⏳ 刻印中...</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300 font-bold">
-                <PixelSparkle size={14} />
-                <span>✨ 冒险日志已刻印封存</span>
-              </div>
-            )
-          ) : (
-            <>
-              <span>{saveStatus === "saving" ? "保存中..." : "已自动保存"}</span>
-              <Cloud
-                size={16}
-                className={cn(
-                  "transition-all duration-300",
-                  saveStatus === "saved"
-                    ? "text-blue-500 fill-blue-500/20"
-                    : "text-muted-foreground animate-pulse"
-                )}
-              />
-            </>
-          )}
-        </div>
-      </footer>
     </article>
   );
 });
@@ -646,6 +611,7 @@ export const DailyReviewPanel: React.FC = () => {
         {/* Left: Persistent Review Editor instance */}
         <section className="flex-1 flex flex-col p-4 md:p-5 min-w-0 overflow-hidden">
           <ReviewEditor
+            key={selectedDate}
             date={selectedDate}
             review={currentReview}
             onSave={handleSave}

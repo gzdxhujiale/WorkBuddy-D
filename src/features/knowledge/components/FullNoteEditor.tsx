@@ -48,6 +48,8 @@ export interface FullNoteEditorProps {
   onDelete: (note: Note) => void;
   onSwitchToDrawer: () => void;
   onOpenStandaloneWindow: () => void;
+  notesForWikilinks?: Array<{ id: string; title: string }>;
+  onNavigateNote?: (noteId: string) => void;
 }
 
 export function FullNoteEditor({
@@ -63,6 +65,8 @@ export function FullNoteEditor({
   onDelete,
   onSwitchToDrawer,
   onOpenStandaloneWindow,
+  notesForWikilinks,
+  onNavigateNote,
 }: FullNoteEditorProps) {
   const [title, setTitle] = useState(note.title);
   const [content, setContent] = useState(note.content || "");
@@ -354,9 +358,12 @@ export function FullNoteEditor({
           {/* Tiptap Rich Text Editor */}
           <div className="flex-1 flex flex-col min-h-[500px]">
             <ReactjsTiptapEditor
+              preset="full"
               content={content}
               onChange={setContent}
               autofocus={autoFocusEditor ? "start" : undefined}
+              notesForWikilinks={notesForWikilinks}
+              onNavigateNote={onNavigateNote}
               placeholder={
                 isPixelTheme
                   ? "📜 展开羊皮纸卷轴，开始书写魔法笔记..."

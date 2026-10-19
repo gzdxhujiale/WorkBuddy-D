@@ -46,11 +46,6 @@ const L2_WIDTH = 316;
 const L3_WIDTH = 288;
 const MARGIN = 8;
 
-function isRichTextFloatingMenuTarget(target: Node): boolean {
-  const element = target instanceof Element ? target : target.parentElement;
-  return Boolean(element?.closest('[class*="richtext-max-h-"]'));
-}
-
 function splitScheduleEnd(timestamp?: number): { date: string | null; time: string } {
   if (!timestamp) return { date: null, time: "" };
   const d = dayjs(timestamp);
@@ -442,12 +437,6 @@ export const TaskQuickEditPopover = memo(
       useEffect(() => {
         const onMouseDown = (e: MouseEvent) => {
           const t = e.target as Node;
-          if (!t || !document.body.contains(t)) return;
-
-          // reactjs-tiptap-editor mounts slash commands under document.body.
-          // Treat them as part of this popover so selecting a command does not close it.
-          if (isRichTextFloatingMenuTarget(t)) return;
-
           // DatePicker / DateRangePicker portals are mounted directly under document.body
           if (t instanceof Element && t.closest?.("[class*='fixed z-[2000]']")) return;
 
@@ -678,6 +667,7 @@ export const TaskQuickEditPopover = memo(
 
               <div className="h-[260px] min-h-[148px] overflow-hidden">
                 <ReactjsTiptapEditor
+                  preset="minimal"
                   placeholder={isPixelTheme ? "添加委托任务详细备忘..." : "添加任务备注描述..."}
                   content={description}
                   showToolbar={false}

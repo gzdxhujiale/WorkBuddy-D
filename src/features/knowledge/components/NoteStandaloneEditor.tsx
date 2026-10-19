@@ -423,6 +423,7 @@ export function NoteStandaloneEditor() {
       {/* Main Editor Body */}
       <main className="flex-1 flex flex-col p-0 overflow-hidden relative">
         <ReactjsTiptapEditor
+          preset="full"
           content={content}
           onChange={handleContentChange}
           autofocus="start"
