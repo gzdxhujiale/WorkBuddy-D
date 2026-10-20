@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
+import { NodeSelection } from "@tiptap/pm/state";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
 import type { RichTextEditorProps, NoteWikilinkItem } from "./types";
@@ -19,6 +20,7 @@ import {
   type WikilinkSuggestionListRef,
 } from "./menus/WikilinkSuggestionList";
 import { EditorBubbleMenu } from "./menus/BubbleMenu";
+import { ImageBubbleMenu } from "./menus/ImageBubbleMenu";
 import { CompactToolbar } from "./toolbars/CompactToolbar";
 import { FullToolbar } from "./toolbars/FullToolbar";
 
@@ -311,6 +313,35 @@ export function RichTextEditor({
       if (noteId && onNavigateNote) {
         e.preventDefault();
         onNavigateNote(noteId);
+        return;
+      }
+    }
+
+    const imgTarget = (e.target as HTMLElement).closest("img");
+    if (imgTarget && editor && !editor.isDestroyed) {
+      try {
+        const pos = editor.view.posAtDOM(imgTarget, 0);
+        if (typeof pos === "number" && pos >= 0) {
+          const $pos = editor.state.doc.resolve(pos);
+          for (let d = $pos.depth; d >= 0; d--) {
+            const node = $pos.node(d);
+            if (node.type.name === "image") {
+              const nodePos = $pos.before(d);
+              editor.view.dispatch(
+                editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, nodePos))
+              );
+              return;
+            }
+          }
+          const nodeAtPos = editor.state.doc.nodeAt(pos);
+          if (nodeAtPos && nodeAtPos.type.name === "image") {
+            editor.view.dispatch(
+              editor.state.tr.setSelection(NodeSelection.create(editor.state.doc, pos))
+            );
+          }
+        }
+      } catch {
+        // Safe fallback
       }
     }
   };
@@ -345,7 +376,10 @@ export function RichTextEditor({
       )}
 
       {preset !== "minimal" && (
-        <EditorBubbleMenu editor={editor} isPixelTheme={isPixelTheme} />
+        <>
+          <EditorBubbleMenu editor={editor} isPixelTheme={isPixelTheme} />
+          <ImageBubbleMenu editor={editor} isPixelTheme={isPixelTheme} />
+        </>
       )}
 
       {/* Editor Content Scroll Container */}
@@ -359,9 +393,6 @@ export function RichTextEditor({
             "[&_.ProseMirror_h1]:text-xl [&_.ProseMirror_h1]:font-bold [&_.ProseMirror_h1]:mt-3 [&_.ProseMirror_h1]:mb-1.5",
             "[&_.ProseMirror_h2]:text-lg [&_.ProseMirror_h2]:font-bold [&_.ProseMirror_h2]:mt-2.5 [&_.ProseMirror_h2]:mb-1.5",
             "[&_.ProseMirror_h3]:text-base [&_.ProseMirror_h3]:font-bold [&_.ProseMirror_h3]:mt-2 [&_.ProseMirror_h3]:mb-1",
-            "[&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:pl-5 [&_.ProseMirror_ul]:my-1.5",
-            "[&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:pl-5 [&_.ProseMirror_ol]:my-1.5",
-            "[&_.ProseMirror_li]:my-0.5",
             "[&_.ProseMirror_blockquote]:my-3 [&_.ProseMirror_blockquote]:rounded-r-md [&_.ProseMirror_blockquote]:border-l-4 [&_.ProseMirror_blockquote]:border-primary/50 [&_.ProseMirror_blockquote]:bg-muted/40 [&_.ProseMirror_blockquote]:px-4 [&_.ProseMirror_blockquote]:py-2 [&_.ProseMirror_blockquote]:italic [&_.ProseMirror_blockquote]:text-muted-foreground",
             "[&_.ProseMirror_pre]:my-3 [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:rounded-md [&_.ProseMirror_pre]:border [&_.ProseMirror_pre]:border-border [&_.ProseMirror_pre]:bg-muted/80 [&_.ProseMirror_pre]:p-4 [&_.ProseMirror_pre]:font-mono [&_.ProseMirror_pre]:text-xs",
             "[&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0 [&_.ProseMirror_pre_code]:text-inherit",

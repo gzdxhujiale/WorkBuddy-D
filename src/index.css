@@ -490,6 +490,73 @@ html.tqe-window *:focus-visible {
   pointer-events: none;
 }
 
+/* ==========================================================================
+   Tiptap Multi-Level List Hierarchy & Robust Counter System (Official Best Practice)
+   ========================================================================== */
+
+/* 1. 多级有序列表：使用现代原生 Marker 接管大纲序号，杜绝脱离文档流与符号冲突 */
+.ProseMirror ol {
+  counter-reset: tiptap-ol;
+  padding-left: 1.6rem;
+  margin: 0.35rem 0;
+}
+
+.ProseMirror ol > li {
+  counter-increment: tiptap-ol;
+  margin: 0.2rem 0;
+  line-height: 1.6;
+}
+
+/* 直接接管原生 Marker 伪元素的内容，浏览器绝不会在同一个 marker 里既画圆点又画数字 */
+.ProseMirror ol > li::marker {
+  content: counters(tiptap-ol, ".") ". ";
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  color: var(--color-muted-foreground, #6b7280);
+}
+
+/* 嵌套层级有序列表：纯净自然缩进，移除任何虚线与边框 */
+.ProseMirror ol ol {
+  margin-top: 0.15rem;
+  margin-bottom: 0.15rem;
+  padding-left: 1.5rem;
+}
+
+/* 2. 多级无序列表：规范符号梯次与纯净缩进 */
+.ProseMirror ul:not([data-type="taskList"]) {
+  list-style-type: disc;
+  padding-left: 1.5rem;
+  margin: 0.35rem 0;
+}
+
+.ProseMirror ul:not([data-type="taskList"]) ul {
+  list-style-type: circle;
+  margin-top: 0.15rem;
+  margin-bottom: 0.15rem;
+  padding-left: 1.5rem;
+}
+
+.ProseMirror ul:not([data-type="taskList"]) ul ul {
+  list-style-type: square;
+}
+
+/* 3. 混合嵌套隔离：在 ul 内部嵌套 ol 时，强制以 ol 的大纲数字为准，绝不继承圆点 */
+.ProseMirror ul:not([data-type="taskList"]) ol > li::marker {
+  content: counters(tiptap-ol, ".") ". ";
+}
+
+/* 4. 双主题（Retro Pixel）适配 */
+.theme-retro-pixel .ProseMirror ol > li::marker {
+  font-family: inherit;
+  color: #d97706;
+  font-weight: 700;
+}
+
+.dark.theme-retro-pixel .ProseMirror ol > li::marker {
+  color: #fbbf24;
+}
+
+
 
 
 

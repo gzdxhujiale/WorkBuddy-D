@@ -14,6 +14,7 @@ import CharacterCount from "@tiptap/extension-character-count";
 import Dropcursor from "@tiptap/extension-dropcursor";
 import { Selection } from "@tiptap/extensions";
 import { CustomKeymap } from "../extensions/CustomKeymapExtensions";
+import { ConsecutiveListJoin } from "../extensions/ConsecutiveListJoinPlugin";
 import { CustomCallout } from "../extensions/CustomCallout";
 import { CustomDetails, DetailsSummary, DetailsContent } from "../extensions/CustomDetails";
 import { CustomCodeBlockLowlight } from "../extensions/CodeBlockWithLowlight";
@@ -51,6 +52,7 @@ export function createFullExtensions(options: FullPresetOptions = {}) {
       width: 2,
     }),
     CustomKeymap,
+    ConsecutiveListJoin,
     TiptapTaskList,
     TiptapTaskItem.configure({
       nested: true,

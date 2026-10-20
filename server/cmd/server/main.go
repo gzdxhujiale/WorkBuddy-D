@@ -89,6 +89,7 @@ func main() {
 	}
 	aiH := handler.NewAIHandler(queries, aiFactory, aiRouter, aiRecorder, aiToolsReg)
 	mcpH := mcp.NewMCPHandler(queries, hub)
+	mediaH := handler.NewMediaHandler(cfg.MediaDir)
 
 	// Public Routes
 	api := r.Group("/api/v1")
@@ -98,6 +99,7 @@ func main() {
 		})
 		api.POST("/auth/register", authH.Register)
 		api.POST("/auth/login", authH.Login)
+		api.GET("/media/assets/:filename", mediaH.ServeAsset)
 	}
 
 	// WebSocket Route (Authenticated via query token or Bearer)
@@ -219,6 +221,9 @@ func main() {
 		// MCP Protocol Endpoints (SSE & JSON-RPC message calls)
 		protected.GET("/mcp/sse", mcpH.HandleSSE)
 		protected.POST("/mcp/messages", mcpH.HandleMessages)
+
+		// Media Asset Upload
+		protected.POST("/media/upload", mediaH.UploadMedia)
 	}
 
 	srv := &http.Server{

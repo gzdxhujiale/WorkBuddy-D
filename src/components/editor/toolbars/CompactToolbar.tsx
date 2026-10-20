@@ -9,6 +9,8 @@ import {
   List,
   ListOrdered,
   CheckSquare,
+  Indent,
+  Outdent,
   Quote,
   Code,
   RemoveFormatting,
@@ -22,6 +24,25 @@ export interface CompactToolbarProps {
 
 export function CompactToolbar({ editor, isPixelTheme }: CompactToolbarProps) {
   if (!editor) return null;
+
+  const canSink = editor.can().sinkListItem("listItem") || editor.can().sinkListItem("taskItem");
+  const canLift = editor.can().liftListItem("listItem") || editor.can().liftListItem("taskItem");
+
+  const sink = () => {
+    if (editor.can().sinkListItem("listItem")) {
+      editor.chain().focus().sinkListItem("listItem").run();
+    } else if (editor.can().sinkListItem("taskItem")) {
+      editor.chain().focus().sinkListItem("taskItem").run();
+    }
+  };
+
+  const lift = () => {
+    if (editor.can().liftListItem("listItem")) {
+      editor.chain().focus().liftListItem("listItem").run();
+    } else if (editor.can().liftListItem("taskItem")) {
+      editor.chain().focus().liftListItem("taskItem").run();
+    }
+  };
 
   const btn = (action: () => void, isActive: boolean, title: string, icon: React.ReactNode, disabled = false) => (
     <button
@@ -64,6 +85,8 @@ export function CompactToolbar({ editor, isPixelTheme }: CompactToolbarProps) {
       {btn(() => editor.chain().focus().toggleBulletList().run(), editor.isActive("bulletList"), "无序列表 (Mod-7)", <List size={14} />)}
       {btn(() => editor.chain().focus().toggleOrderedList().run(), editor.isActive("orderedList"), "有序列表 (Mod-8)", <ListOrdered size={14} />)}
       {btn(() => editor.chain().focus().toggleTaskList().run(), editor.isActive("taskList"), "任务清单 (Mod-9)", <CheckSquare size={14} />)}
+      {btn(sink, false, "增加缩进 / 降级 (Mod-])", <Indent size={14} />, !canSink)}
+      {btn(lift, false, "减少缩进 / 升级 (Mod-[)", <Outdent size={14} />, !canLift)}
       <div className="mx-1 h-4 w-px bg-border/60" />
 
       {btn(() => editor.chain().focus().toggleBlockquote().run(), editor.isActive("blockquote"), "引用", <Quote size={14} />)}

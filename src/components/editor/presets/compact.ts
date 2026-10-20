@@ -12,6 +12,7 @@ import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import CharacterCount from "@tiptap/extension-character-count";
 import { CustomKeymap } from "../extensions/CustomKeymapExtensions";
+import { ConsecutiveListJoin } from "../extensions/ConsecutiveListJoinPlugin";
 import { CustomCallout } from "../extensions/CustomCallout";
 import { CustomDetails, DetailsSummary, DetailsContent } from "../extensions/CustomDetails";
 import { CustomCodeBlockLowlight } from "../extensions/CodeBlockWithLowlight";
@@ -25,6 +26,7 @@ export function createCompactExtensions(placeholder = "输入 / 使用命令..."
       codeBlock: false,
     }),
     CustomKeymap,
+    ConsecutiveListJoin,
     TiptapTaskList,
     TiptapTaskItem.configure({
       nested: true,

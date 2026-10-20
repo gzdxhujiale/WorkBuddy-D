@@ -1,5 +1,6 @@
 import React, { useRef } from "react";
 import type { Editor } from "@tiptap/core";
+import { uploadMediaAsset } from "@/services/mediaService";
 import {
   Undo,
   Redo,
@@ -26,6 +27,8 @@ import {
   Minus,
   Image as ImageIcon,
   RemoveFormatting,
+  Indent,
+  Outdent,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -72,6 +75,25 @@ export function FullToolbar({
     </button>
   );
 
+  const canSink = editor.can().sinkListItem("listItem") || editor.can().sinkListItem("taskItem");
+  const canLift = editor.can().liftListItem("listItem") || editor.can().liftListItem("taskItem");
+
+  const sink = () => {
+    if (editor.can().sinkListItem("listItem")) {
+      editor.chain().focus().sinkListItem("listItem").run();
+    } else if (editor.can().sinkListItem("taskItem")) {
+      editor.chain().focus().sinkListItem("taskItem").run();
+    }
+  };
+
+  const lift = () => {
+    if (editor.can().liftListItem("listItem")) {
+      editor.chain().focus().liftListItem("listItem").run();
+    } else if (editor.can().liftListItem("taskItem")) {
+      editor.chain().focus().liftListItem("taskItem").run();
+    }
+  };
+
   const toggleLink = () => {
     if (editor.isActive("link")) {
       editor.chain().focus().unsetLink().run();
@@ -87,17 +109,26 @@ export function FullToolbar({
     editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
   };
 
-  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const src = event.target?.result as string;
-      if (src) {
-        editor.chain().focus().setImage({ src, alt: file.name }).run();
+    try {
+      const res = await uploadMediaAsset(file);
+      if (res.src && !editor.isDestroyed) {
+        editor
+          .chain()
+          .focus()
+          .setImage({
+            src: res.src,
+            alt: res.alt || file.name,
+            width: "100%",
+            align: "center",
+          })
+          .run();
       }
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error("[FullToolbar] Failed to insert image:", err);
+    }
     e.target.value = "";
   };
 
@@ -129,6 +160,8 @@ export function FullToolbar({
       {btn(() => editor.chain().focus().toggleBulletList().run(), editor.isActive("bulletList"), "无序列表 (Mod-7)", <List size={14} />)}
       {btn(() => editor.chain().focus().toggleOrderedList().run(), editor.isActive("orderedList"), "有序列表 (Mod-8)", <ListOrdered size={14} />)}
       {btn(() => editor.chain().focus().toggleTaskList().run(), editor.isActive("taskList"), "任务清单 (Mod-9)", <CheckSquare size={14} />)}
+      {btn(sink, false, "增加缩进 / 降级 (Mod-])", <Indent size={14} />, !canSink)}
+      {btn(lift, false, "减少缩进 / 升级 (Mod-[)", <Outdent size={14} />, !canLift)}
       <div className="mx-1 h-4 w-px bg-border/60" />
 
       {btn(() => editor.chain().focus().setTextAlign("left").run(), editor.isActive({ textAlign: "left" }), "左对齐", <AlignLeft size={14} />)}

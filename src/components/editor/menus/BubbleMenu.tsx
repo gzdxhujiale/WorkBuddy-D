@@ -84,17 +84,23 @@ export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps
       isPixelTheme && "rounded-xs"
     );
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Prevent ProseMirror selection blur on button mousedown
+    e.preventDefault();
+  };
+
   return (
     <div
       ref={menuRef}
       className={cn(
-        "absolute z-50 flex items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-1 shadow-lg backdrop-blur-md select-none pointer-events-none data-[state=visible]:pointer-events-auto",
+        "absolute z-50 flex items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-1 shadow-lg backdrop-blur-md select-none pointer-events-auto",
         isPixelTheme && "font-mono border-2 border-border/90 rounded-xs shadow-[2px_2px_0px_#000]"
       )}
       style={{ visibility: "hidden" }}
     >
       <button
         type="button"
+        onMouseDown={handleMouseDown}
         onClick={() => editor.chain().focus().toggleBold().run()}
         className={buttonClass(editor.isActive("bold"))}
         title="粗体 (Mod-B)"
@@ -104,6 +110,7 @@ export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps
 
       <button
         type="button"
+        onMouseDown={handleMouseDown}
         onClick={() => editor.chain().focus().toggleItalic().run()}
         className={buttonClass(editor.isActive("italic"))}
         title="斜体 (Mod-I)"
@@ -113,6 +120,7 @@ export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps
 
       <button
         type="button"
+        onMouseDown={handleMouseDown}
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         className={buttonClass(editor.isActive("underline"))}
         title="下划线 (Mod-U)"
@@ -122,6 +130,7 @@ export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps
 
       <button
         type="button"
+        onMouseDown={handleMouseDown}
         onClick={() => editor.chain().focus().toggleStrike().run()}
         className={buttonClass(editor.isActive("strike"))}
         title="删除线"
@@ -131,6 +140,7 @@ export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps
 
       <button
         type="button"
+        onMouseDown={handleMouseDown}
         onClick={() => editor.chain().focus().toggleHighlight().run()}
         className={buttonClass(editor.isActive("highlight"))}
         title="高亮"
@@ -140,6 +150,7 @@ export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps
 
       <button
         type="button"
+        onMouseDown={handleMouseDown}
         onClick={() => editor.chain().focus().toggleCode().run()}
         className={buttonClass(editor.isActive("code"))}
         title="行内代码"
@@ -149,6 +160,7 @@ export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps
 
       <button
         type="button"
+        onMouseDown={handleMouseDown}
         onClick={toggleLink}
         className={buttonClass(editor.isActive("link"))}
         title="添加链接"
@@ -160,6 +172,7 @@ export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps
 
       <button
         type="button"
+        onMouseDown={handleMouseDown}
         onClick={() => editor.chain().focus().unsetAllMarks().clearNodes().run()}
         className={buttonClass(false)}
         title="清除格式"

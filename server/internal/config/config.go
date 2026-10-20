@@ -11,6 +11,7 @@ type Config struct {
 	DBDSN      string
 	JWTSecret  string
 	CORSOrigin string
+	MediaDir   string
 }
 
 func loadEnvFile(path string) {
@@ -64,11 +65,17 @@ func Load() *Config {
 		corsOrigin = "*"
 	}
 
+	mediaDir := os.Getenv("MEDIA_DIR")
+	if mediaDir == "" {
+		mediaDir = "./data/media"
+	}
+
 	return &Config{
 		Port:       port,
 		DBDSN:      dsn,
 		JWTSecret:  jwtSecret,
 		CORSOrigin: corsOrigin,
+		MediaDir:   mediaDir,
 	}
 }
 
