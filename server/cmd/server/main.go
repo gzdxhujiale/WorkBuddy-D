@@ -21,6 +21,7 @@ import (
 	"workbuddy-server/internal/handler"
 	"workbuddy-server/internal/mcp"
 	"workbuddy-server/internal/middleware"
+	"workbuddy-server/internal/storage"
 	yjssync "workbuddy-server/internal/sync"
 	"workbuddy-server/internal/ws"
 )
@@ -89,7 +90,27 @@ func main() {
 	}
 	aiH := handler.NewAIHandler(queries, aiFactory, aiRouter, aiRecorder, aiToolsReg)
 	mcpH := mcp.NewMCPHandler(queries, hub)
-	mediaH := handler.NewMediaHandler(cfg.MediaDir)
+
+	var mediaStorage storage.StorageDriver
+	if cfg.StorageDriver == "r2" {
+		r2Driver, err := storage.NewR2StorageDriver(storage.R2Config{
+			AccountID:       cfg.R2AccountID,
+			AccessKeyID:     cfg.R2AccessKeyID,
+			SecretAccessKey: cfg.R2SecretAccessKey,
+			BucketName:      cfg.R2BucketName,
+			PublicDomain:    cfg.R2PublicDomain,
+		})
+		if err != nil {
+			slog.Warn("Failed to initialize Cloudflare R2 storage, falling back to local storage", slog.Any("error", err))
+			mediaStorage, _ = storage.NewLocalStorageDriver(cfg.MediaDir)
+		} else {
+			mediaStorage = r2Driver
+			slog.Info("Cloudflare R2 media storage driver initialized", slog.String("bucket", cfg.R2BucketName), slog.String("domain", cfg.R2PublicDomain))
+		}
+	} else {
+		mediaStorage, _ = storage.NewLocalStorageDriver(cfg.MediaDir)
+	}
+	mediaH := handler.NewMediaHandler(cfg.MediaDir, mediaStorage)
 
 	// Public Routes
 	api := r.Group("/api/v1")

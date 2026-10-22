@@ -14,9 +14,9 @@
     "tauri": "tauri dev",
     "tauri:all": "concurrently -k -p \"[{name}]\" -n \"GO,TAURI\" -c \"cyan.bold,magenta.bold\" \"pnpm server:dev\" \"pnpm tauri\"",
     "tauri build": "tauri build",
+    "release": "node scripts/release.cjs",
     "lint:boundaries": "eslint src/features"
   },
-
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",

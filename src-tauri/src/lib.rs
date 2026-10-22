@@ -4,6 +4,8 @@ use tauri::{
     Manager,
 };
 
+mod updater;
+
 
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
@@ -193,6 +195,7 @@ pub fn run() {
             Some(vec![]),
         ))
         .setup(|app| {
+            updater::cleanup_legacy_backup();
             let quit_item = MenuItem::with_id(app, "quit", "退出 WorkBuddy", true, None::<&str>)?;
             let show_item = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
             let tray_menu = Menu::with_items(app, &[&show_item, &quit_item])?;
@@ -236,7 +239,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             quit_app,
             show_multi_monitor_notification,
-            show_center_interactive_notification
+            show_center_interactive_notification,
+            updater::check_portable_update,
+            updater::download_portable_update,
+            updater::apply_portable_update,
+            updater::relaunch_portable_app
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

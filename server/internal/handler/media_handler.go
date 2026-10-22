@@ -12,6 +12,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"workbuddy-server/internal/middleware"
+	"workbuddy-server/internal/storage"
 )
 
 const (
@@ -19,14 +20,22 @@ const (
 )
 
 type MediaHandler struct {
+	driver    storage.StorageDriver
 	uploadDir string
 }
 
-func NewMediaHandler(uploadDir string) *MediaHandler {
+func NewMediaHandler(uploadDir string, drivers ...storage.StorageDriver) *MediaHandler {
 	if uploadDir == "" {
 		uploadDir = "./data/media"
 	}
+	var d storage.StorageDriver
+	if len(drivers) > 0 && drivers[0] != nil {
+		d = drivers[0]
+	} else {
+		d, _ = storage.NewLocalStorageDriver(uploadDir)
+	}
 	return &MediaHandler{
+		driver:    d,
 		uploadDir: uploadDir,
 	}
 }
@@ -82,23 +91,12 @@ func (h *MediaHandler) UploadMedia(c *gin.Context) {
 	hashHex := hex.EncodeToString(hashBytes[:])
 	filename := fmt.Sprintf("%s%s", hashHex, ext)
 
-	// Ensure upload directory exists
-	if err := os.MkdirAll(h.uploadDir, 0755); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to initialize media directory: %v", err)})
+	// Persist via storage driver (handles deduplication, cloud R2 upload, or local fallback)
+	mediaURL, err := h.driver.Put(c.Request.Context(), filename, content, mimeType)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to persist media file: %v", err)})
 		return
 	}
-
-	targetPath := filepath.Join(h.uploadDir, filename)
-
-	// Save to disk if not already existing (deduplication)
-	if _, err := os.Stat(targetPath); os.IsNotExist(err) {
-		if err := os.WriteFile(targetPath, content, 0644); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("failed to write media file: %v", err)})
-			return
-		}
-	}
-
-	mediaURL := fmt.Sprintf("/api/v1/media/assets/%s", filename)
 
 	c.JSON(http.StatusOK, gin.H{
 		"url":       mediaURL,

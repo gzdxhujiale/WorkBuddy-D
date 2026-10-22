@@ -1,0 +1,10 @@
+{
+  "version": "v0.1.0",
+  "pub_date": "2026-10-22T09:52:05.810Z",
+  "notes": "1. WorkBuddy 便携版原地静默自动更新\n2. 任务中心交互体验与性能优化",
+  "download_url": "https://assets.workbuddy.hujiale.works/releases/v0.1.0/WorkBuddy-portable-x64.exe",
+  "proxy_url": "https://update.workbuddy.hujiale.works/download/v0.1.0/WorkBuddy-portable-x64.exe",
+  "github_url": "https://github.com/hujiale/WorkBuddy/releases/download/v0.1.0/WorkBuddy-portable-x64.exe",
+  "sha256": "SHA256_PLACEHOLDER",
+  "size": 0
+}

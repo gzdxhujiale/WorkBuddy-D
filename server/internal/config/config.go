@@ -7,11 +7,17 @@ import (
 )
 
 type Config struct {
-	Port       string
-	DBDSN      string
-	JWTSecret  string
-	CORSOrigin string
-	MediaDir   string
+	Port              string
+	DBDSN             string
+	JWTSecret         string
+	CORSOrigin        string
+	MediaDir          string
+	StorageDriver     string
+	R2AccountID       string
+	R2AccessKeyID     string
+	R2SecretAccessKey string
+	R2BucketName      string
+	R2PublicDomain    string
 }
 
 func loadEnvFile(path string) {
@@ -70,12 +76,23 @@ func Load() *Config {
 		mediaDir = "./data/media"
 	}
 
+	storageDriver := strings.ToLower(os.Getenv("STORAGE_DRIVER"))
+	if storageDriver == "" {
+		storageDriver = "local"
+	}
+
 	return &Config{
-		Port:       port,
-		DBDSN:      dsn,
-		JWTSecret:  jwtSecret,
-		CORSOrigin: corsOrigin,
-		MediaDir:   mediaDir,
+		Port:              port,
+		DBDSN:             dsn,
+		JWTSecret:         jwtSecret,
+		CORSOrigin:        corsOrigin,
+		MediaDir:          mediaDir,
+		StorageDriver:     storageDriver,
+		R2AccountID:       os.Getenv("R2_ACCOUNT_ID"),
+		R2AccessKeyID:     os.Getenv("R2_ACCESS_KEY_ID"),
+		R2SecretAccessKey: os.Getenv("R2_SECRET_ACCESS_KEY"),
+		R2BucketName:      os.Getenv("R2_BUCKET_NAME"),
+		R2PublicDomain:    os.Getenv("R2_PUBLIC_DOMAIN"),
 	}
 }
 

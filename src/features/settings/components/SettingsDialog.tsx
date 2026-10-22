@@ -43,6 +43,7 @@ import {
   PixelSparkle,
   PixelScroll,
 } from "@/components/pixel/PixelIcons";
+import { PortableUpdateSection } from "./PortableUpdateSection";
 import { cn } from "@/lib/utils";
 
 type Tab = "account" | "general" | "templates" | "ai";
@@ -809,6 +810,9 @@ export function SettingsDialog({ onClose, templatesContent, aiContent }: Setting
                     />
                   </div>
                 </div>
+
+                {/* 便携版原地静默更新区域 */}
+                <PortableUpdateSection />
               </div>
             ) : tab === "ai" ? (
               aiContent ?? (
