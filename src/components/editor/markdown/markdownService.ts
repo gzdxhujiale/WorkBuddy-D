@@ -92,9 +92,12 @@ export function convertMarkdownToTipTapJson(markdown: string): string {
   });
 }
 
-function formatInlineNode(inline: any): string {
+export function formatInlineNode(inline: any): string {
   if (!inline) return "";
   if (inline.type === "hardBreak") return "\n";
+  if (inline.type === "wikilink") {
+    return `[[${inline.attrs?.noteTitle || "无标题"}]]`;
+  }
   let text = inline.text ?? "";
   if (!text) return "";
   if (!Array.isArray(inline.marks) || inline.marks.length === 0) {
@@ -129,12 +132,12 @@ function formatInlineNode(inline: any): string {
   return text;
 }
 
-function formatInlineNodes(content?: any[]): string {
+export function formatInlineNodes(content?: any[]): string {
   if (!Array.isArray(content)) return "";
   return content.map(formatInlineNode).join("");
 }
 
-function renderBlockToMarkdown(block: any, indent = ""): string {
+export function renderBlockToMarkdown(block: any, indent = ""): string {
   if (!block) return "";
 
   if (block.type === "heading") {
@@ -194,6 +197,45 @@ function renderBlockToMarkdown(block: any, indent = ""): string {
         return result;
       })
       .join("\n");
+  }
+
+  if (block.type === "listItem") {
+    const itemChildren: any[] = block.content || [];
+    const lines: string[] = [];
+    for (const child of itemChildren) {
+      if (child.type === "paragraph") {
+        lines.push(formatInlineNodes(child.content));
+      } else {
+        lines.push(renderBlockToMarkdown(child, indent + "  "));
+      }
+    }
+    const firstLine = lines[0] ?? "";
+    const remainingLines = lines.slice(1);
+    let result = `${indent}- ${firstLine}`;
+    if (remainingLines.length > 0) {
+      result += "\n" + remainingLines.join("\n");
+    }
+    return result;
+  }
+
+  if (block.type === "taskItem") {
+    const checked = block.attrs?.checked ? "x" : " ";
+    const itemChildren: any[] = block.content || [];
+    const lines: string[] = [];
+    for (const child of itemChildren) {
+      if (child.type === "paragraph") {
+        lines.push(formatInlineNodes(child.content));
+      } else {
+        lines.push(renderBlockToMarkdown(child, indent + "  "));
+      }
+    }
+    const firstLine = lines[0] ?? "";
+    const remainingLines = lines.slice(1);
+    let result = `${indent}- [${checked}] ${firstLine}`;
+    if (remainingLines.length > 0) {
+      result += "\n" + remainingLines.join("\n");
+    }
+    return result;
   }
 
   if (block.type === "codeBlock") {

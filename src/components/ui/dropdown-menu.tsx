@@ -25,6 +25,7 @@ export interface DropdownMenuProps {
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   children: React.ReactNode;
+  modal?: boolean;
 }
 
 export function DropdownMenu({
@@ -32,6 +33,7 @@ export function DropdownMenu({
   defaultOpen,
   onOpenChange,
   children,
+  modal,
 }: DropdownMenuProps) {
   const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen ?? false);
   const isControlled = controlledOpen !== undefined;
@@ -62,6 +64,7 @@ export function DropdownMenu({
         open={open}
         defaultOpen={defaultOpen}
         onOpenChange={handleOpenChange}
+        modal={modal}
       >
         {children}
       </RadixDropdownMenu.Root>

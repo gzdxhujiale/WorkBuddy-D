@@ -1,5 +1,6 @@
 import StarterKit from "@tiptap/starter-kit";
 import { Placeholder } from "@tiptap/extension-placeholder";
+import { Selection } from "@tiptap/extensions";
 import { TaskList as TiptapTaskList } from "@tiptap/extension-task-list";
 import { TaskItem as TiptapTaskItem } from "@tiptap/extension-task-item";
 import Link from "@tiptap/extension-link";
@@ -14,6 +15,7 @@ export function createMinimalExtensions(placeholder = "添加备注...") {
       horizontalRule: false,
       blockquote: false,
     }),
+    Selection,
     TiptapTaskList,
     TiptapTaskItem.configure({
       nested: true,

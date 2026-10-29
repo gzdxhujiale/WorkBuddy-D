@@ -16,10 +16,13 @@ import { cn } from "@/lib/utils";
 export interface EditorBubbleMenuProps {
   editor: Editor;
   isPixelTheme?: boolean;
+  suppress?: boolean;
 }
 
-export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps) {
+export function EditorBubbleMenu({ editor, isPixelTheme, suppress = false }: EditorBubbleMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
+  const suppressRef = useRef(suppress);
+  suppressRef.current = suppress;
 
   useEffect(() => {
     if (!editor || editor.isDestroyed || !menuRef.current) return;
@@ -30,6 +33,9 @@ export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps
       editor,
       element: menuRef.current,
       shouldShow: ({ state, from, to }) => {
+        if (suppressRef.current) {
+          return false;
+        }
         const { doc, selection } = state;
         const { empty } = selection;
         if (empty || from === to || editor.isDestroyed || !editor.isEditable) {
@@ -96,7 +102,7 @@ export function EditorBubbleMenu({ editor, isPixelTheme }: EditorBubbleMenuProps
         "absolute z-50 flex items-center gap-0.5 rounded-lg border border-border bg-popover/95 p-1 shadow-lg backdrop-blur-md select-none pointer-events-auto",
         isPixelTheme && "font-mono border-2 border-border/90 rounded-xs shadow-[2px_2px_0px_#000]"
       )}
-      style={{ visibility: "hidden" }}
+      style={{ visibility: "hidden", display: suppress ? "none" : undefined }}
     >
       <button
         type="button"

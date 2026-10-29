@@ -21,6 +21,7 @@ import {
 } from "./menus/WikilinkSuggestionList";
 import { EditorBubbleMenu } from "./menus/BubbleMenu";
 import { ImageBubbleMenu } from "./menus/ImageBubbleMenu";
+import { EditorContextMenu } from "./menus/EditorContextMenu";
 import { CompactToolbar } from "./toolbars/CompactToolbar";
 import { FullToolbar } from "./toolbars/FullToolbar";
 
@@ -82,6 +83,29 @@ export function RichTextEditor({
     rect: null,
   });
   const wikilinkListRef = useRef<WikilinkSuggestionListRef>(null);
+
+  // Context menu state on right-click over selection
+  const [contextMenuState, setContextMenuState] = useState<{
+    isOpen: boolean;
+    position: { x: number; y: number };
+  }>({
+    isOpen: false,
+    position: { x: 0, y: 0 },
+  });
+
+  // Dismiss context menu immediately on scroll to prevent detached floating
+  useEffect(() => {
+    if (!contextMenuState.isOpen) return;
+
+    const handleScroll = () => {
+      setContextMenuState((prev) => (prev.isOpen ? { ...prev, isOpen: false } : prev));
+    };
+
+    window.addEventListener("scroll", handleScroll, { capture: true, passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll, { capture: true });
+    };
+  }, [contextMenuState.isOpen]);
 
   const extensions = useMemo(() => {
     const slashExt = SlashCommandExtension.configure({
@@ -239,6 +263,22 @@ export function RichTextEditor({
     };
   }, [editor]);
 
+  const lastNonEmptySelectionRef = useRef<{ from: number; to: number } | null>(null);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const updateSelection = () => {
+      const { selection } = editor.state;
+      if (selection && !selection.empty) {
+        lastNonEmptySelectionRef.current = { from: selection.from, to: selection.to };
+      }
+    };
+    editor.on("selectionUpdate", updateSelection);
+    return () => {
+      editor.off("selectionUpdate", updateSelection);
+    };
+  }, [editor]);
+
   // Synchronize editable state
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
@@ -346,6 +386,35 @@ export function RichTextEditor({
     }
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!editor || editor.isDestroyed) return;
+
+    let selection = editor.state.selection;
+    if ((!selection || selection.empty) && lastNonEmptySelectionRef.current) {
+      const { from, to } = lastNonEmptySelectionRef.current;
+      const pos = editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
+      if (pos && pos.pos >= from - 2 && pos.pos <= to + 2) {
+        editor.commands.setTextSelection({ from, to });
+        selection = editor.state.selection;
+      }
+    }
+
+    if (!selection || selection.empty) {
+      if (contextMenuState.isOpen) {
+        setContextMenuState((prev) => ({ ...prev, isOpen: false }));
+      }
+      return;
+    }
+
+    e.preventDefault();
+    const x = Math.max(8, Math.min(e.clientX, window.innerWidth - 16));
+    const y = Math.max(8, Math.min(e.clientY, window.innerHeight - 16));
+    setContextMenuState({
+      isOpen: true,
+      position: { x, y },
+    });
+  };
+
   if (!editor) {
     return <div className="flex min-h-0 flex-1 bg-card" />;
   }
@@ -377,13 +446,27 @@ export function RichTextEditor({
 
       {preset !== "minimal" && (
         <>
-          <EditorBubbleMenu editor={editor} isPixelTheme={isPixelTheme} />
+          <EditorBubbleMenu
+            editor={editor}
+            isPixelTheme={isPixelTheme}
+            suppress={contextMenuState.isOpen}
+          />
           <ImageBubbleMenu editor={editor} isPixelTheme={isPixelTheme} />
         </>
       )}
 
+      <EditorContextMenu
+        editor={editor}
+        isOpen={contextMenuState.isOpen}
+        position={contextMenuState.position}
+        onClose={() => setContextMenuState((prev) => ({ ...prev, isOpen: false }))}
+      />
+
       {/* Editor Content Scroll Container */}
-      <div className="flex min-h-0 min-w-0 flex-1 overflow-y-auto relative">
+      <div
+        onContextMenu={handleContextMenu}
+        className="flex min-h-0 min-w-0 flex-1 overflow-y-auto relative"
+      >
         <EditorContent
           editor={editor}
           className={cn(
@@ -398,6 +481,7 @@ export function RichTextEditor({
             "[&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0 [&_.ProseMirror_pre_code]:text-inherit",
             "[&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:bg-muted [&_.ProseMirror_code]:px-1.5 [&_.ProseMirror_code]:py-0.5 [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-xs [&_.ProseMirror_code]:font-medium",
             "[&_.ProseMirror_mark]:bg-amber-200/80 [&_.ProseMirror_mark]:rounded-xs [&_.ProseMirror_mark]:px-0.5 dark:[&_.ProseMirror_mark]:bg-amber-900/60 dark:[&_.ProseMirror_mark]:text-amber-100",
+            "[&_.ProseMirror_.selection]:bg-[#bfdbfe] [&_.ProseMirror_.selection]:text-slate-900 dark:[&_.ProseMirror_.selection]:bg-blue-900/80 dark:[&_.ProseMirror_.selection]:text-blue-100",
             "[&_.ProseMirror_table]:my-3 [&_.ProseMirror_table]:w-full [&_.ProseMirror_table]:border-collapse [&_.ProseMirror_table]:border [&_.ProseMirror_table]:border-border",
             "[&_.ProseMirror_th]:border [&_.ProseMirror_th]:border-border [&_.ProseMirror_th]:bg-muted/60 [&_.ProseMirror_th]:p-2 [&_.ProseMirror_th]:text-left [&_.ProseMirror_th]:font-semibold [&_.ProseMirror_th]:text-xs",
             "[&_.ProseMirror_td]:border [&_.ProseMirror_td]:border-border [&_.ProseMirror_td]:p-2 [&_.ProseMirror_td]:text-xs",
@@ -411,7 +495,7 @@ export function RichTextEditor({
             "[&_.ProseMirror_li[data-checked]>div]:min-w-0 [&_.ProseMirror_li[data-checked]>div]:flex-1 [&_.ProseMirror_li[data-checked]>div>p]:m-0",
             "[&_.ProseMirror_.is-editor-empty:first-child::before]:pointer-events-none [&_.ProseMirror_.is-editor-empty:first-child::before]:float-left [&_.ProseMirror_.is-editor-empty:first-child::before]:h-0 [&_.ProseMirror_.is-editor-empty:first-child::before]:text-muted-foreground [&_.ProseMirror_.is-editor-empty:first-child::before]:opacity-65 [&_.ProseMirror_.is-editor-empty:first-child::before]:content-[attr(data-placeholder)]",
             isPixelTheme &&
-              "[&_.ProseMirror]:font-mono [&_.ProseMirror_pre]:border-2 [&_.ProseMirror_pre]:border-border/90 [&_.ProseMirror_pre]:rounded-xs [&_.ProseMirror_details]:border-2 [&_.ProseMirror_details]:border-border/90 [&_.ProseMirror_details]:rounded-xs [&_.ProseMirror_table]:border-2 [&_.ProseMirror_table]:border-border/90"
+              "[&_.ProseMirror]:font-mono [&_.ProseMirror_.selection]:bg-[#d97706] [&_.ProseMirror_.selection]:text-white dark:[&_.ProseMirror_.selection]:bg-[#d97706] [&_.ProseMirror_pre]:border-2 [&_.ProseMirror_pre]:border-border/90 [&_.ProseMirror_pre]:rounded-xs [&_.ProseMirror_details]:border-2 [&_.ProseMirror_details]:border-border/90 [&_.ProseMirror_details]:rounded-xs [&_.ProseMirror_table]:border-2 [&_.ProseMirror_table]:border-border/90"
           )}
         />
       </div>
