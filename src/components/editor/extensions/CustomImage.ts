@@ -193,10 +193,65 @@ export const CustomImage = Image.extend({
         if (!file.type.startsWith("image/")) continue;
         if (editor.isDestroyed) return;
 
+        let tempBlobUrl = "";
+        try {
+          if (typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+            tempBlobUrl = URL.createObjectURL(file);
+          }
+        } catch {
+          tempBlobUrl = "";
+        }
+
+        // Insert immediate visual placeholder with pulsing blur if blob URL is available
+        if (tempBlobUrl && !editor.isDestroyed) {
+          editor
+            .chain()
+            .focus()
+            .setImage({
+              src: tempBlobUrl,
+              alt: file.name || "图片上传中...",
+              width: "100%",
+              align: "center",
+              isLoading: true,
+            })
+            .run();
+        }
+
         try {
           const uploadResult = await uploadMediaAsset(file);
 
+          if (tempBlobUrl) {
+            try {
+              URL.revokeObjectURL(tempBlobUrl);
+            } catch {
+              // ignore
+            }
+          }
+
           if (!editor.isDestroyed && uploadResult.src) {
+            if (tempBlobUrl) {
+              const { tr } = editor.state;
+              let foundPos: number | null = null;
+              editor.state.doc.descendants((node, pos) => {
+                if (node.type.name === "image" && node.attrs.src === tempBlobUrl) {
+                  foundPos = pos;
+                  return false;
+                }
+              });
+
+              if (foundPos !== null) {
+                editor.view.dispatch(
+                  tr.setNodeMarkup(foundPos, undefined, {
+                    ...editor.state.doc.nodeAt(foundPos)?.attrs,
+                    src: uploadResult.src,
+                    alt: uploadResult.alt || file.name,
+                    isLoading: false,
+                  })
+                );
+                continue;
+              }
+            }
+
             editor
               .chain()
               .focus()
@@ -210,6 +265,28 @@ export const CustomImage = Image.extend({
               .run();
           }
         } catch (err) {
+          if (tempBlobUrl) {
+            try {
+              URL.revokeObjectURL(tempBlobUrl);
+            } catch {
+              // ignore
+            }
+            if (!editor.isDestroyed) {
+              const { tr } = editor.state;
+              let foundPos: number | null = null;
+              let nodeSize = 0;
+              editor.state.doc.descendants((node, pos) => {
+                if (node.type.name === "image" && node.attrs.src === tempBlobUrl) {
+                  foundPos = pos;
+                  nodeSize = node.nodeSize;
+                  return false;
+                }
+              });
+              if (foundPos !== null) {
+                editor.view.dispatch(tr.delete(foundPos, foundPos + nodeSize));
+              }
+            }
+          }
           console.error("[CustomImage] Failed to insert image:", err);
         }
       }

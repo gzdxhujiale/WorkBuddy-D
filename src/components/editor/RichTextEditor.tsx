@@ -220,6 +220,17 @@ export function RichTextEditor({
       autofocus: autofocus ?? false,
       extensions,
       content: collabExtensions && collabExtensions.length > 0 ? undefined : parseContent(content),
+      onCreate: ({ editor: currentEditor }) => {
+        // If collaboration is active and editor is empty, seed from initial content
+        if (collabExtensions && collabExtensions.length > 0 && content) {
+          const parsed = parseContent(content);
+          if (parsed && typeof parsed === "object" && (parsed as any).content && (parsed as any).content.length > 0) {
+            if (currentEditor.isEmpty) {
+              currentEditor.commands.setContent(parsed, { emitUpdate: false });
+            }
+          }
+        }
+      },
       onUpdate: ({ editor: currentEditor }) => {
         // Debounce serialization to 150ms to eliminate per-keystroke full-tree lag
         if (debounceTimerRef.current) {
@@ -290,9 +301,19 @@ export function RichTextEditor({
   // Synchronize incoming content changes from outside
   useEffect(() => {
     if (!editor || editor.isDestroyed) return;
-    if (collabExtensions && collabExtensions.length > 0) return;
     if (isUpdatingFromEditorRef.current) return;
     if (content === lastContentRef.current) return;
+
+    if (collabExtensions && collabExtensions.length > 0) {
+      if (editor.isEmpty && content) {
+        const nextContent = parseContent(content);
+        if (nextContent && typeof nextContent === "object" && (nextContent as any).content?.length > 0) {
+          lastContentRef.current = content;
+          editor.commands.setContent(nextContent, { emitUpdate: false });
+        }
+      }
+      return;
+    }
 
     lastContentRef.current = content;
 

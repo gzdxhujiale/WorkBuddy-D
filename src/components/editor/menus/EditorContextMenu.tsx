@@ -18,6 +18,7 @@ import {
   serializeSelectionToPlainText,
   copyToClipboard,
 } from "../utils/selectionClipboard";
+import { isLikelyMarkdown, insertMarkdownContent } from "../extensions/MarkdownPaste";
 import { toast } from "@/components/ui/toast";
 
 export interface ContextMenuPosition {
@@ -185,7 +186,12 @@ export function EditorContextMenu({
       if (typeof navigator !== "undefined" && navigator.clipboard?.readText) {
         const text = await navigator.clipboard.readText();
         if (text) {
-          editor.chain().focus().insertContent(text).run();
+          editor.chain().focus().run();
+          if (isLikelyMarkdown(text) && !editor.isActive("codeBlock")) {
+            insertMarkdownContent(editor, text);
+          } else {
+            editor.commands.insertContent(text);
+          }
         }
       }
     } catch {

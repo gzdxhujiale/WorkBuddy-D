@@ -6,12 +6,9 @@ import { Table as TiptapTable } from "@tiptap/extension-table";
 import { TableRow as TiptapTableRow } from "@tiptap/extension-table-row";
 import { TableHeader as TiptapTableHeader } from "@tiptap/extension-table-header";
 import { TableCell as TiptapTableCell } from "@tiptap/extension-table-cell";
-import Link from "@tiptap/extension-link";
 import Highlight from "@tiptap/extension-highlight";
-import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import CharacterCount from "@tiptap/extension-character-count";
-import Dropcursor from "@tiptap/extension-dropcursor";
 import { Selection } from "@tiptap/extensions";
 import { CustomKeymap } from "../extensions/CustomKeymapExtensions";
 import { ConsecutiveListJoin } from "../extensions/ConsecutiveListJoinPlugin";
@@ -21,6 +18,8 @@ import { CustomCodeBlockLowlight } from "../extensions/CodeBlockWithLowlight";
 import { CustomImage } from "../extensions/CustomImage";
 import { WikilinkExtension } from "../extensions/WikilinkExtension";
 import { PasteHandler } from "../extensions/paste-handler";
+import { Markdown } from "@tiptap/markdown";
+import { MarkdownPaste } from "../extensions/MarkdownPaste";
 import { SnapshotExtension } from "../extensions/snapshot/snapshotExtension";
 import type { NoteWikilinkItem } from "../types";
 
@@ -45,12 +44,15 @@ export function createFullExtensions(options: FullPresetOptions = {}) {
   return [
     StarterKit.configure({
       codeBlock: false,
+      dropcursor: {
+        color: "var(--primary)",
+        width: 2,
+      },
+      link: {
+        openOnClick: false,
+      },
     }),
     Selection,
-    Dropcursor.configure({
-      color: "var(--primary)",
-      width: 2,
-    }),
     CustomKeymap,
     ConsecutiveListJoin,
     TiptapTaskList,
@@ -67,11 +69,7 @@ export function createFullExtensions(options: FullPresetOptions = {}) {
     TiptapTableRow,
     TiptapTableHeader,
     TiptapTableCell,
-    Link.configure({
-      openOnClick: false,
-    }),
     Highlight,
-    Underline,
     TextAlign.configure({
       types: ["heading", "paragraph"],
     }),
@@ -82,6 +80,8 @@ export function createFullExtensions(options: FullPresetOptions = {}) {
     CustomCodeBlockLowlight,
     CustomImage,
     PasteHandler,
+    Markdown,
+    MarkdownPaste,
     SnapshotExtension,
     CharacterCount,
     Placeholder.configure({

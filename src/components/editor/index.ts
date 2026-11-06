@@ -7,6 +7,7 @@ export * from "./extensions/ConsecutiveListJoinPlugin";
 export * from "./extensions/CustomDetails";
 export * from "./extensions/CustomImage";
 export * from "./extensions/CodeBlockWithLowlight";
+export * from "./extensions/MarkdownPaste";
 export * from "./extensions/WikilinkExtension";
 export * from "./menus/BubbleMenu";
 export * from "./menus/ImageBubbleMenu";

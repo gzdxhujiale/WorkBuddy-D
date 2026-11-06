@@ -8,7 +8,6 @@ import { TableRow as TiptapTableRow } from "@tiptap/extension-table-row";
 import { TableHeader as TiptapTableHeader } from "@tiptap/extension-table-header";
 import { TableCell as TiptapTableCell } from "@tiptap/extension-table-cell";
 import Highlight from "@tiptap/extension-highlight";
-import Underline from "@tiptap/extension-underline";
 import { CustomCallout } from "../extensions/CustomCallout";
 import { CustomDetails, DetailsSummary, DetailsContent } from "../extensions/CustomDetails";
 import { CustomCodeBlockLowlight } from "../extensions/CodeBlockWithLowlight";
@@ -36,7 +35,6 @@ function getSingletonParserEditor(): Editor | null {
           TiptapTableHeader,
           TiptapTableCell,
           Highlight,
-          Underline,
           CustomCallout,
           CustomDetails,
           DetailsSummary,
@@ -52,6 +50,67 @@ function getSingletonParserEditor(): Editor | null {
     }
   }
   return singletonParserEditor;
+}
+
+const CALLOUT_HEADER_REGEX = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](?:\s*\*\*([^\n*]+)\*\*)?(?:\s*([^\n]*))?(?:\n([\s\S]*))?$/i;
+
+export function normalizeCalloutNodes(doc: any) {
+  if (!doc || !Array.isArray(doc.content)) return;
+
+  for (let i = 0; i < doc.content.length; i++) {
+    const node = doc.content[i];
+    if (node?.type === "blockquote" && Array.isArray(node.content) && node.content.length > 0) {
+      const firstParagraph = node.content[0];
+      if (firstParagraph?.type === "paragraph" && Array.isArray(firstParagraph.content) && firstParagraph.content.length > 0) {
+        const firstText = firstParagraph.content[0]?.text || "";
+        const match = firstText.trim().match(CALLOUT_HEADER_REGEX);
+        if (match) {
+          const type = match[1].toUpperCase();
+          const title = (match[2] || "").trim();
+          const firstLineTail = (match[3] || "").trim();
+          const nextLines = (match[4] || "").trim();
+
+          const children: any[] = [];
+          if (firstLineTail) {
+            children.push({
+              type: "paragraph",
+              content: [{ type: "text", text: firstLineTail }],
+            });
+          }
+          if (nextLines) {
+            nextLines.split(/\r?\n/).forEach((line: string) => {
+              if (line.trim()) {
+                children.push({
+                  type: "paragraph",
+                  content: [{ type: "text", text: line }],
+                });
+              }
+            });
+          }
+          for (let j = 1; j < node.content.length; j++) {
+            children.push(node.content[j]);
+          }
+          if (children.length === 0) {
+            children.push({ type: "paragraph", content: [] });
+          }
+
+          doc.content[i] = {
+            type: "callout",
+            attrs: {
+              type,
+              title,
+            },
+            content: children,
+          };
+          continue;
+        }
+      }
+    }
+
+    if (Array.isArray(node?.content)) {
+      normalizeCalloutNodes(node);
+    }
+  }
 }
 
 export function convertMarkdownToTipTapJson(markdown: string): string {
@@ -75,6 +134,7 @@ export function convertMarkdownToTipTapJson(markdown: string): string {
       editor.commands.setContent(markdown, { contentType: "markdown", emitUpdate: false });
       const json = editor.getJSON();
       if (json && json.type === "doc" && Array.isArray(json.content) && json.content.length > 0) {
+        normalizeCalloutNodes(json);
         return JSON.stringify(json);
       }
     } catch (err) {

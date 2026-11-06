@@ -3,8 +3,9 @@ import { Placeholder } from "@tiptap/extension-placeholder";
 import { Selection } from "@tiptap/extensions";
 import { TaskList as TiptapTaskList } from "@tiptap/extension-task-list";
 import { TaskItem as TiptapTaskItem } from "@tiptap/extension-task-item";
-import Link from "@tiptap/extension-link";
 import CharacterCount from "@tiptap/extension-character-count";
+import { Markdown } from "@tiptap/markdown";
+import { MarkdownPaste } from "../extensions/MarkdownPaste";
 import { CustomKeymap } from "../extensions/CustomKeymapExtensions";
 
 export function createMinimalExtensions(placeholder = "添加备注...") {
@@ -14,6 +15,9 @@ export function createMinimalExtensions(placeholder = "添加备注...") {
       codeBlock: false,
       horizontalRule: false,
       blockquote: false,
+      link: {
+        openOnClick: false,
+      },
     }),
     Selection,
     TiptapTaskList,
@@ -25,9 +29,8 @@ export function createMinimalExtensions(placeholder = "添加备注...") {
       },
     }),
     CustomKeymap,
-    Link.configure({
-      openOnClick: false,
-    }),
+    Markdown,
+    MarkdownPaste,
     CharacterCount,
     Placeholder.configure({
       placeholder,

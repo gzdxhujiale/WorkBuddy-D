@@ -6,9 +6,7 @@ import { Table as TiptapTable } from "@tiptap/extension-table";
 import { TableRow as TiptapTableRow } from "@tiptap/extension-table-row";
 import { TableHeader as TiptapTableHeader } from "@tiptap/extension-table-header";
 import { TableCell as TiptapTableCell } from "@tiptap/extension-table-cell";
-import Link from "@tiptap/extension-link";
 import Highlight from "@tiptap/extension-highlight";
-import Underline from "@tiptap/extension-underline";
 import TextAlign from "@tiptap/extension-text-align";
 import CharacterCount from "@tiptap/extension-character-count";
 import { Selection } from "@tiptap/extensions";
@@ -19,12 +17,17 @@ import { CustomDetails, DetailsSummary, DetailsContent } from "../extensions/Cus
 import { CustomCodeBlockLowlight } from "../extensions/CodeBlockWithLowlight";
 import { CustomImage } from "../extensions/CustomImage";
 import { PasteHandler } from "../extensions/paste-handler";
+import { Markdown } from "@tiptap/markdown";
+import { MarkdownPaste } from "../extensions/MarkdownPaste";
 import { SnapshotExtension } from "../extensions/snapshot/snapshotExtension";
 
 export function createCompactExtensions(placeholder = "输入 / 使用命令...") {
   return [
     StarterKit.configure({
       codeBlock: false,
+      link: {
+        openOnClick: false,
+      },
     }),
     Selection,
     CustomKeymap,
@@ -43,11 +46,7 @@ export function createCompactExtensions(placeholder = "输入 / 使用命令..."
     TiptapTableRow,
     TiptapTableHeader,
     TiptapTableCell,
-    Link.configure({
-      openOnClick: false,
-    }),
     Highlight,
-    Underline,
     TextAlign.configure({
       types: ["heading", "paragraph"],
     }),
@@ -58,6 +57,8 @@ export function createCompactExtensions(placeholder = "输入 / 使用命令..."
     CustomCodeBlockLowlight,
     CustomImage,
     PasteHandler,
+    Markdown,
+    MarkdownPaste,
     SnapshotExtension,
     CharacterCount,
     Placeholder.configure({

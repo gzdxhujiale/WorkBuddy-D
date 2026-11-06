@@ -14,6 +14,8 @@ import (
 	"workbuddy-server/internal/ws"
 )
 
+const MaxNoteContentLength = 10 * 1024 * 1024 // 10MB limit
+
 type NoteHandler struct {
 	queries sqlc.Querier
 	hub     *ws.Hub
@@ -537,6 +539,25 @@ func (h *NoteHandler) ListNotesInFolder(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+
+	// Overlay latest dirty changes from NoteBufferManager if present
+	if h.buffer != nil {
+		for i := range notes {
+			noteUUID := notes[i].ID.Bytes
+			if buffered, ok := h.buffer.GetItem(noteUUID); ok && buffered.UserID == userID {
+				if buffered.Title != nil {
+					notes[i].Title = *buffered.Title
+				}
+				if buffered.LockVersion > notes[i].LockVersion {
+					notes[i].LockVersion = buffered.LockVersion
+				}
+				if buffered.UpdatedAt.After(notes[i].UpdatedAt.Time) {
+					notes[i].UpdatedAt = pgtype.Timestamptz{Time: buffered.UpdatedAt, Valid: true}
+				}
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, notes)
 }
 
@@ -557,6 +578,25 @@ func (h *NoteHandler) GetNote(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"error": "note not found"})
 		return
 	}
+
+	// Overlay latest dirty changes from NoteBufferManager if present
+	if h.buffer != nil {
+		if buffered, ok := h.buffer.GetItem(noteID); ok && buffered.UserID == userID {
+			if buffered.Title != nil {
+				note.Title = *buffered.Title
+			}
+			if buffered.Content != nil {
+				note.Content = *buffered.Content
+			}
+			if buffered.LockVersion > note.LockVersion {
+				note.LockVersion = buffered.LockVersion
+			}
+			if buffered.UpdatedAt.After(note.UpdatedAt.Time) {
+				note.UpdatedAt = pgtype.Timestamptz{Time: buffered.UpdatedAt, Valid: true}
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, note)
 }
 
@@ -574,6 +614,11 @@ func (h *NoteHandler) CreateNote(c *gin.Context) {
 	var req CreateNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.Content) > MaxNoteContentLength {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note content exceeds maximum limit (10MB)"})
 		return
 	}
 
@@ -644,6 +689,11 @@ func (h *NoteHandler) PatchNote(c *gin.Context) {
 	var req PatchNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Content != nil && len(*req.Content) > MaxNoteContentLength {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note content exceeds maximum limit (10MB)"})
 		return
 	}
 
@@ -735,6 +785,11 @@ func (h *NoteHandler) BufferPatchNote(c *gin.Context) {
 	var req PatchNoteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Content != nil && len(*req.Content) > MaxNoteContentLength {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "note content exceeds maximum limit (10MB)"})
 		return
 	}
 
