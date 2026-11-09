@@ -10,6 +10,8 @@ import {
   Check,
   Trash2,
   ArrowRight,
+  RotateCcw,
+  ListTodo,
   GripVertical,
 } from "lucide-react";
 import {
@@ -36,8 +38,17 @@ import { useProjectsData } from "../hooks/useProjects";
 import { hasTaskDescription } from "@/lib/taskDescription";
 import { openQuickEditWindow } from "@/app/windows/quickEditWindowManager";
 import { createTaskId } from "@/lib/entityIds";
+import { sortStageTasks } from "@/lib/taskSort";
 import { cn } from "@/lib/utils";
 import type { ProjectStage, ProjectTask } from "../types";
+import {
+  advanceTaskStage,
+  rollbackTaskStage,
+  directCompleteTask,
+  getStageCategorizedTasks,
+} from "../lib/stagePipeline";
+import { StageTaskManagerModal } from "./StageTaskManagerModal";
+import { StageTaskContextMenu } from "./StageTaskContextMenu";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -194,7 +205,7 @@ interface StageBoxProps {
   stage: ProjectStage;
   stageIndex: number;
   stages: ProjectStage[];
-  tasks: ProjectTask[];
+  allTasks: ProjectTask[];
   disabled?: boolean;
   onSaveStage: (stage: ProjectStage) => void | Promise<void>;
   onDeleteStage: (stage: ProjectStage) => void | Promise<void>;
@@ -206,7 +217,7 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
   stage,
   stageIndex,
   stages,
-  tasks,
+  allTasks,
   disabled,
   onSaveStage,
   onDeleteStage,
@@ -221,6 +232,18 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleValue, setTitleValue] = useState(stage.name);
   const [inlineDraftTitle, setInlineDraftTitle] = useState("");
+  const [managingTasks, setManagingTasks] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{
+    isOpen: boolean;
+    position: { x: number; y: number };
+    task: ProjectTask | null;
+    isSnapshot: boolean;
+  }>({
+    isOpen: false,
+    position: { x: 0, y: 0 },
+    task: null,
+    isSnapshot: false,
+  });
   const inputRef = useRef<HTMLInputElement>(null);
   const isInputFocusedRef = useRef(false);
 
@@ -249,8 +272,17 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
   const theme = STAGE_THEME_PALETTE[stageIndex % STAGE_THEME_PALETTE.length];
   const nextStage = stages[stageIndex + 1];
 
-  const completedTasks = useMemo(() => tasks.filter((t) => t.completed), [tasks]);
-  const isStageAllDone = tasks.length > 0 && completedTasks.length === tasks.length;
+  const { active: activeTasks, snapshots: snapshotTasks } = useMemo(
+    () => getStageCategorizedTasks(stage.id, allTasks),
+    [stage.id, allTasks]
+  );
+
+  const completedCount = useMemo(
+    () => snapshotTasks.length + activeTasks.filter((t) => t.completed).length,
+    [snapshotTasks, activeTasks]
+  );
+  const totalCount = activeTasks.length + snapshotTasks.length;
+  const isStageAllDone = totalCount > 0 && activeTasks.every((t) => t.completed);
 
   const handleCreateTask = (anchorEl: HTMLElement) => {
     void openQuickEditWindow({
@@ -327,12 +359,20 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
     });
   };
 
-  const sortedTasks = useMemo(() => {
-    return [...tasks].sort((a, b) => {
-      if (a.completed === b.completed) return b.createdAt - a.createdAt;
-      return a.completed ? 1 : -1;
+  const handleTaskContextMenu = (e: React.MouseEvent, task: ProjectTask, isSnapshot: boolean) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      isOpen: true,
+      position: { x: e.clientX, y: e.clientY },
+      task,
+      isSnapshot,
     });
-  }, [tasks]);
+  };
+
+  const sortedTasks = useMemo(() => {
+    return sortStageTasks(activeTasks);
+  }, [activeTasks]);
 
   const now = Date.now();
   const expired: ProjectTask[] = [];
@@ -369,6 +409,7 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
         <div
           key={task.id}
           onClick={(e) => handleOpenEditTask(task, e)}
+          onContextMenu={(e) => handleTaskContextMenu(e, task, false)}
           className={cn(
             "group flex items-center justify-between transition-all cursor-pointer select-none",
             isPixelTheme
@@ -383,11 +424,16 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
               disabled={disabled}
               onClick={(e) => {
                 e.stopPropagation();
-                void onSaveTask({
-                  ...task,
-                  completed: !task.completed,
-                  completedAt: !task.completed ? Date.now() : undefined,
-                });
+                if (task.completed) {
+                  void onSaveTask({
+                    ...task,
+                    completed: false,
+                    completedAt: undefined,
+                  });
+                } else {
+                  const advanced = advanceTaskStage(task, stages);
+                  void onSaveTask(advanced);
+                }
               }}
               className={cn(
                 "flex-shrink-0 cursor-pointer transition-all",
@@ -454,16 +500,36 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
           </div>
 
           <div className="flex items-center justify-end flex-shrink-0 ml-2 gap-1">
+            {/* Rollback to Previous Stage Button */}
+            {stageIndex > 0 && !task.completed && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const rolledBack = rollbackTaskStage(task, stages);
+                  void onSaveTask(rolledBack);
+                }}
+                className={cn(
+                  "hidden group-hover:flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 transition-colors cursor-pointer shrink-0",
+                  isPixelTheme
+                    ? "rounded-xs border border-amber-900/60 bg-amber-100 dark:bg-amber-950 text-amber-950 dark:text-amber-200 shadow-[1px_1px_0px_#000]"
+                    : "rounded bg-muted hover:bg-amber-500/10 text-muted-foreground hover:text-amber-600"
+                )}
+                title={`退回上一阶段“${stages[stageIndex - 1]?.name}”`}
+              >
+                <RotateCcw size={10} />
+                <span>退回</span>
+              </button>
+            )}
+
             {/* Quick Move to Next Stage Button */}
             {nextStage && !task.completed && (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void onSaveTask({
-                    ...task,
-                    projectStageId: nextStage.id,
-                  });
+                  const advanced = advanceTaskStage(task, stages);
+                  void onSaveTask(advanced);
                 }}
                 className={cn(
                   "hidden group-hover:flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 transition-colors cursor-pointer shrink-0",
@@ -507,6 +573,50 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
             >
               <X size={14} />
             </Button>
+          </div>
+        </div>
+      );
+    });
+  };
+
+  const renderSnapshotList = (list: ProjectTask[]) => {
+    return list.map((task) => {
+      return (
+        <div
+          key={`snapshot-${task.id}`}
+          onClick={(e) => handleOpenEditTask(task, e)}
+          onContextMenu={(e) => handleTaskContextMenu(e, task, true)}
+          className={cn(
+            "group flex items-center justify-between transition-all cursor-pointer select-none opacity-60 hover:opacity-90",
+            isPixelTheme
+              ? "px-3 py-2 rounded-xs border-2 border-dashed border-border/80 bg-muted/40 font-mono text-muted-foreground shadow-[1px_1px_0px_#000]"
+              : "px-2.5 py-1.5 rounded-lg border border-dashed border-border/70 bg-muted/20 text-muted-foreground"
+          )}
+        >
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <span
+              className={cn(
+                "flex-shrink-0 size-4 rounded-xs flex items-center justify-center text-[10px] font-bold",
+                isPixelTheme
+                  ? "bg-emerald-700 text-white border border-emerald-900 shadow-[1px_1px_0px_#064e3b]"
+                  : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400"
+              )}
+              title="该任务已完成本阶段工序"
+            >
+              ✓
+            </span>
+
+            <span className="text-xs font-medium truncate line-through">
+              {task.title}
+            </span>
+
+            <span className="text-[10px] text-muted-foreground/80 bg-muted/60 px-1.5 py-0.5 rounded shrink-0">
+              已流转至后续阶段
+            </span>
+          </div>
+
+          <div className="flex items-center justify-end flex-shrink-0 ml-2 gap-1 text-[11px] text-muted-foreground">
+            <span>快照</span>
           </div>
         </div>
       );
@@ -624,7 +734,7 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
 
           {/* Task count badge */}
           <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-            {completedTasks.length}/{tasks.length}
+            {completedCount}/{totalCount}
           </span>
 
         </div>
@@ -660,6 +770,22 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
             title={`删除阶段“${stage.name}”`}
           >
             <Trash2 size={14} />
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="icon"
+            disabled={disabled}
+            onClick={() => setManagingTasks(true)}
+            className={cn(
+              "h-7 w-7 cursor-pointer",
+              isPixelTheme
+                ? "rounded-xs border-2 border-border bg-muted hover:bg-card text-foreground shadow-[1px_1px_0px_#000] active:translate-x-[1px] active:translate-y-[1px]"
+                : "text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100"
+            )}
+            title={`批量管理“${stage.name}”任务清单（Tiptap弹窗）`}
+          >
+            <ListTodo size={16} strokeWidth={isPixelTheme ? 2.5 : 2} />
           </Button>
 
           <Button
@@ -712,6 +838,11 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
             {noDate.length > 0 && (
               <CollapsibleGroup title="无日期" count={noDate.length}>
                 {renderTaskList(noDate)}
+              </CollapsibleGroup>
+            )}
+            {snapshotTasks.length > 0 && (
+              <CollapsibleGroup title="已流转工序" count={snapshotTasks.length} defaultExpanded={false}>
+                {renderSnapshotList(sortStageTasks(snapshotTasks))}
               </CollapsibleGroup>
             )}
 
@@ -772,6 +903,62 @@ const StageQuadrantBox: React.FC<StageBoxProps> = ({
           </div>
         </>
       )}
+
+      <StageTaskContextMenu
+        task={contextMenu.task}
+        isOpen={contextMenu.isOpen}
+        position={contextMenu.position}
+        isSnapshot={contextMenu.isSnapshot}
+        canRollback={stageIndex > 0 && !contextMenu.isSnapshot && !contextMenu.task?.completed}
+        onClose={() => setContextMenu((prev) => ({ ...prev, isOpen: false, task: null }))}
+        onDirectComplete={(t) => {
+          const completed = directCompleteTask(t);
+          void onSaveTask(completed);
+        }}
+        onRollback={(t) => {
+          const rolledBack = rollbackTaskStage(t, stages);
+          void onSaveTask(rolledBack);
+        }}
+        onOpenEdit={(t) => {
+          void openQuickEditWindow({
+            task: t,
+            projects: allProjects,
+            stages: allStages,
+            anchorEl: document.body,
+            onCommit: (taskId, updates) => {
+              void onSaveTask({
+                ...t,
+                ...updates,
+                id: taskId,
+              });
+            },
+            onClosed: () => {},
+          });
+        }}
+        onDelete={(id) => {
+          void onDeleteTask(id);
+        }}
+      />
+
+      <StageTaskManagerModal
+        open={managingTasks}
+        onOpenChange={setManagingTasks}
+        stage={stage}
+        stages={stages}
+        tasks={allTasks}
+        disabled={disabled}
+        onSyncTasks={async ({ creates, updates, deletes }) => {
+          for (const t of creates) {
+            await onSaveTask(t);
+          }
+          for (const t of updates) {
+            await onSaveTask(t);
+          }
+          for (const id of deletes) {
+            await onDeleteTask(id);
+          }
+        }}
+      />
     </div>
   );
 };
@@ -845,7 +1032,7 @@ export function ProjectStageBoard({
                 stage={stage}
                 stageIndex={index}
                 stages={stages}
-                tasks={tasks.filter((task) => task.projectStageId === stage.id)}
+                allTasks={tasks}
                 disabled={disabled}
                 onSaveStage={onSaveStage}
                 onDeleteStage={onDeleteStage}

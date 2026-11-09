@@ -2,6 +2,7 @@ import React, { useState, memo } from "react";
 import { Plus, CheckCircle2, Circle, AlignLeft, X, ChevronDown, ChevronRight, Check } from "lucide-react";
 import { Task, QuadrantType } from "../types";
 import { hasTaskDescription } from "@/lib/taskDescription";
+import { sortQuadrantTasks } from "@/lib/taskSort";
 import { Button } from "@/components/ui/button";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 
@@ -299,15 +300,15 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
       const now = Date.now();
       const targetGroup = getScheduleGroup(targetTask.scheduledEndAt, now, targetTask.completed);
 
-      const sameGroupTasks = tasks
-        .filter(
+      const sameGroupTasks = sortQuadrantTasks(
+        tasks.filter(
           (t) =>
             t.quadrant === targetTask.quadrant &&
             t.completed === movedTask.completed &&
             getScheduleGroup(t.scheduledEndAt, now, t.completed) === targetGroup &&
             t.id !== taskId
         )
-        .sort((a, b) => (b.sortOrder ?? -1) - (a.sortOrder ?? -1));
+      );
 
       const yIndex = sameGroupTasks.findIndex((t) => t.id === targetTask.id);
       if (yIndex === -1) return;
@@ -485,10 +486,7 @@ export const DailyQuadrants: React.FC<DailyQuadrantsProps> = memo(
         qTasks = qTasks.filter((t) => !t.completed);
       }
 
-      const sortedTasks = [...qTasks].sort((a, b) => {
-        if (a.completed === b.completed) return (b.sortOrder ?? -1) - (a.sortOrder ?? -1);
-        return a.completed ? 1 : -1;
-      });
+      const sortedTasks = sortQuadrantTasks(qTasks);
 
       const now = Date.now();
       const expired: Task[] = [];

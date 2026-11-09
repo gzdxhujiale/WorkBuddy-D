@@ -18,6 +18,7 @@ import {
   getOverdueDurationLabel,
   sortTasksByQuadrantAndDeadline,
 } from "@/lib/taskSchedule";
+import { sortTodayTasks } from "@/lib/taskSort";
 import { cn } from "@/lib/utils";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { PixelSparkle } from "@/components/pixel/PixelIcons";
@@ -155,19 +156,7 @@ export const TodayTasksSection: React.FC<TodayTasksSectionProps> = ({
   }, [dueTasks, taskFilter]);
 
   const chronologicalTasks = useMemo(() => {
-    return [...filteredDueTasks].sort((a, b) => {
-      if (a.completed !== b.completed) {
-        return a.completed ? 1 : -1;
-      }
-      const aOverdue = isTaskOverdue(a, now);
-      const bOverdue = isTaskOverdue(b, now);
-      if (aOverdue !== bOverdue) {
-        return aOverdue ? -1 : 1;
-      }
-      const aEnd = a.scheduledEndAt ?? a.scheduledStartAt ?? Number.MAX_SAFE_INTEGER;
-      const bEnd = b.scheduledEndAt ?? b.scheduledStartAt ?? Number.MAX_SAFE_INTEGER;
-      return aEnd - bEnd;
-    });
+    return sortTodayTasks(filteredDueTasks, now);
   }, [filteredDueTasks, now]);
 
   const tasksByQuadrant = useMemo(() => {
@@ -185,17 +174,7 @@ export const TodayTasksSection: React.FC<TodayTasksSectionProps> = ({
       }
     }
     for (const q of Object.keys(map) as QuadrantType[]) {
-      map[q].sort((a, b) => {
-        if (a.completed !== b.completed) {
-          return a.completed ? 1 : -1;
-        }
-        const aOverdue = isTaskOverdue(a, now);
-        const bOverdue = isTaskOverdue(b, now);
-        if (aOverdue !== bOverdue) {
-          return aOverdue ? -1 : 1;
-        }
-        return (a.scheduledEndAt ?? Number.MAX_SAFE_INTEGER) - (b.scheduledEndAt ?? Number.MAX_SAFE_INTEGER);
-      });
+      map[q] = sortTodayTasks(map[q], now);
     }
     return map;
   }, [filteredDueTasks, now]);

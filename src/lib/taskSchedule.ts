@@ -104,7 +104,9 @@ export function sortTasksByQuadrantAndDeadline(tasks: Task[], now: number = Date
     const timeB = b.scheduledEndAt ?? Number.MAX_SAFE_INTEGER;
     if (timeA !== timeB) return timeA - timeB;
 
-    return (b.createdAt ?? 0) - (a.createdAt ?? 0);
+    const createdDiff = (b.createdAt ?? 0) - (a.createdAt ?? 0);
+    if (createdDiff !== 0) return createdDiff;
+    return a.id.localeCompare(b.id);
   });
 }
 

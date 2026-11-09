@@ -376,6 +376,12 @@ html.tqe-window *:focus-visible {
   border-radius: 0;
 }
 
+/* Tiptap Editor Global Focus Outline Reset */
+.ProseMirror:focus,
+.ProseMirror-focused {
+  outline: none !important;
+}
+
 /* Tiptap TaskList & TaskItem Global Alignment & Styling */
 .ProseMirror ul[data-type="taskList"] {
   list-style: none !important;

@@ -70,6 +70,7 @@ export const projectApi = {
         reminder: row.reminder ? (typeof row.reminder === "string" ? row.reminder : JSON.stringify(row.reminder)) : undefined,
         projectId: row.project_id,
         projectStageId: row.project_stage_id || undefined,
+        stageHistory: Array.isArray(row.stage_history) ? row.stage_history : undefined,
         priority: row.priority,
         assigneeName: row.assignee_name || undefined,
         sortOrder: Number(row.sort_order ?? 0),

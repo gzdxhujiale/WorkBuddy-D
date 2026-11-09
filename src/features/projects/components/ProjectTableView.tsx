@@ -149,7 +149,13 @@ export function ProjectTableView({
       } else if (sortField === "completed") {
         cmp = Number(a.completed) - Number(b.completed);
       }
-      return sortDirection === "asc" ? cmp : -cmp;
+      if (cmp !== 0) {
+        return sortDirection === "asc" ? cmp : -cmp;
+      }
+      // Deterministic tie-breaker: creation time then ID
+      const createdDiff = (b.createdAt || 0) - (a.createdAt || 0);
+      if (createdDiff !== 0) return createdDiff;
+      return a.id.localeCompare(b.id);
     });
   }, [filteredTasks, sortField, sortDirection, stageMap]);
 

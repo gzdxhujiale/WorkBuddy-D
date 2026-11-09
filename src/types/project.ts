@@ -1,4 +1,6 @@
-import type { Task } from "./task";
+import type { Task, TaskStageHistoryItem } from "./task";
+
+export type { TaskStageHistoryItem };
 
 export type ProjectStatus = "not_started" | "in_progress" | "completed" | "archived";
 export type Priority = "low" | "medium" | "high" | "urgent";

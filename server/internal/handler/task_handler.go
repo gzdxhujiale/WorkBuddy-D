@@ -36,6 +36,7 @@ type TaskResponse struct {
 	Reminder         json.RawMessage    `json:"reminder"`
 	ProjectID        pgtype.UUID        `json:"project_id"`
 	ProjectStageID   pgtype.UUID        `json:"project_stage_id"`
+	StageHistory     json.RawMessage    `json:"stage_history"`
 	Priority         string             `json:"priority"`
 	AssigneeName     pgtype.Text        `json:"assignee_name"`
 	SortOrder        int32              `json:"sort_order"`
@@ -49,6 +50,12 @@ func toTaskResponse(t sqlc.TimeManagementTask) TaskResponse {
 	var rem json.RawMessage
 	if len(t.Reminder) > 0 && string(t.Reminder) != "null" {
 		rem = json.RawMessage(t.Reminder)
+	}
+	var stageHist json.RawMessage
+	if len(t.StageHistory) > 0 && string(t.StageHistory) != "null" {
+		stageHist = json.RawMessage(t.StageHistory)
+	} else {
+		stageHist = json.RawMessage("[]")
 	}
 	return TaskResponse{
 		ID:               t.ID,
@@ -64,6 +71,7 @@ func toTaskResponse(t sqlc.TimeManagementTask) TaskResponse {
 		Reminder:         rem,
 		ProjectID:        t.ProjectID,
 		ProjectStageID:   t.ProjectStageID,
+		StageHistory:     stageHist,
 		Priority:         t.Priority,
 		AssigneeName:     t.AssigneeName,
 		SortOrder:        t.SortOrder,
@@ -127,6 +135,7 @@ type TaskInput struct {
 	Reminder         *json.RawMessage `json:"reminder"`
 	ProjectID        *string          `json:"project_id"`
 	ProjectStageID   *string          `json:"project_stage_id"`
+	StageHistory     *json.RawMessage `json:"stage_history"`
 	Priority         string           `json:"priority"`
 	AssigneeName     *string          `json:"assignee_name"`
 	SortOrder        *int32           `json:"sort_order"`
@@ -203,6 +212,11 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		reminderBytes = []byte(*req.Reminder)
 	}
 
+	stageHistoryBytes := []byte("[]")
+	if req.StageHistory != nil && string(*req.StageHistory) != "null" && string(*req.StageHistory) != "" {
+		stageHistoryBytes = []byte(*req.StageHistory)
+	}
+
 	task, err := h.queries.CreateTask(c.Request.Context(), sqlc.CreateTaskParams{
 		ID:               pgtype.UUID{Bytes: id, Valid: true},
 		UserID:           pgtype.UUID{Bytes: userID, Valid: true},
@@ -217,6 +231,7 @@ func (h *TaskHandler) CreateTask(c *gin.Context) {
 		Reminder:         reminderBytes,
 		ProjectID:        projUUID,
 		ProjectStageID:   stageUUID,
+		StageHistory:     stageHistoryBytes,
 		Priority:         priority,
 		AssigneeName:     pgtype.Text{String: derefString(req.AssigneeName), Valid: req.AssigneeName != nil},
 		SortOrder:        sortOrder,
@@ -359,6 +374,15 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 		}
 	}
 
+	stageHistoryBytes := existing.StageHistory
+	if req.StageHistory != nil {
+		if string(*req.StageHistory) == "null" || string(*req.StageHistory) == "" {
+			stageHistoryBytes = []byte("[]")
+		} else {
+			stageHistoryBytes = []byte(*req.StageHistory)
+		}
+	}
+
 	lockVersion := req.LockVersion
 	if lockVersion == 0 {
 		lockVersion = existing.LockVersion
@@ -378,6 +402,7 @@ func (h *TaskHandler) UpdateTask(c *gin.Context) {
 		Reminder:         reminderBytes,
 		ProjectID:        projUUID,
 		ProjectStageID:   stageUUID,
+		StageHistory:     stageHistoryBytes,
 		Priority:         priority,
 		AssigneeName:     assignee,
 		SortOrder:        sortOrder,

@@ -35,6 +35,7 @@ export const timeManagementApi = {
       reminder: typeof t.reminder === "string" ? t.reminder : t.reminder ? JSON.stringify(t.reminder) : undefined,
       projectId: (t.project_id as string) || undefined,
       projectStageId: (t.project_stage_id as string) || undefined,
+      stageHistory: Array.isArray(t.stage_history) ? (t.stage_history as Task["stageHistory"]) : undefined,
       priority: ((t.priority as string) || "medium") as Task["priority"],
       assigneeName: (t.assignee_name as string) || undefined,
       sortOrder: Number(t.sort_order),

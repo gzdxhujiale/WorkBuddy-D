@@ -17,6 +17,7 @@ import { PixelScroll } from "@/components/pixel/PixelIcons";
 import { createTaskId } from "@/lib/entityIds";
 import { openQuickEditWindow } from "@/app/windows/quickEditWindowManager";
 import { taskIntersectsDay } from "@/lib/taskSchedule";
+import { sortStageTasks } from "@/lib/taskSort";
 import { useTodayHighlightStore } from "@/stores/todayHighlightStore";
 import type { Project, ProjectTask } from "../types";
 import type { Task } from "@/types/task";
@@ -347,7 +348,9 @@ export const TodayProjectTimeline: React.FC<TodayProjectTimelineProps> = ({
       const projTasks = tasks.filter((t) => t.projectId === proj.id);
 
       const stagesWithMeta: StageItemWithMeta[] = projStages.map((stage) => {
-        const stageTasks = projTasks.filter((t) => t.projectStageId === stage.id);
+        const stageTasks = sortStageTasks(
+          projTasks.filter((t) => t.projectStageId === stage.id)
+        );
         const taskStartTimes = stageTasks
           .map((t) => t.scheduledStartAt || t.scheduledEndAt)
           .filter((t): t is number => Boolean(t));

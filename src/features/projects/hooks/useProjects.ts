@@ -168,10 +168,16 @@ export function useProjectActions() {
           t.id === task.id ? { ...t, ...pTask, updatedAt: Date.now() } : t
         );
       } else {
-        nextTasks = [
-          { ...pTask, updatedAt: Date.now(), createdAt: pTask.createdAt || Date.now() },
-          ...cur.tasks,
-        ];
+        const stageTasks = cur.tasks.filter((t) => t.projectStageId === pTask.projectStageId);
+        const nextSortOrder =
+          stageTasks.reduce((max, t) => Math.max(max, t.sortOrder ?? -1), -1) + 1;
+        const taskWithOrder: ProjectTask = {
+          ...pTask,
+          sortOrder: pTask.sortOrder ?? nextSortOrder,
+          updatedAt: Date.now(),
+          createdAt: pTask.createdAt || Date.now(),
+        };
+        nextTasks = [taskWithOrder, ...cur.tasks];
       }
       return { ...cur, tasks: nextTasks };
     },
@@ -303,18 +309,27 @@ export function useProjectActions() {
   }, [PROJECTS_KEY, TIME_KEY, queryClient, triggerDeleteStage]);
   const saveTask = useCallback(
     async (task: Task) => {
-      triggerSaveTask(task);
+      const cur = queryClient.getQueryData<ProjectCenterData>(PROJECTS_KEY);
+      const isNew = !cur?.tasks.some((t) => t.id === task.id);
+      let taskToSave = task;
+      if (isNew && (task.sortOrder === undefined || task.sortOrder === null)) {
+        const stageTasks = cur?.tasks.filter((t) => t.projectStageId === task.projectStageId) ?? [];
+        const nextSortOrder =
+          stageTasks.reduce((max, t) => Math.max(max, t.sortOrder ?? -1), -1) + 1;
+        taskToSave = { ...task, sortOrder: nextSortOrder };
+      }
+      triggerSaveTask(taskToSave);
       queryClient.setQueryData<TimeManagementData>(TIME_KEY, (old) => {
         if (!old) return old;
-        const idx = old.tasks.findIndex((t) => t.id === task.id);
+        const idx = old.tasks.findIndex((t) => t.id === taskToSave.id);
         const nextTasks =
           idx >= 0
-            ? old.tasks.map((t) => (t.id === task.id ? { ...t, ...task } : t))
-            : [task, ...old.tasks];
+            ? old.tasks.map((t) => (t.id === taskToSave.id ? { ...t, ...taskToSave } : t))
+            : [taskToSave, ...old.tasks];
         return { ...old, tasks: nextTasks };
       });
     },
-    [triggerSaveTask, queryClient, TIME_KEY]
+    [triggerSaveTask, queryClient, TIME_KEY, PROJECTS_KEY]
   );
   const deleteTask = useCallback(
     async (taskId: string) => {

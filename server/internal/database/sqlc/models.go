@@ -207,6 +207,7 @@ type TimeManagementTask struct {
 	CreatedAt        pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
 	DeletedAt        pgtype.Timestamptz `json:"deleted_at"`
+	StageHistory     []byte             `json:"stage_history"`
 }
 
 type User struct {

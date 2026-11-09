@@ -55,6 +55,7 @@ export async function saveRemoteTask(task: Task): Promise<SavedTaskVersion> {
     reminder: parseReminder(task.reminder),
     project_id: task.projectId || null,
     project_stage_id: task.projectStageId || null,
+    stage_history: task.stageHistory || null,
     priority: task.priority || "medium",
     assignee_name: task.assigneeName || null,
     sort_order: task.sortOrder,

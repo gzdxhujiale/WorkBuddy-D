@@ -13,6 +13,7 @@ import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { useProjectsData } from "../hooks/useProjects";
 import { openQuickEditWindow } from "@/app/windows/quickEditWindowManager";
 import { createTaskId } from "@/lib/entityIds";
+import { sortStageTasks } from "@/lib/taskSort";
 import type { Project, ProjectStage, ProjectTask } from "../types";
 
 export type GanttViewScale = "week" | "biweekly" | "month";
@@ -353,7 +354,9 @@ export function ProjectGanttView({
           {/* Tree Rows */}
           <div className="divide-y divide-border/60">
             {stages.map((stage, sIdx) => {
-              const stageTasks = tasks.filter((t) => t.projectStageId === stage.id);
+              const stageTasks = sortStageTasks(
+                tasks.filter((t) => t.projectStageId === stage.id)
+              );
               const completedCount = stageTasks.filter((t) => t.completed).length;
               const isCollapsed = collapsedStages[stage.id];
               const isStageAllDone = stageTasks.length > 0 && completedCount === stageTasks.length;
@@ -522,7 +525,9 @@ export function ProjectGanttView({
           {/* Grid Content Rows */}
           <div className="flex-1 divide-y divide-border/60 overflow-y-auto relative">
             {stages.map((stage) => {
-              const stageTasks = tasks.filter((t) => t.projectStageId === stage.id);
+              const stageTasks = sortStageTasks(
+                tasks.filter((t) => t.projectStageId === stage.id)
+              );
               const isCollapsed = collapsedStages[stage.id];
               const isStageAllDone = stageTasks.length > 0 && stageTasks.every((t) => t.completed);
 

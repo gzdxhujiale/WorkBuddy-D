@@ -7,6 +7,11 @@ export interface TaskReminder {
   repeat?: boolean;
 }
 
+export interface TaskStageHistoryItem {
+  stageId: string;
+  completedAt: number;
+}
+
 export interface Task {
   id: string;
   title: string;
@@ -22,6 +27,7 @@ export interface Task {
   /** A task may belong to one project; it remains the same task everywhere. */
   projectId?: string;
   projectStageId?: string;
+  stageHistory?: TaskStageHistoryItem[];
   priority?: 'low' | 'medium' | 'high' | 'urgent';
   assigneeName?: string;
   /** Explicit server-owned ordering within a quadrant; never derived from createdAt. */
