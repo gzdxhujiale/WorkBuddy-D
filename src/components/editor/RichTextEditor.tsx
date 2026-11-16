@@ -20,6 +20,7 @@ import {
   type WikilinkSuggestionListRef,
 } from "./menus/WikilinkSuggestionList";
 import { EditorBubbleMenu } from "./menus/BubbleMenu";
+import { TableBubbleMenu } from "./menus/TableBubbleMenu";
 import { ImageBubbleMenu } from "./menus/ImageBubbleMenu";
 import { EditorContextMenu } from "./menus/EditorContextMenu";
 import { CompactToolbar } from "./toolbars/CompactToolbar";
@@ -410,7 +411,21 @@ export function RichTextEditor({
   const handleContextMenu = (e: React.MouseEvent) => {
     if (!editor || editor.isDestroyed) return;
 
+    const target = e.target as HTMLElement | null;
+    const tableCellTarget = target?.closest("td, th");
+    const isTableTarget = Boolean(tableCellTarget || target?.closest("table"));
+
     let selection = editor.state.selection;
+
+    // If right clicked inside a table cell, ensure editor cursor is positioned at the clicked cell
+    if (isTableTarget && (!editor.isActive("table") || !selection || selection.empty)) {
+      const clickPos = editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
+      if (clickPos && typeof clickPos.pos === "number") {
+        editor.commands.setTextSelection(clickPos.pos);
+        selection = editor.state.selection;
+      }
+    }
+
     if ((!selection || selection.empty) && lastNonEmptySelectionRef.current) {
       const { from, to } = lastNonEmptySelectionRef.current;
       const pos = editor.view.posAtCoords({ left: e.clientX, top: e.clientY });
@@ -420,7 +435,12 @@ export function RichTextEditor({
       }
     }
 
-    if (!selection || selection.empty) {
+    const isTable = editor.isActive("table") || isTableTarget;
+    const hasSelection = Boolean(
+      (selection && !selection.empty) || lastNonEmptySelectionRef.current
+    );
+
+    if (!hasSelection && !isTable) {
       if (contextMenuState.isOpen) {
         setContextMenuState((prev) => ({ ...prev, isOpen: false }));
       }
@@ -468,6 +488,11 @@ export function RichTextEditor({
       {preset !== "minimal" && (
         <>
           <EditorBubbleMenu
+            editor={editor}
+            isPixelTheme={isPixelTheme}
+            suppress={contextMenuState.isOpen}
+          />
+          <TableBubbleMenu
             editor={editor}
             isPixelTheme={isPixelTheme}
             suppress={contextMenuState.isOpen}

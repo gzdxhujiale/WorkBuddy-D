@@ -9,6 +9,14 @@ import {
   Clipboard,
   CheckSquare,
   ChevronRight,
+  ArrowUpToLine,
+  ArrowDownToLine,
+  ArrowLeftToLine,
+  ArrowRightToLine,
+  Merge,
+  Split,
+  TableProperties,
+  Trash2,
 } from "lucide-react";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
@@ -97,6 +105,9 @@ export function EditorContextMenu({
     (selection && !selection.empty) || savedSelectionRef.current
   );
   const isEditable = editor.isEditable;
+  const isTableActive = isEditable && editor.isActive("table");
+  const canMerge = isTableActive && editor.can().mergeCells();
+  const canSplit = isTableActive && editor.can().splitCell();
 
   const getSelectedPlainText = () => {
     if (!editor || editor.isDestroyed) return "";
@@ -206,8 +217,8 @@ export function EditorContextMenu({
   };
 
   // Safe viewport boundaries calculation
-  const menuWidth = 168;
-  const menuHeight = isEditable ? 164 : 100;
+  const menuWidth = isTableActive ? 184 : 168;
+  const menuHeight = isTableActive ? 420 : (isEditable ? 164 : 100);
   const submenuWidth = 148;
 
   const left =
@@ -224,11 +235,13 @@ export function EditorContextMenu({
   const openSubmenuLeft =
     typeof window !== "undefined" && left + menuWidth + submenuWidth > window.innerWidth - 12;
 
-  const itemClass = (disabled = false) =>
+  const itemClass = (disabled = false, destructive = false) =>
     cn(
       "w-full text-left px-2.5 py-1.5 text-xs transition-colors flex items-center justify-between gap-2 select-none outline-none",
       disabled
-        ? "opacity-50 pointer-events-none cursor-not-allowed"
+        ? "opacity-40 pointer-events-none cursor-not-allowed"
+        : destructive
+        ? "cursor-pointer text-destructive hover:bg-destructive/10 active:bg-destructive/20"
         : "cursor-pointer hover:bg-muted active:bg-muted/80 text-foreground",
       isPixelTheme ? "rounded-xs font-mono" : "rounded-lg"
     );
@@ -248,12 +261,175 @@ export function EditorContextMenu({
         zIndex: 1100,
       }}
       className={cn(
-        "min-w-40 p-1 bg-popover text-popover-foreground flex flex-col shadow-lg select-none outline-none animate-in fade-in zoom-in-95 duration-100",
+        "min-w-44 max-h-[min(520px,calc(100vh-24px))] overflow-y-auto no-scrollbar p-1 bg-popover text-popover-foreground flex flex-col shadow-lg select-none outline-none animate-in fade-in zoom-in-95 duration-100",
         isPixelTheme
           ? "rounded-xs border-2 border-border font-mono shadow-[3px_3px_0px_#000]"
-          : "border border-border rounded-xl shadow-[0_4px_12px_rgba(0,0,0,0.1)] dark:shadow-[0_4px_16px_rgba(0,0,0,0.35)]"
+          : "border border-border rounded-xl shadow-[0_4px_16px_rgba(0,0,0,0.12)] dark:shadow-[0_4px_20px_rgba(0,0,0,0.4)]"
       )}
     >
+      {/* Table Context Specific Commands */}
+      {isTableActive && (
+        <>
+          <div className="px-2.5 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider select-none">
+            表格操作
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              editor.chain().focus().addRowBefore().run();
+            }}
+            className={itemClass()}
+          >
+            <div className="flex items-center gap-2">
+              <ArrowUpToLine size={14} className="opacity-70" />
+              <span>在上方插入行</span>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              editor.chain().focus().addRowAfter().run();
+            }}
+            className={itemClass()}
+          >
+            <div className="flex items-center gap-2">
+              <ArrowDownToLine size={14} className="opacity-70" />
+              <span>在下方插入行</span>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              editor.chain().focus().addColumnBefore().run();
+            }}
+            className={itemClass()}
+          >
+            <div className="flex items-center gap-2">
+              <ArrowLeftToLine size={14} className="opacity-70" />
+              <span>在左侧插入列</span>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              editor.chain().focus().addColumnAfter().run();
+            }}
+            className={itemClass()}
+          >
+            <div className="flex items-center gap-2">
+              <ArrowRightToLine size={14} className="opacity-70" />
+              <span>在右侧插入列</span>
+            </div>
+          </button>
+
+          <div className="h-px bg-border my-1 -mx-1" />
+
+          <button
+            type="button"
+            disabled={!canMerge}
+            onClick={() => {
+              onClose();
+              editor.chain().focus().mergeCells().run();
+            }}
+            className={itemClass(!canMerge)}
+          >
+            <div className="flex items-center gap-2">
+              <Merge size={14} className="opacity-70" />
+              <span>合并单元格</span>
+            </div>
+          </button>
+          <button
+            type="button"
+            disabled={!canSplit}
+            onClick={() => {
+              onClose();
+              editor.chain().focus().splitCell().run();
+            }}
+            className={itemClass(!canSplit)}
+          >
+            <div className="flex items-center gap-2">
+              <Split size={14} className="opacity-70" />
+              <span>拆分单元格</span>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              editor.chain().focus().toggleHeaderRow().run();
+            }}
+            className={itemClass()}
+          >
+            <div className="flex items-center gap-2">
+              <TableProperties size={14} className="opacity-70" />
+              <span>切换表头行</span>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              editor.chain().focus().toggleHeaderColumn().run();
+            }}
+            className={itemClass()}
+          >
+            <div className="flex items-center gap-2">
+              <TableProperties size={14} className="opacity-70 rotate-90" />
+              <span>切换表头列</span>
+            </div>
+          </button>
+
+          <div className="h-px bg-border my-1 -mx-1" />
+
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              editor.chain().focus().deleteRow().run();
+            }}
+            className={itemClass(false, true)}
+          >
+            <div className="flex items-center gap-2">
+              <Trash2 size={14} />
+              <span>删除当前行</span>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              editor.chain().focus().deleteColumn().run();
+            }}
+            className={itemClass(false, true)}
+          >
+            <div className="flex items-center gap-2">
+              <Trash2 size={14} />
+              <span>删除当前列</span>
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              editor.chain().focus().deleteTable().run();
+            }}
+            className={itemClass(false, true)}
+          >
+            <div className="flex items-center gap-2">
+              <Trash2 size={14} />
+              <span>删除表格</span>
+            </div>
+          </button>
+
+          <div className="h-px bg-border my-1 -mx-1" />
+        </>
+      )}
+
+      {/* Standard Clipboard / Selection Operations */}
       {isEditable && (
         <button
           type="button"

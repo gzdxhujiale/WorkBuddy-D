@@ -1,4 +1,4 @@
-import { apiClient } from "@/lib/apiClient";
+import { apiClient, setOnUnauthorizedHandler } from "@/lib/apiClient";
 
 export interface AuthUser {
   id: string;
@@ -101,3 +101,9 @@ export const authService = {
     };
   },
 };
+
+// 绑定 401 拦截器：当请求返回 401 未授权时自动退出登录并清空凭证
+setOnUnauthorizedHandler(() => {
+  authService.logout();
+});
+

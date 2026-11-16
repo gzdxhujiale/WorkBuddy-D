@@ -17,6 +17,16 @@ export type ApiError = ApiHttpError;
 
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080";
 
+type UnauthorizedHandler = () => void;
+let onUnauthorizedCallback: UnauthorizedHandler | null = null;
+
+/**
+ * 注册全局 401 Unauthorized 回调（由 Auth 模块在初始化时绑定）
+ */
+export function setOnUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  onUnauthorizedCallback = handler;
+}
+
 export function getAuthToken(): string | null {
   try {
     const raw = localStorage.getItem("workbuddy_auth_session");
@@ -56,6 +66,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     } catch {
       // Non-JSON error
     }
+
+    // 当服务端返回 401 Unauthorized，且请求并非登录/注册本身时，触发自动登出
+    const isAuthEndpoint = endpoint.includes("/api/v1/auth/login") || endpoint.includes("/api/v1/auth/register");
+    if (response.status === 401 && !isAuthEndpoint && onUnauthorizedCallback) {
+      onUnauthorizedCallback();
+    }
+
     throw new ApiHttpError(response.status, errorMsg, errJson);
   }
 
