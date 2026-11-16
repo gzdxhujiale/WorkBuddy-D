@@ -11,7 +11,6 @@ export default defineConfig(async () => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
-      "@douyinfe/semi-ui/dist/css/semi.css": path.resolve(__dirname, "./node_modules/@douyinfe/semi-ui/dist/css/semi.css"),
     },
   },
   clearScreen: false,

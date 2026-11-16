@@ -1,30 +1,29 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Layout,
-  Button,
-  Input,
-  Dropdown,
-  Popconfirm,
-  Modal,
-  Tooltip,
-  Empty,
-  Toast,
-} from "@douyinfe/semi-ui";
+  Plus,
+  Search,
+  MoreVertical,
+  Edit2,
+  Trash2,
+  PanelLeft,
+  Clock,
+  Pin,
+  PinOff,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
-  IconPlus,
-  IconSearch,
-  IconMore,
-  IconEdit,
-  IconDelete,
-  IconSidebar,
-  IconClock,
-  IconTop,
-} from "@douyinfe/semi-icons";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "@/components/ui/toast";
 import { aiApi } from "../api/aiApi";
 import type { AISession } from "../types";
-
-const { Sider } = Layout;
 
 interface AISessionListProps {
   currentSessionId: string | null;
@@ -45,6 +44,7 @@ export const AISessionList: React.FC<AISessionListProps> = ({
   const [searchTerm, setSearchTerm] = useState("");
   const [renameTarget, setRenameTarget] = useState<AISession | null>(null);
   const [newTitle, setNewTitle] = useState("");
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // 1. Fetch sessions
   const { data: sessions = [], isLoading } = useQuery<AISession[]>({
@@ -58,11 +58,11 @@ export const AISessionList: React.FC<AISessionListProps> = ({
       aiApi.updateSession(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai-sessions"] });
-      Toast.success("会话已更新");
+      toast.success("会话已更新");
       setRenameTarget(null);
     },
     onError: (err: any) => {
-      Toast.error("更新失败: " + err.message);
+      toast.error("更新失败: " + err.message);
     },
   });
 
@@ -71,13 +71,14 @@ export const AISessionList: React.FC<AISessionListProps> = ({
     onSuccess: (_, deletedId) => {
       queryClient.invalidateQueries({ queryKey: ["ai-sessions"] });
       queryClient.removeQueries({ queryKey: ["ai-messages", deletedId] });
-      Toast.success("会话已删除");
+      toast.success("会话已删除");
+      setDeleteConfirmId(null);
       if (currentSessionId === deletedId) {
         onNewSession();
       }
     },
     onError: (err: any) => {
-      Toast.error("删除失败: " + err.message);
+      toast.error("删除失败: " + err.message);
     },
   });
 
@@ -157,7 +158,7 @@ export const AISessionList: React.FC<AISessionListProps> = ({
     if (list.length === 0) return null;
     return (
       <div key={title} className="mb-4">
-        <div className="px-3 mb-1 text-[11px] font-semibold tracking-wider text-gray-400 uppercase select-none">
+        <div className="px-3 mb-1 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase select-none">
           {title}
         </div>
         <div className="space-y-0.5">
@@ -169,13 +170,13 @@ export const AISessionList: React.FC<AISessionListProps> = ({
                 onClick={() => onSelectSession(session)}
                 className={`group relative flex items-center justify-between px-3 py-2 rounded-lg cursor-pointer transition-colors text-xs ${
                   isSelected
-                    ? "bg-blue-50 text-blue-600 font-medium dark:bg-blue-900/30 dark:text-blue-400"
-                    : "text-gray-700 dark:text-gray-300 hover:bg-gray-100/80 dark:hover:bg-gray-800/60"
+                    ? "bg-primary/10 text-primary font-medium"
+                    : "text-foreground hover:bg-accent/60"
                 }`}
               >
                 <div className="flex items-center gap-2 truncate pr-6">
                   {session.is_pinned && (
-                    <IconTop size="small" className="text-amber-500 shrink-0" />
+                    <Pin className="size-3 text-amber-500 shrink-0 fill-amber-500" />
                   )}
                   <span className="truncate" title={session.title}>
                     {session.title || "新对话"}
@@ -186,45 +187,43 @@ export const AISessionList: React.FC<AISessionListProps> = ({
                   className="opacity-0 group-hover:opacity-100 flex items-center shrink-0 transition-opacity"
                   onClick={(e) => e.stopPropagation()}
                 >
-                  <Dropdown
-                    trigger="click"
-                    position="bottomRight"
-                    render={
-                      <Dropdown.Menu>
-                        <Dropdown.Item
-                          icon={<IconTop />}
-                          onClick={(e) => handleTogglePin(session, e as any)}
-                        >
-                          {session.is_pinned ? "取消置顶" : "置顶对话"}
-                        </Dropdown.Item>
-                        <Dropdown.Item
-                          icon={<IconEdit />}
-                          onClick={(e) => handleStartRename(session, e as any)}
-                        >
-                          重命名
-                        </Dropdown.Item>
-                        <Dropdown.Divider />
-                        <Popconfirm
-                          title="确定删除此对话吗？"
-                          content="删除后聊天记录将无法恢复"
-                          okType="danger"
-                          onConfirm={() => deleteMutation.mutate(session.id)}
-                        >
-                          <Dropdown.Item icon={<IconDelete />} type="danger">
-                            删除对话
-                          </Dropdown.Item>
-                        </Popconfirm>
-                      </Dropdown.Menu>
-                    }
-                  >
-                    <Button
-                      theme="borderless"
-                      type="tertiary"
-                      size="small"
-                      icon={<IconMore size="small" />}
-                      style={{ padding: "0 2px" }}
-                    />
-                  </Dropdown>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        className="size-6 inline-flex items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground cursor-pointer"
+                      >
+                        <MoreVertical className="size-3.5" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-36">
+                      <DropdownMenuItem onClick={(e) => handleTogglePin(session, e as any)}>
+                        {session.is_pinned ? (
+                          <>
+                            <PinOff className="size-3.5 mr-2" />
+                            <span>取消置顶</span>
+                          </>
+                        ) : (
+                          <>
+                            <Pin className="size-3.5 mr-2" />
+                            <span>置顶对话</span>
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => handleStartRename(session, e as any)}>
+                        <Edit2 className="size-3.5 mr-2" />
+                        <span>重命名</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onClick={() => setDeleteConfirmId(session.id)}
+                      >
+                        <Trash2 className="size-3.5 mr-2" />
+                        <span>删除对话</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             );
@@ -236,24 +235,23 @@ export const AISessionList: React.FC<AISessionListProps> = ({
 
   if (collapsed) {
     return (
-      <div className="w-12 border-r border-gray-200/80 dark:border-gray-800 flex flex-col items-center py-3 bg-gray-50/50 dark:bg-gray-900/40 shrink-0">
-        <Tooltip content="展开历史会话 (Ctrl+B)" position="right">
-          <Button
-            theme="borderless"
-            type="tertiary"
-            icon={<IconSidebar />}
-            onClick={onToggleCollapse}
-            className="mb-3"
-          />
-        </Tooltip>
-        <Tooltip content="新建对话" position="right">
-          <Button
-            theme="solid"
-            type="primary"
-            icon={<IconPlus />}
-            onClick={onNewSession}
-          />
-        </Tooltip>
+      <div className="w-12 border-r border-border flex flex-col items-center py-3 bg-card/40 shrink-0">
+        <button
+          type="button"
+          title="展开历史会话 (Ctrl+B)"
+          onClick={onToggleCollapse}
+          className="size-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent mb-3 cursor-pointer"
+        >
+          <PanelLeft className="size-4" />
+        </button>
+        <button
+          type="button"
+          title="新建对话"
+          onClick={onNewSession}
+          className="size-8 rounded-lg flex items-center justify-center bg-primary text-primary-foreground hover:bg-primary/90 cursor-pointer shadow-xs"
+        >
+          <Plus className="size-4" />
+        </button>
       </div>
     );
   }
@@ -266,63 +264,52 @@ export const AISessionList: React.FC<AISessionListProps> = ({
     groupedSessions.earlier.length > 0;
 
   return (
-    <Sider
-      style={{
-        width: 260,
-        backgroundColor: "var(--semi-color-nav-bg, rgba(249, 250, 251, 0.7))",
-        borderRight: "1px solid var(--semi-color-border, rgba(229, 231, 235, 0.8))",
-      }}
-      className="flex flex-col h-full shrink-0 select-none"
-    >
+    <aside className="w-64 border-r border-border bg-card/30 flex flex-col h-full shrink-0 select-none">
       {/* Header action bar */}
-      <div className="p-3 border-b border-gray-200/60 dark:border-gray-800 space-y-2">
+      <div className="p-3 border-b border-border space-y-2">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-700 dark:text-gray-200">
-            <IconClock size="small" className="text-gray-400" />
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+            <Clock className="size-3.5 text-muted-foreground" />
             <span>对话历史</span>
           </div>
-          <Tooltip content="折叠侧边栏 (Ctrl+B)">
-            <Button
-              theme="borderless"
-              type="tertiary"
-              size="small"
-              icon={<IconSidebar />}
-              onClick={onToggleCollapse}
-            />
-          </Tooltip>
+          <button
+            type="button"
+            title="折叠侧边栏 (Ctrl+B)"
+            onClick={onToggleCollapse}
+            className="size-6 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-accent cursor-pointer"
+          >
+            <PanelLeft className="size-3.5" />
+          </button>
         </div>
 
         <Button
-          theme="solid"
-          type="primary"
-          icon={<IconPlus />}
-          block
+          size="sm"
+          className="w-full shadow-xs font-medium gap-1.5"
           onClick={onNewSession}
-          className="shadow-xs font-medium"
         >
-          新建对话
+          <Plus className="size-3.5" />
+          <span>新建对话</span>
         </Button>
 
-        <Input
-          prefix={<IconSearch />}
-          placeholder="搜索会话..."
-          size="small"
-          showClear
-          value={searchTerm}
-          onChange={(val) => setSearchTerm(val)}
-        />
+        <div className="relative">
+          <Search className="size-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="搜索会话..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-8 pl-8 text-xs bg-background/60"
+          />
+        </div>
       </div>
 
       {/* Sessions tree */}
       <div className="flex-1 overflow-y-auto p-2">
         {isLoading ? (
-          <div className="p-4 text-center text-xs text-gray-400">加载历史对话中...</div>
+          <div className="p-4 text-center text-xs text-muted-foreground">加载历史对话中...</div>
         ) : !hasAnySessions ? (
-          <div className="py-12 px-4 text-center">
-            <Empty
-              title={searchTerm ? "未找到匹配会话" : "暂无历史对话"}
-              description={searchTerm ? "尝试其他关键词" : "点击上方新建对话开始交流"}
-            />
+          <div className="py-12 px-4 text-center text-muted-foreground text-xs">
+            <p className="font-medium text-foreground">{searchTerm ? "未找到匹配会话" : "暂无历史对话"}</p>
+            <p className="mt-1">{searchTerm ? "尝试其他关键词" : "点击上方新建对话开始交流"}</p>
           </div>
         ) : (
           <>
@@ -336,23 +323,52 @@ export const AISessionList: React.FC<AISessionListProps> = ({
       </div>
 
       {/* Rename Modal */}
-      <Modal
-        title="重命名会话"
-        visible={!!renameTarget}
-        onOk={handleConfirmRename}
-        onCancel={() => setRenameTarget(null)}
-        closeOnEsc
-      >
-        <div className="py-2">
-          <Input
-            value={newTitle}
-            onChange={(val) => setNewTitle(val)}
-            placeholder="请输入会话标题"
-            autoFocus
-            onEnterPress={handleConfirmRename}
-          />
-        </div>
-      </Modal>
-    </Sider>
+      <Dialog open={!!renameTarget} onOpenChange={(open) => !open && setRenameTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>重命名会话</DialogTitle>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              value={newTitle}
+              onChange={(e) => setNewTitle(e.target.value)}
+              placeholder="请输入会话标题"
+              autoFocus
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  handleConfirmRename();
+                }
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRenameTarget(null)}>取消</Button>
+            <Button onClick={handleConfirmRename}>确定</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirm Modal */}
+      <Dialog open={!!deleteConfirmId} onOpenChange={(open) => !open && setDeleteConfirmId(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>删除会话</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            确认删除该会话记录吗？删除后聊天历史将无法恢复。
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteConfirmId(null)}>取消</Button>
+            <Button
+              variant="destructive"
+              onClick={() => deleteConfirmId && deleteMutation.mutate(deleteConfirmId)}
+              disabled={deleteMutation.isPending}
+            >
+              删除
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </aside>
   );
 };

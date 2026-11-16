@@ -1,25 +1,25 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import ReactMarkdown from "react-markdown";
 import {
-  Chat,
-  Button,
-  Tag,
-  Dropdown,
-  Toast,
-  Spin,
-  Layout,
-  Tooltip,
-  MarkdownRender,
-} from "@douyinfe/semi-ui";
+  Settings,
+  Eraser,
+  Sparkles,
+  ChevronDown,
+  Square,
+  ArrowUp,
+  Loader2,
+  Wrench,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import {
-  IconSetting,
-  IconClear,
-  IconSidebar,
-  IconPlus,
-  IconChevronDown,
-  IconArrowRight,
-} from "@douyinfe/semi-icons";
-import type { Message } from "@douyinfe/semi-ui/lib/es/chat/interface";
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { toast } from "@/components/ui/toast";
 import { aiApi } from "../api/aiApi";
 import type {
   SkillItem,
@@ -33,9 +33,11 @@ import { AISessionList } from "./AISessionList";
 import { AIThinkingBlock } from "./AIThinkingBlock";
 import { AIToolCallBlock } from "./AIToolCallBlock";
 
-const { Content } = Layout;
-
-export interface ExtendedChatMessage extends Message {
+export interface ExtendedChatMessage {
+  id: string;
+  role: "user" | "assistant" | "system";
+  content: string;
+  createAt?: number;
   reasoning_content?: string;
   tool_calls?: ToolCallItem[];
   thinkingDurationMs?: number;
@@ -73,6 +75,7 @@ export function AIWorkspace({ onOpenSettings }: { onOpenSettings?: () => void })
   const [inputText, setInputText] = useState("");
   const isComposingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setInputText(e.target.value);
@@ -99,111 +102,82 @@ export function AIWorkspace({ onOpenSettings }: { onOpenSettings?: () => void })
     queryFn: aiApi.listSkills,
   });
 
-  // 2. Fetch active channels for channel & model selection
+  // 2. Fetch configured channels
   const { data: channels = [] } = useQuery<AIChannel[]>({
     queryKey: ["ai-channels"],
     queryFn: aiApi.listChannels,
   });
 
-  const activeChannels = useMemo(() => channels.filter((c) => c.is_active), [channels]);
-
-  // Model selection options
+  // Flat list of model options with channel tagging
   const modelOptions = useMemo(() => {
-    const opts: Array<{ label: string; value: string; channelId: string; modelName: string }> = [
+    const list: Array<{ label: string; value: string; channelId: string; modelName: string }> = [
       {
-        label: "🚀 智能自动调度 (最高优先级渠道)",
+        label: "⚡ 智能自动调度 (基于渠道优先级)",
         value: "auto",
         channelId: "",
         modelName: "",
       },
     ];
 
-    for (const ch of activeChannels) {
-      if (ch.models && ch.models.length > 0) {
-        for (const m of ch.models) {
-          opts.push({
-            label: `[${ch.name}] ${m}`,
-            value: `${ch.id}::${m}`,
-            channelId: ch.id,
-            modelName: m,
+    channels
+      .filter((c) => c.is_active)
+      .forEach((ch) => {
+        if (ch.models && ch.models.length > 0) {
+          ch.models.forEach((m) => {
+            list.push({
+              label: `${m} (${ch.name})`,
+              value: `${ch.id}::${m}`,
+              channelId: ch.id,
+              modelName: m,
+            });
           });
         }
-      } else {
-        opts.push({
-          label: `[${ch.name}] 默认模型`,
-          value: `${ch.id}::default`,
-          channelId: ch.id,
-          modelName: "default",
-        });
-      }
-    }
-    return opts;
-  }, [activeChannels]);
+      });
 
-  const currentModelLabel = useMemo(() => {
-    if (!selectedChannelId && !selectedModel) {
-      return "🚀 智能调度";
-    }
-    const found = modelOptions.find(
-      (opt) => opt.channelId === selectedChannelId && opt.modelName === selectedModel
-    );
-    if (found) {
-      return found.label;
-    }
-    return selectedModel ? selectedModel : "🚀 智能调度";
-  }, [selectedChannelId, selectedModel, modelOptions]);
+    return list;
+  }, [channels]);
 
-  const currentSkillName = useMemo(() => {
-    if (selectedSkill === "general") return "通用协同助手";
-    const found = skills.find((s) => s.code === selectedSkill);
-    return found ? found.name : "协同助手";
-  }, [selectedSkill, skills]);
-
-  // 3. Load messages when currentSessionId changes
-  const { data: serverMessages, isFetching: isFetchingMessages } = useQuery<AIMessage[]>({
+  // Sync historical messages on session change
+  const { data: serverMessages = [], isFetching: isFetchingMessages } = useQuery<AIMessage[]>({
     queryKey: ["ai-messages", currentSessionId],
     queryFn: () => (currentSessionId ? aiApi.listSessionMessages(currentSessionId) : Promise.resolve([])),
     enabled: !!currentSessionId,
   });
 
-  // Sync server messages only when user explicitly switches to another existing session from sidebar
   useEffect(() => {
-    // 1. If currently streaming, NEVER overwrite local chats
-    if (isStreaming) {
+    if (!currentSessionId) {
+      setChats([]);
+      activeLoadedSessionIdRef.current = null;
       return;
     }
 
-    // 2. Only reload if user selected an existing session that hasn't been loaded into current view
-    if (currentSessionId && currentSessionId !== activeLoadedSessionIdRef.current) {
-      if (serverMessages && serverMessages.length > 0) {
-        activeLoadedSessionIdRef.current = currentSessionId;
-        const mapped: ExtendedChatMessage[] = serverMessages.map((m) => {
-          let toolCalls: ToolCallItem[] = [];
-          if (Array.isArray(m.tool_calls)) {
-            toolCalls = m.tool_calls;
-          } else if (typeof m.tool_calls === "string") {
-            try {
-              const parsed = JSON.parse(m.tool_calls);
-              if (Array.isArray(parsed)) toolCalls = parsed;
-            } catch {}
-          }
-          return {
-            id: m.id,
-            role: m.role as "user" | "assistant" | "system",
-            content: m.content,
-            reasoning_content: m.reasoning_content,
-            tool_calls: toolCalls,
-            createAt: new Date(m.created_at).getTime(),
-            thinkingDurationMs: m.thinking_duration_ms,
-            status: "complete",
-          };
-        });
-        setChats(mapped);
-      }
+    if (activeLoadedSessionIdRef.current !== currentSessionId) {
+      activeLoadedSessionIdRef.current = currentSessionId;
+      const formatted: ExtendedChatMessage[] = serverMessages.map((m) => {
+        let toolCalls: ToolCallItem[] | undefined;
+        if (m.tool_calls) {
+          try {
+            toolCalls = typeof m.tool_calls === "string" ? JSON.parse(m.tool_calls) : m.tool_calls;
+          } catch {}
+        }
+        return {
+          id: m.id,
+          role: m.role as "user" | "assistant" | "system",
+          content: m.content || "",
+          createAt: new Date(m.created_at).getTime(),
+          reasoning_content: m.reasoning_content,
+          tool_calls: toolCalls,
+        };
+      });
+      setChats(formatted);
     }
-  }, [serverMessages, currentSessionId, isStreaming]);
+  }, [currentSessionId, serverMessages]);
 
-  // Clean up streaming on unmount
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [chats, isStreaming, isThinking]);
+
+  // Clean-up abort controller on unmount
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
@@ -212,611 +186,492 @@ export function AIWorkspace({ onOpenSettings }: { onOpenSettings?: () => void })
     };
   }, []);
 
-  // Handlers for session switching
-  const handleSelectSession = (session: AISession) => {
-    if (isStreaming) {
-      abortControllerRef.current?.abort();
-      setIsStreaming(false);
-      setIsThinking(false);
+  const handleStopGenerator = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
     }
-    activeLoadedSessionIdRef.current = null; // Allow syncing the selected session's messages
-    setCurrentSessionId(session.id);
-    if (session.skill_code) {
-      setSelectedSkill(session.skill_code);
-    }
-    if (session.model_name) {
-      setSelectedModel(session.model_name);
-    }
+    setIsStreaming(false);
+    setIsThinking(false);
+    toast.info("已停止生成");
   };
 
-  const handleNewSession = () => {
-    if (isStreaming) {
-      abortControllerRef.current?.abort();
-      setIsStreaming(false);
-      setIsThinking(false);
-    }
-    activeLoadedSessionIdRef.current = null;
-    setCurrentSessionId(null);
-    setChats([]);
-  };
+  const handleSendMessage = async (text: string) => {
+    if (!text.trim() || isStreaming) return;
 
-  // Model switch
-  const handleModelChange = (value: string) => {
-    const found = modelOptions.find((opt) => opt.value === value);
-    if (found) {
-      setSelectedChannelId(found.channelId);
-      setSelectedModel(found.modelName);
-    }
-  };
-
-  // Main chat sending handler
-  const handleSendMessage = async (inputContent: string) => {
-    if (!inputContent.trim() || isStreaming) return;
-
-    if (activeChannels.length === 0) {
-      Toast.warning("尚未配置或启用任何 AI 模型渠道，请前往「设置 - AI配置」添加");
-      return;
+    let targetSessionId = currentSessionId;
+    if (!targetSessionId) {
+      try {
+        const titleSnippet = text.trim().slice(0, 16) || "新对话";
+        const newSess = await aiApi.createSession({
+          title: titleSnippet,
+          skill_code: selectedSkill !== "general" ? selectedSkill : undefined,
+          model_name: selectedModel || undefined,
+        });
+        targetSessionId = newSess.id;
+        setCurrentSessionId(newSess.id);
+        currentSessionIdRef.current = newSess.id;
+        activeLoadedSessionIdRef.current = newSess.id;
+        queryClient.invalidateQueries({ queryKey: ["ai-sessions"] });
+      } catch (err: any) {
+        toast.error("创建会话失败: " + err.message);
+        return;
+      }
     }
 
     const userMsgId = `user-${Date.now()}`;
-    const assistantMsgId = `assistant-${Date.now()}`;
-    const startTime = Date.now();
-
     const userMsg: ExtendedChatMessage = {
-      role: "user",
       id: userMsgId,
+      role: "user",
+      content: text,
       createAt: Date.now(),
-      content: inputContent,
     };
 
-    const assistantMsg: ExtendedChatMessage = {
-      role: "assistant",
+    const assistantMsgId = `assistant-${Date.now()}`;
+    const placeholderAssistantMsg: ExtendedChatMessage = {
       id: assistantMsgId,
-      createAt: Date.now(),
+      role: "assistant",
       content: "",
+      createAt: Date.now(),
       reasoning_content: "",
       tool_calls: [],
-      status: "loading",
-      isThinking: true,
+      isThinking: false,
     };
 
-    const newChats = [...chats, userMsg, assistantMsg];
-    setChats(newChats);
+    setChats((prev) => [...prev, userMsg, placeholderAssistantMsg]);
     setIsStreaming(true);
-    setIsThinking(true);
+    setIsThinking(false);
     setCurrentAssistantMsgId(assistantMsgId);
 
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
-    // Prepare message history
-    const apiMessages: ChatMessage[] = newChats
-      .filter((c) => c.id !== assistantMsgId && typeof c.content === "string" && c.content.trim() !== "")
+    const historyPayload: ChatMessage[] = chats
       .slice(-10)
+      .filter((c) => c.role === "user" || c.role === "assistant")
       .map((c) => ({
-        role: (c.role === "assistant" ? "assistant" : "user") as "user" | "assistant",
-        content: typeof c.content === "string" ? c.content : "",
-        reasoning_content: c.reasoning_content,
+        role: c.role,
+        content: c.content,
       }));
 
-    let accumulatedContent = "";
-    let accumulatedThinking = "";
-    let accumulatedTools: ToolCallItem[] = [];
-    let isStillThinking = true;
-    let thinkingDuration: number | undefined;
+    historyPayload.push({ role: "user", content: text });
+
+    const abortCtrl = new AbortController();
+    abortControllerRef.current = abortCtrl;
+    const thinkingStartTime = Date.now();
 
     try {
       await aiApi.streamChat(
         {
-          session_id: currentSessionIdRef.current || undefined,
-          messages: apiMessages,
+          session_id: targetSessionId,
+          messages: historyPayload,
+          skill_code: selectedSkill !== "general" ? selectedSkill : undefined,
           channel_id: selectedChannelId || undefined,
           model: selectedModel || undefined,
-          skill_code: selectedSkill !== "general" ? selectedSkill : undefined,
-          date: new Date().toISOString().split("T")[0],
           enable_tools: enableTools,
         },
         {
-          onSession: (sessionId) => {
-            currentSessionIdRef.current = sessionId;
-            activeLoadedSessionIdRef.current = sessionId;
-            setCurrentSessionId(sessionId);
-            queryClient.invalidateQueries({ queryKey: ["ai-sessions"] });
-          },
-          onThinking: (chunk) => {
-            accumulatedThinking += chunk;
+          onThinking: (chunk: string) => {
+            setIsThinking(true);
             setChats((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMsgId
+              prev.map((m) =>
+                m.id === assistantMsgId
                   ? {
-                      ...msg,
-                      reasoning_content: accumulatedThinking,
+                      ...m,
+                      reasoning_content: (m.reasoning_content || "") + chunk,
                       isThinking: true,
-                      status: "loading",
                     }
-                  : msg
+                  : m
               )
             );
           },
-          onContent: (chunk) => {
-            if (isStillThinking) {
-              isStillThinking = false;
-              thinkingDuration = Date.now() - startTime;
-              setIsThinking(false);
-            }
-            accumulatedContent += chunk;
+          onContent: (chunk: string) => {
+            setIsThinking(false);
             setChats((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMsgId
-                  ? {
-                      ...msg,
-                      content: accumulatedContent,
-                      reasoning_content: accumulatedThinking,
-                      thinkingDurationMs: thinkingDuration,
-                      isThinking: false,
-                      status: "loading",
-                    }
-                  : msg
-              )
+              prev.map((m) => {
+                if (m.id === assistantMsgId) {
+                  const duration = m.isThinking ? Date.now() - thinkingStartTime : m.thinkingDurationMs;
+                  return {
+                    ...m,
+                    content: (m.content || "") + chunk,
+                    isThinking: false,
+                    thinkingDurationMs: duration,
+                  };
+                }
+                return m;
+              })
             );
           },
           onToolCall: (tool) => {
-            const newItem: ToolCallItem = {
-              id: tool.tool_id,
-              name: tool.tool_name,
-              arguments: tool.arguments,
-              status: "running",
-            };
-            accumulatedTools = [...accumulatedTools, newItem];
             setChats((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMsgId
-                  ? {
-                      ...msg,
-                      tool_calls: accumulatedTools,
-                    }
-                  : msg
-              )
+              prev.map((m) => {
+                if (m.id === assistantMsgId) {
+                  const toolItem: ToolCallItem = {
+                    id: tool.tool_id,
+                    name: tool.tool_name,
+                    arguments: tool.arguments,
+                    status: "running",
+                  };
+                  const existingTools = m.tool_calls || [];
+                  const foundIdx = existingTools.findIndex((t) => t.id === tool.tool_id);
+                  let updatedTools: ToolCallItem[];
+                  if (foundIdx >= 0) {
+                    updatedTools = [...existingTools];
+                    updatedTools[foundIdx] = toolItem;
+                  } else {
+                    updatedTools = [...existingTools, toolItem];
+                  }
+                  return {
+                    ...m,
+                    tool_calls: updatedTools,
+                  };
+                }
+                return m;
+              })
             );
           },
           onToolResult: (res) => {
-            accumulatedTools = accumulatedTools.map((t) =>
-              t.id === res.tool_id
-                ? {
-                    ...t,
-                    result: res.output,
-                    status: "success",
-                  }
-                : t
-            );
             setChats((prev) =>
-              prev.map((msg) =>
-                msg.id === assistantMsgId
-                  ? {
-                      ...msg,
-                      tool_calls: accumulatedTools,
-                    }
-                  : msg
-              )
+              prev.map((m) => {
+                if (m.id === assistantMsgId) {
+                  const existingTools = (m.tool_calls || []).map((t) =>
+                    t.id === res.tool_id ? { ...t, result: res.output, status: "success" as const } : t
+                  );
+                  return {
+                    ...m,
+                    tool_calls: existingTools,
+                  };
+                }
+                return m;
+              })
             );
           },
           onDone: () => {
-            // Signal completed
+            setIsStreaming(false);
+            setIsThinking(false);
+            abortControllerRef.current = null;
+            if (targetSessionId) {
+              queryClient.invalidateQueries({ queryKey: ["ai-messages", targetSessionId] });
+              queryClient.invalidateQueries({ queryKey: ["ai-sessions"] });
+            }
           },
         },
-        controller.signal
+        abortCtrl.signal
       );
-
-      // Successfully finished
-      setChats((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantMsgId
-            ? {
-                ...msg,
-                content: accumulatedContent || "已完成响应。",
-                reasoning_content: accumulatedThinking,
-                thinkingDurationMs: thinkingDuration || (accumulatedThinking ? Date.now() - startTime : undefined),
-                isThinking: false,
-                status: "complete",
-              }
-            : msg
-        )
-      );
-
-      // Invalidate sessions list and messages
-      const finalSessionId = currentSessionIdRef.current;
-      queryClient.invalidateQueries({ queryKey: ["ai-sessions"] });
-      if (finalSessionId) {
-        queryClient.invalidateQueries({ queryKey: ["ai-messages", finalSessionId] });
-      }
     } catch (err: any) {
-      if (err.name === "AbortError") {
-        Toast.info("生成已中止");
-        setChats((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMsgId
-              ? {
-                  ...msg,
-                  content: accumulatedContent ? `${accumulatedContent}\n\n*(已中止生成)*` : "*(已中止生成)*",
-                  isThinking: false,
-                  status: "complete",
-                }
-              : msg
-          )
-        );
-      } else {
-        const errorMsg = err.message || "请求 AI 服务失败";
-        Toast.error(errorMsg);
-        setChats((prev) =>
-          prev.map((msg) =>
-            msg.id === assistantMsgId
-              ? {
-                  ...msg,
-                  content: `⚠️ 生成遇到错误: ${errorMsg}\n\n请检查渠道端点与密钥配置。`,
-                  isThinking: false,
-                  status: "error",
-                }
-              : msg
-          )
-        );
+      if (err.name !== "AbortError") {
+        setIsStreaming(false);
+        setIsThinking(false);
+        toast.error("请求发送异常: " + err.message);
       }
-    } finally {
-      setIsStreaming(false);
-      setIsThinking(false);
-      setCurrentAssistantMsgId(null);
-      abortControllerRef.current = null;
-    }
-  };
-
-  const handleStopGenerator = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
     }
   };
 
   const handleClearContext = () => {
     setChats([]);
-    Toast.success("当前对话显示已清空");
+    toast.success("已清空当前聊天记录显示");
+  };
+
+  const currentSkillName = useMemo(() => {
+    if (selectedSkill === "general") return "通用协同助手";
+    const found = skills.find((s) => s.code === selectedSkill);
+    return found ? found.name : selectedSkill;
+  }, [selectedSkill, skills]);
+
+  const currentModelLabel = useMemo(() => {
+    if (!selectedChannelId || !selectedModel) return "自动模型分配";
+    const found = modelOptions.find(
+      (opt) => opt.channelId === selectedChannelId && opt.modelName === selectedModel
+    );
+    return found ? found.label : selectedModel;
+  }, [selectedChannelId, selectedModel, modelOptions]);
+
+  const handleModelChange = (val: string) => {
+    if (val === "auto") {
+      setSelectedChannelId("");
+      setSelectedModel("");
+    } else {
+      const [chId, model] = val.split("::");
+      setSelectedChannelId(chId || "");
+      setSelectedModel(model || "");
+    }
   };
 
   return (
-    <Layout className="h-full w-full overflow-hidden flex flex-row bg-background text-foreground">
-      {/* Left Column: Session History Sider */}
+    <div className="flex h-full w-full overflow-hidden bg-background">
+      {/* 1. Left Session Sidebar */}
       <AISessionList
         currentSessionId={currentSessionId}
-        onSelectSession={handleSelectSession}
-        onNewSession={handleNewSession}
+        onSelectSession={(session) => {
+          setCurrentSessionId(session.id);
+        }}
+        onNewSession={() => {
+          setCurrentSessionId(null);
+          setChats([]);
+        }}
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
       />
 
-      {/* Right Column: Main Chat & Input Area */}
-      <Content className="flex flex-col h-full flex-1 overflow-hidden min-w-0 bg-white dark:bg-gray-950">
-        {/* Top Header */}
-        <div className="border-b border-gray-200/80 dark:border-gray-800 bg-white/70 dark:bg-gray-950/70 backdrop-blur-sm px-4 py-2.5 flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            {sidebarCollapsed && (
-              <Tooltip content="展开对话历史 (Ctrl+B)">
-                <Button
-                  theme="borderless"
-                  type="tertiary"
-                  size="small"
-                  icon={<IconSidebar />}
-                  onClick={() => setSidebarCollapsed(false)}
-                />
-              </Tooltip>
-            )}
-            <div className="flex size-8 items-center justify-center rounded-lg bg-blue-500/10 text-blue-600 font-bold text-sm shrink-0">
-              ✨
-            </div>
-            <div className="truncate">
-              <div className="flex items-center gap-2">
-                <span className="font-semibold text-sm truncate max-w-xs" title={currentSession?.title}>
-                  {currentSession?.title || (currentSessionId ? "当前会话" : "新对话")}
-                </span>
-                <Tag color="violet" size="small" type="light">
-                  Eino 驱动
-                </Tag>
-              </div>
-            </div>
+      {/* 2. Main Chat Workspace */}
+      <main className="flex-1 flex flex-col h-full overflow-hidden min-w-0">
+        {/* Top Control Bar */}
+        <div className="h-12 border-b border-border flex items-center justify-between px-4 bg-card/40 shrink-0">
+          <div className="flex items-center gap-2 overflow-hidden mr-2">
+            <span className="text-sm font-semibold truncate text-foreground">
+              {currentSession?.title || "新对话"}
+            </span>
+            <Badge variant="outline" className="text-[11px] font-normal text-muted-foreground shrink-0">
+              {currentSkillName}
+            </Badge>
           </div>
 
-          {/* Action Tools */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 shrink-0">
             <Button
-              size="small"
-              theme="borderless"
-              type="tertiary"
-              icon={<IconClear />}
+              size="sm"
+              variant="ghost"
               onClick={handleClearContext}
               title="清空当前消息"
+              className="h-8 text-xs text-muted-foreground hover:text-foreground gap-1"
             >
-              清屏
+              <Eraser className="size-3.5" />
+              <span>清屏</span>
             </Button>
 
             {onOpenSettings && (
               <Button
-                size="small"
-                theme="light"
-                icon={<IconSetting />}
+                size="sm"
+                variant="outline"
                 onClick={onOpenSettings}
                 title="AI 网关渠道配置"
+                className="h-8 text-xs gap-1"
               >
-                AI配置
+                <Settings className="size-3.5" />
+                <span>AI配置</span>
               </Button>
             )}
           </div>
         </div>
 
-        {/* Chat Area */}
-        <div className="flex-1 overflow-hidden p-4 flex flex-col min-h-0 relative">
+        {/* Chat History Messages Scroll Area */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0 relative">
           {isFetchingMessages && (
-            <div className="absolute top-2 right-4 z-10 bg-white/80 dark:bg-gray-900/80 px-2 py-1 rounded shadow-xs text-xs text-gray-400 flex items-center gap-1.5 backdrop-blur-xs">
-              <Spin size="small" />
+            <div className="absolute top-2 right-4 z-10 bg-card/90 border border-border px-2.5 py-1 rounded-md shadow-xs text-xs text-muted-foreground flex items-center gap-1.5 backdrop-blur-xs">
+              <Loader2 className="size-3 animate-spin text-primary" />
               <span>加载历史消息中...</span>
             </div>
           )}
 
-          {/* Clean minimal empty state placeholder */}
           {chats.length === 0 && !isFetchingMessages && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-center select-none pointer-events-none px-4 z-0">
-              <div className="size-12 rounded-2xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center text-2xl font-bold mb-3 shadow-xs">
-                ✨
+            <div className="h-full flex flex-col items-center justify-center text-center select-none px-4">
+              <div className="size-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-3 shadow-xs">
+                <Sparkles className="size-6" />
               </div>
-              <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">
+              <h3 className="text-base font-semibold text-foreground">
                 WorkBuddy AI 协同助手
               </h3>
-              <p className="text-xs text-gray-400 mt-1 max-w-sm">
+              <p className="text-xs text-muted-foreground mt-1 max-w-sm">
                 输入消息开启高效对话，可在输入框上方自由切换模型与专项技能
               </p>
             </div>
           )}
 
-          <Chat
-            chats={chats}
-            onMessageSend={handleSendMessage}
-            showStopGenerate={isStreaming}
-            onStopGenerator={handleStopGenerator}
-            mode="userBubble"
-            roleConfig={{
-              user: {
-                name: "",
-                avatar: null,
-              },
-              assistant: {
-                name: "",
-                avatar: null,
-              },
-            }}
-            chatBoxRenderConfig={{
-              renderChatBoxAvatar: () => null,
-              renderChatBoxTitle: () => null,
-              renderChatBoxContent: ({ message }) => {
-                const msg = message as ExtendedChatMessage;
-                const isAssistant = msg?.role === "assistant";
-                const isThinkingNow =
-                  isStreaming &&
-                  isAssistant &&
-                  msg?.id === currentAssistantMsgId &&
-                  (msg?.isThinking ?? isThinking);
+          {chats.map((msg) => {
+            const isAssistant = msg.role === "assistant";
+            const isThinkingNow =
+              isStreaming &&
+              isAssistant &&
+              msg.id === currentAssistantMsgId &&
+              (msg.isThinking ?? isThinking);
 
-                if (!isAssistant) {
-                  return (
-                    <div className="bg-gray-100 dark:bg-gray-800/90 text-gray-900 dark:text-gray-100 rounded-2xl px-4 py-2.5 max-w-2xl border border-gray-200/60 dark:border-gray-700/60 shadow-xs text-sm leading-relaxed whitespace-pre-wrap break-words">
-                      {typeof msg?.content === "string" ? msg.content : ""}
-                    </div>
-                  );
-                }
-
-                return (
-                  <div className="w-full space-y-2 text-foreground">
-                    {/* 1. Deep Thinking Chain Block */}
-                    {(msg?.reasoning_content || isThinkingNow) && (
-                      <AIThinkingBlock
-                        content={msg?.reasoning_content}
-                        isGenerating={isThinkingNow}
-                        durationMs={msg?.thinkingDurationMs}
-                      />
-                    )}
-
-                    {/* 2. Tool Calls Block */}
-                    {msg?.tool_calls && msg.tool_calls.length > 0 && (
-                      <AIToolCallBlock toolCalls={msg.tool_calls} />
-                    )}
-
-                    {/* 3. Main Answer via Semi MarkdownRender */}
-                    {msg?.content ? (
-                      <div className="semi-markdown-wrapper text-sm leading-relaxed">
-                        <MarkdownRender raw={typeof msg.content === "string" ? msg.content : ""} />
-                      </div>
-                    ) : isThinkingNow ? null : isStreaming ? (
-                      <div className="flex items-center gap-2 text-xs text-gray-400 py-1.5">
-                        <Spin size="small" />
-                        <span>正在组织回答...</span>
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              },
-            }}
-            renderInputArea={() => {
-              const currentModelValue = selectedChannelId && selectedModel
-                ? `${selectedChannelId}::${selectedModel}`
-                : "auto";
-
+            if (!isAssistant) {
               return (
-                <div className="border border-gray-200/90 dark:border-gray-800 rounded-2xl bg-white/95 dark:bg-gray-900/90 p-3 shadow-sm transition-all focus-within:border-blue-500/80 focus-within:ring-2 focus-within:ring-blue-500/20 backdrop-blur-xs flex flex-col gap-2">
-                  {/* Top: Skill / Mode Badge */}
-                  <div className="flex items-center justify-between">
-                    <Dropdown
-                      position="topLeft"
-                      render={
-                        <Dropdown.Menu style={{ maxHeight: 260, overflowY: "auto" }}>
-                          <Dropdown.Item
-                            active={selectedSkill === "general"}
-                            onClick={() => setSelectedSkill("general")}
-                          >
-                            💬 通用协同助手
-                          </Dropdown.Item>
-                          {skills.map((s) => (
-                            <Dropdown.Item
-                              key={s.code}
-                              active={selectedSkill === s.code}
-                              onClick={() => setSelectedSkill(s.code)}
-                            >
-                              {s.code === "daily_review_synthesis" && "🌟 "}
-                              {s.code === "task_quadrant_breakdown" && "🎯 "}
-                              {s.code === "project_stage_planning" && "📊 "}
-                              {s.name}
-                            </Dropdown.Item>
-                          ))}
-                        </Dropdown.Menu>
-                      }
-                    >
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 hover:bg-gray-200/80 dark:bg-gray-800 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 transition-colors cursor-pointer select-none"
-                      >
-                        <span className="text-blue-500">✨</span>
-                        <span>{currentSkillName}</span>
-                        <IconChevronDown size="extra-small" className="text-gray-400" />
-                      </button>
-                    </Dropdown>
-
-                    <div className="text-[11px] text-gray-400 select-none hidden sm:block">
-                      <span>Enter 发送 / Shift + Enter 换行</span>
-                    </div>
-                  </div>
-
-                  {/* Middle: Borderless Auto-resizing Textarea */}
-                  <textarea
-                    ref={textareaRef}
-                    value={inputText}
-                    onChange={handleInputChange}
-                    onCompositionStart={() => {
-                      isComposingRef.current = true;
-                    }}
-                    onCompositionEnd={() => {
-                      isComposingRef.current = false;
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        if (isComposingRef.current) return;
-                        e.preventDefault();
-                        if (inputText.trim() && !isStreaming) {
-                          const text = inputText;
-                          setInputText("");
-                          if (textareaRef.current) {
-                            textareaRef.current.style.height = "auto";
-                          }
-                          handleSendMessage(text);
-                        }
-                      }
-                    }}
-                    placeholder="输入你的想法，或让 AI 为你规划任务..."
-                    rows={2}
-                    className="w-full resize-none border-0 bg-transparent px-1 py-1 text-sm text-foreground placeholder:text-gray-400 focus:outline-hidden focus:ring-0 leading-relaxed max-h-48 overflow-y-auto"
-                  />
-
-                  {/* Bottom: Left (Plus + Model Capsule) & Right (MCP + Send Button) */}
-                  <div className="flex items-center justify-between pt-1 border-t border-gray-100 dark:border-gray-800/60">
-                    <div className="flex items-center gap-1.5">
-                      <Tooltip content="添加附件与上下文 (规划中)">
-                        <button
-                          type="button"
-                          className="size-7 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer"
-                        >
-                          <IconPlus size="small" />
-                        </button>
-                      </Tooltip>
-
-                      {/* Model Selector Capsule */}
-                      <Dropdown
-                        position="topLeft"
-                        render={
-                          <Dropdown.Menu style={{ maxHeight: 260, overflowY: "auto" }}>
-                            {modelOptions.map((opt) => (
-                              <Dropdown.Item
-                                key={opt.value}
-                                active={currentModelValue === opt.value}
-                                onClick={() => handleModelChange(opt.value)}
-                              >
-                                {opt.label}
-                              </Dropdown.Item>
-                            ))}
-                          </Dropdown.Menu>
-                        }
-                      >
-                        <button
-                          type="button"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors cursor-pointer select-none"
-                        >
-                          <span className="truncate max-w-[180px]">{currentModelLabel}</span>
-                          <IconChevronDown size="extra-small" className="text-gray-400" />
-                        </button>
-                      </Dropdown>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {/* MCP Toggle */}
-                      <button
-                        type="button"
-                        onClick={() => setEnableTools(!enableTools)}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-mono transition-colors cursor-pointer select-none ${
-                          enableTools
-                            ? "bg-purple-100 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 font-medium"
-                            : "text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
-                        }`}
-                        title={enableTools ? "点击关闭 MCP 工具调用" : "点击开启 MCP 工具调用"}
-                      >
-                        <span>⚡</span>
-                        <span>MCP</span>
-                      </button>
-
-                      {/* Send / Stop Button */}
-                      {isStreaming ? (
-                        <button
-                          type="button"
-                          onClick={handleStopGenerator}
-                          className="size-7 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95"
-                          title="停止生成"
-                        >
-                          <div className="size-2.5 bg-white rounded-xs" />
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={!inputText.trim() || activeChannels.length === 0}
-                          onClick={() => {
-                            if (inputText.trim()) {
-                              const text = inputText;
-                              setInputText("");
-                              if (textareaRef.current) {
-                                textareaRef.current.style.height = "auto";
-                              }
-                              handleSendMessage(text);
-                            }
-                          }}
-                          className={`size-7 rounded-full flex items-center justify-center transition-all ${
-                            inputText.trim() && activeChannels.length > 0
-                              ? "bg-blue-600 hover:bg-blue-700 text-white cursor-pointer shadow-xs active:scale-95"
-                              : "bg-gray-100 dark:bg-gray-800 text-gray-300 dark:text-gray-600 cursor-not-allowed"
-                          }`}
-                          title="发送 (Enter)"
-                        >
-                          <IconArrowRight size="small" />
-                        </button>
-                      )}
-                    </div>
+                <div key={msg.id} className="flex justify-end">
+                  <div className="bg-primary/10 text-foreground rounded-2xl px-4 py-2.5 max-w-2xl border border-primary/20 shadow-xs text-sm leading-relaxed whitespace-pre-wrap break-words">
+                    {msg.content}
                   </div>
                 </div>
               );
-            }}
-            placeholder="输入你的想法，或点击上方推荐提示词..."
-            style={{ height: "100%", width: "100%" }}
-          />
+            }
+
+            return (
+              <div key={msg.id} className="flex justify-start">
+                <div className="w-full max-w-3xl space-y-2 text-foreground">
+                  {/* 1. Reasoning content block */}
+                  {(msg.reasoning_content || isThinkingNow) && (
+                    <AIThinkingBlock
+                      content={msg.reasoning_content}
+                      isGenerating={isThinkingNow}
+                      durationMs={msg.thinkingDurationMs}
+                    />
+                  )}
+
+                  {/* 2. Tool Calls Block */}
+                  {msg.tool_calls && msg.tool_calls.length > 0 && (
+                    <AIToolCallBlock toolCalls={msg.tool_calls} />
+                  )}
+
+                  {/* 3. Main Answer Markdown */}
+                  {msg.content ? (
+                    <div className="prose dark:prose-invert max-w-none text-sm leading-relaxed">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  ) : isThinkingNow ? null : isStreaming ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-1.5">
+                      <Loader2 className="size-3.5 animate-spin text-primary" />
+                      <span>正在组织回答...</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+
+          <div ref={messagesEndRef} />
         </div>
-      </Content>
-    </Layout>
+
+        {/* Input Dock Area */}
+        <div className="p-4 pt-1 bg-background shrink-0">
+          <div className="border border-border rounded-2xl bg-card p-3 shadow-xs transition-all focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 flex flex-col gap-2">
+            {/* Top Toolbar in Input Capsule */}
+            <div className="flex items-center justify-between">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-muted hover:bg-muted/80 text-foreground transition-colors cursor-pointer select-none"
+                  >
+                    <Sparkles className="size-3 text-primary" />
+                    <span>{currentSkillName}</span>
+                    <ChevronDown className="size-3 text-muted-foreground" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="w-48 max-h-60 overflow-y-auto">
+                  <DropdownMenuItem onClick={() => setSelectedSkill("general")}>
+                    💬 通用协同助手
+                  </DropdownMenuItem>
+                  {skills.map((s) => (
+                    <DropdownMenuItem key={s.code} onClick={() => setSelectedSkill(s.code)}>
+                      {s.code === "daily_review_synthesis" && "🌟 "}
+                      {s.code === "task_quadrant_breakdown" && "🎯 "}
+                      {s.code === "project_stage_planning" && "📊 "}
+                      {s.name}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="text-[11px] text-muted-foreground select-none hidden sm:block">
+                <span>Enter 发送 / Shift + Enter 换行</span>
+              </div>
+            </div>
+
+            {/* Textarea */}
+            <textarea
+              ref={textareaRef}
+              value={inputText}
+              onChange={handleInputChange}
+              onCompositionStart={() => {
+                isComposingRef.current = true;
+              }}
+              onCompositionEnd={() => {
+                isComposingRef.current = false;
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  if (isComposingRef.current) return;
+                  e.preventDefault();
+                  if (inputText.trim() && !isStreaming) {
+                    const text = inputText;
+                    setInputText("");
+                    if (textareaRef.current) {
+                      textareaRef.current.style.height = "auto";
+                    }
+                    handleSendMessage(text);
+                  }
+                }
+              }}
+              placeholder="输入你的想法，或让 AI 为你规划任务..."
+              rows={2}
+              className="w-full resize-none border-0 bg-transparent px-1 py-1 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none leading-relaxed max-h-48 overflow-y-auto"
+            />
+
+            {/* Bottom Actions */}
+            <div className="flex items-center justify-between pt-1 border-t border-border/60">
+              <div className="flex items-center gap-1.5">
+                {/* Model Selector Dropdown */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
+                    >
+                      <span>{currentModelLabel}</span>
+                      <ChevronDown className="size-3" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="w-56 max-h-60 overflow-y-auto">
+                    {modelOptions.map((opt) => (
+                      <DropdownMenuItem
+                        key={opt.value}
+                        onClick={() => handleModelChange(opt.value)}
+                      >
+                        {opt.label}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+
+                {/* Enable Tools Button */}
+                <button
+                  type="button"
+                  onClick={() => setEnableTools(!enableTools)}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] transition-colors cursor-pointer ${
+                    enableTools
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                  title="启用工具调用与外部 MCP 能力"
+                >
+                  <Wrench className="size-3" />
+                  <span>工具调用</span>
+                </button>
+              </div>
+
+              {/* Stop / Send Button */}
+              <div>
+                {isStreaming ? (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleStopGenerator}
+                    className="size-8 p-0 rounded-lg text-destructive hover:text-destructive"
+                    title="停止生成"
+                  >
+                    <Square className="size-3.5 fill-current" />
+                  </Button>
+                ) : (
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (inputText.trim()) {
+                        const text = inputText;
+                        setInputText("");
+                        if (textareaRef.current) {
+                          textareaRef.current.style.height = "auto";
+                        }
+                        handleSendMessage(text);
+                      }
+                    }}
+                    disabled={!inputText.trim()}
+                    className="size-8 p-0 rounded-lg shadow-xs"
+                    title="发送"
+                  >
+                    <ArrowUp className="size-4" />
+                  </Button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
   );
 }

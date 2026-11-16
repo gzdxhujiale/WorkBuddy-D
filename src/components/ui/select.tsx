@@ -4,7 +4,7 @@ import React, {
   useCallback,
   forwardRef,
 } from "react";
-import * as RadixSelect from "@radix-ui/react-select";
+import { Select as BaseSelect } from "@base-ui-components/react/select";
 import { ChevronDown, Check, X } from "lucide-react";
 import { useAppThemeStyle } from "@/hooks/useAppThemeStyle";
 import { cn } from "@/lib/utils";
@@ -28,14 +28,14 @@ export const OptGroup: React.FC<{ label?: React.ReactNode; children?: React.Reac
   children,
 }) => {
   return (
-    <RadixSelect.Group>
+    <BaseSelect.Group>
       {label && (
-        <RadixSelect.Label className="px-2 py-1 text-xs font-semibold text-muted-foreground">
+        <BaseSelect.GroupLabel className="px-2 py-1 text-xs font-semibold text-muted-foreground">
           {label}
-        </RadixSelect.Label>
+        </BaseSelect.GroupLabel>
       )}
       {children}
-    </RadixSelect.Group>
+    </BaseSelect.Group>
   );
 };
 
@@ -88,7 +88,7 @@ const SelectComponent = forwardRef<HTMLButtonElement, SelectProps>(
 
     const isControlled = controlledValue !== undefined;
     const rawValue = isControlled ? controlledValue : internalValue;
-    const currentRadixValue =
+    const currentBaseValue =
       rawValue === ""
         ? EMPTY_VALUE_SENTINEL
         : rawValue !== undefined && rawValue !== null
@@ -130,16 +130,17 @@ const SelectComponent = forwardRef<HTMLButtonElement, SelectProps>(
 
     const selectedItem = useMemo(() => {
       return parsedItems.find((item) => {
-        if (currentRadixValue === EMPTY_VALUE_SENTINEL) {
+        if (currentBaseValue === EMPTY_VALUE_SENTINEL) {
           return item.value === "" || item.value === null;
         }
-        return String(item.value) === String(currentRadixValue);
+        return String(item.value) === String(currentBaseValue);
       });
-    }, [parsedItems, currentRadixValue]);
+    }, [parsedItems, currentBaseValue]);
 
     const handleValueChange = useCallback(
-      (newRadixValue: string) => {
-        const actualValue = newRadixValue === EMPTY_VALUE_SENTINEL ? "" : newRadixValue;
+      (newBaseValue: any) => {
+        const valStr = String(newBaseValue ?? "");
+        const actualValue = valStr === EMPTY_VALUE_SENTINEL ? "" : valStr;
         const found = parsedItems.find((item) => {
           if (actualValue === "") return item.value === "" || item.value === null;
           return String(item.value) === actualValue;
@@ -147,7 +148,7 @@ const SelectComponent = forwardRef<HTMLButtonElement, SelectProps>(
 
         const returnedValue = found ? found.value : actualValue;
         if (!isControlled) {
-          setInternalValue(newRadixValue);
+          setInternalValue(valStr);
         }
         onChange?.(returnedValue, found);
       },
@@ -167,12 +168,12 @@ const SelectComponent = forwardRef<HTMLButtonElement, SelectProps>(
     );
 
     return (
-      <RadixSelect.Root
-        value={currentRadixValue}
+      <BaseSelect.Root
+        value={currentBaseValue}
         onValueChange={handleValueChange}
         disabled={disabled}
       >
-        <RadixSelect.Trigger
+        <BaseSelect.Trigger
           ref={ref}
           style={style}
           className={cn(
@@ -203,70 +204,71 @@ const SelectComponent = forwardRef<HTMLButtonElement, SelectProps>(
                 <X size={13} />
               </span>
             )}
-            <RadixSelect.Icon asChild>
+            <BaseSelect.Icon>
               <ChevronDown size={14} className="transition-transform duration-200" />
-            </RadixSelect.Icon>
+            </BaseSelect.Icon>
           </div>
-        </RadixSelect.Trigger>
+        </BaseSelect.Trigger>
 
-        <RadixSelect.Portal>
-          <RadixSelect.Content
-            position="popper"
-            sideOffset={4}
-            className={cn(
-              "z-[1100] min-w-[var(--radix-select-trigger-width)] max-h-60 overflow-y-auto p-1 animate-in fade-in zoom-in-95 duration-100",
-              isPixelTheme
-                ? "rounded-xs border-2 border-border bg-popover text-popover-foreground font-mono shadow-[3px_3px_0px_#000]"
-                : "rounded-xl border border-border bg-popover text-popover-foreground shadow-lg",
-              dropdownMenuClassName
-            )}
-          >
-            <RadixSelect.Viewport className="p-0.5">
-              {parsedItems.length === 0 ? (
-                <div className="py-2 text-center text-xs text-muted-foreground">无匹配选项</div>
-              ) : (
-                parsedItems.map((item, index) => {
-                  const itemRadixValue =
-                    item.value === "" || item.value === null
-                      ? EMPTY_VALUE_SENTINEL
-                      : String(item.value);
-                  const isSelected =
-                    currentRadixValue === itemRadixValue ||
-                    (currentRadixValue === EMPTY_VALUE_SENTINEL && item.value === "");
-
-                  return (
-                    <RadixSelect.Item
-                      key={itemRadixValue || index}
-                      value={itemRadixValue}
-                      disabled={item.disabled}
-                      className={cn(
-                        "flex items-center justify-between px-2.5 py-1.5 text-sm cursor-pointer select-none outline-none transition-colors",
-                        item.disabled
-                          ? "opacity-40 cursor-not-allowed"
-                          : isPixelTheme
-                          ? cn(
-                              "rounded-xs hover:bg-muted font-mono data-[highlighted]:bg-muted data-[highlighted]:text-foreground",
-                              isSelected &&
-                                "bg-amber-100 dark:bg-amber-950/80 font-bold text-amber-950 dark:text-amber-100"
-                            )
-                          : cn(
-                              "rounded-md hover:bg-muted data-[highlighted]:bg-muted data-[highlighted]:text-foreground",
-                              isSelected && "bg-accent text-accent-foreground font-medium"
-                            )
-                      )}
-                    >
-                      <RadixSelect.ItemText>{item.label}</RadixSelect.ItemText>
-                      <RadixSelect.ItemIndicator>
-                        <Check size={14} className="shrink-0 ml-1 text-primary" />
-                      </RadixSelect.ItemIndicator>
-                    </RadixSelect.Item>
-                  );
-                })
+        <BaseSelect.Portal>
+          <BaseSelect.Positioner sideOffset={4} className="z-[1100]">
+            <BaseSelect.Popup
+              className={cn(
+                "min-w-(--anchor-width) max-h-60 overflow-y-auto p-1 shadow-md transition-all outline-none",
+                "data-open:animate-in data-open:fade-in data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out data-closed:zoom-out-95 duration-100",
+                isPixelTheme
+                  ? "rounded-xs border-2 border-border bg-popover text-popover-foreground font-mono shadow-[3px_3px_0px_#000]"
+                  : "rounded-xl border border-border bg-popover text-popover-foreground shadow-lg",
+                dropdownMenuClassName
               )}
-            </RadixSelect.Viewport>
-          </RadixSelect.Content>
-        </RadixSelect.Portal>
-      </RadixSelect.Root>
+            >
+              <BaseSelect.List className="p-0.5">
+                {parsedItems.length === 0 ? (
+                  <div className="py-2 text-center text-xs text-muted-foreground">无匹配选项</div>
+                ) : (
+                  parsedItems.map((item, index) => {
+                    const itemBaseValue =
+                      item.value === "" || item.value === null
+                        ? EMPTY_VALUE_SENTINEL
+                        : String(item.value);
+                    const isSelected =
+                      currentBaseValue === itemBaseValue ||
+                      (currentBaseValue === EMPTY_VALUE_SENTINEL && item.value === "");
+
+                    return (
+                      <BaseSelect.Item
+                        key={itemBaseValue || index}
+                        value={itemBaseValue}
+                        disabled={item.disabled}
+                        className={cn(
+                          "flex items-center justify-between px-2.5 py-1.5 text-sm cursor-pointer select-none outline-none transition-colors",
+                          item.disabled
+                            ? "opacity-40 cursor-not-allowed"
+                            : isPixelTheme
+                            ? cn(
+                                "rounded-xs hover:bg-muted font-mono data-highlighted:bg-muted data-highlighted:text-foreground",
+                                isSelected &&
+                                  "bg-amber-100 dark:bg-amber-950/80 font-bold text-amber-950 dark:text-amber-100"
+                              )
+                            : cn(
+                                "rounded-md hover:bg-muted data-highlighted:bg-muted data-highlighted:text-foreground",
+                                isSelected && "bg-accent text-accent-foreground font-medium"
+                              )
+                        )}
+                      >
+                        <BaseSelect.ItemText>{item.label}</BaseSelect.ItemText>
+                        <BaseSelect.ItemIndicator>
+                          <Check size={14} className="shrink-0 ml-1 text-primary" />
+                        </BaseSelect.ItemIndicator>
+                      </BaseSelect.Item>
+                    );
+                  })
+                )}
+              </BaseSelect.List>
+            </BaseSelect.Popup>
+          </BaseSelect.Positioner>
+        </BaseSelect.Portal>
+      </BaseSelect.Root>
     );
   }
 );
